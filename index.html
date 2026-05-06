@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Católica School · Sistema de Gestión de Inventario</title>
+  <meta name="description" content="Sistema de gestión de inventario escolar Católica School." />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%231b5cff'%3E%3Cpath d='M12 3 1 9l11 6 9-4.91V17h2V9'/%3E%3Cpath d='M5 13.18v4L12 21l7-3.82v-4L12 17z'/%3E%3C/svg%3E" />
+
+  <!-- Tailwind via CDN (con configuración personalizada) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            primary: { DEFAULT: '#1b5cff', hover: '#1648cc', foreground: '#ffffff' },
+            secondary: { DEFAULT: '#36a2bc', foreground: '#ffffff' },
+            accent: { DEFAULT: '#f4da40', foreground: '#1f2937' },
+            muted: { DEFAULT: '#f1f5f9', foreground: '#64748b' },
+            border: '#e2e8f0',
+            background: '#ffffff',
+            foreground: '#0f172a',
+            card: '#ffffff',
+            destructive: { DEFAULT: '#ef4444', foreground: '#ffffff' },
+          },
+          fontFamily: { sans: ['Inter','system-ui','sans-serif'] },
+        }
+      }
+    }
+  </script>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="assets/css/styles.css" />
+
+  <!-- Iconos -->
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+  <!-- PDF Generation -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+</head>
+<body class="font-sans bg-background text-foreground antialiased">
+  <!-- Contenedor principal: login o app -->
+  <div id="app-root"></div>
+
+  <!-- Toast container -->
+  <div id="toast" class="fixed top-4 right-4 z-50 space-y-2"></div>
+
+  <!-- Scripts modulares -->
+  <script>const _V = Date.now();</script>
+  <script src="assets/js/auth.js"></script>
+  <script src="assets/js/roles.js"></script>
+  <script src="assets/js/router.js"></script>
+  <script src="assets/js/components.js"></script>
+  <script src="assets/js/views/login.js"></script>
+  <script src="assets/js/views/search.js"></script>
+  <script src="assets/js/views/dashboard.js"></script>
+  <script src="assets/js/views/inventory.js"></script>
+  <script src="assets/js/views/assets.js"></script>
+  <script src="assets/js/views/categories.js"></script>
+  <script src="assets/js/views/locations.js"></script>
+  <script src="assets/js/views/movements.js"></script>
+  <script src="assets/js/views/maintenance.js"></script>
+  <script src="assets/js/views/suppliers.js"></script>
+  <script src="assets/js/views/purchases.js"></script>
+  <script src="assets/js/views/treasury.js"></script>
+  <script src="assets/js/views/approvals.js"></script>
+  <script src="assets/js/views/staff.js"></script>
+  <script src="assets/js/views/users.js"></script>
+  <script src="assets/js/views/notifications.js"></script>
+  <script src="assets/js/views/reports.js"></script>
+  <script src="assets/js/views/history.js"></script>
+  <script src="assets/js/views/documents.js"></script>
+  <script src="assets/js/views/settings.js"></script>
+  <script src="assets/js/app.js"></script>
+</body>
+</html>

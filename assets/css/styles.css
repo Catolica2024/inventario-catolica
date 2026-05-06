@@ -1,0 +1,127 @@
+/* Católica School – estilos personalizados */
+:root {
+  --primary: #1b5cff;
+  --secondary: #36a2bc;
+  --accent: #f4da40;
+}
+
+html, body { height: 100%; }
+body { background: #ffffff; }
+
+/* Scrollbar minimalista */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 8px; }
+::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+/* Gradientes institucionales reutilizables */
+.bg-brand-gradient { background-image: linear-gradient(135deg, var(--primary), var(--secondary)); }
+.text-brand-gradient {
+  background-image: linear-gradient(135deg, var(--primary), var(--secondary));
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+
+/* Login: fondo claro con blobs */
+.login-bg {
+  background: linear-gradient(135deg, #f8fafc 0%, #eff6ff 50%, #ecfeff 100%);
+}
+.login-blob {
+  position: absolute; border-radius: 9999px; filter: blur(80px); opacity: 0.35; pointer-events: none;
+}
+
+/* Cards */
+.card {
+  background: #fff; border: 1px solid #e2e8f0; border-radius: 14px;
+  box-shadow: 0 1px 2px rgba(15,23,42,.04), 0 8px 24px -12px rgba(15,23,42,.08);
+}
+
+/* Botones genéricos */
+.btn { display:inline-flex; align-items:center; justify-content:center; gap:.5rem;
+  font-weight:500; padding:.6rem 1rem; border-radius:.6rem; transition: all .18s ease;
+  font-size: .875rem; line-height:1; cursor:pointer; }
+.btn-primary { background-image: linear-gradient(135deg, var(--primary), var(--secondary)); color:#fff; box-shadow:0 6px 20px -8px rgba(27,92,255,.5); }
+.btn-primary:hover { filter: brightness(1.05); }
+.btn-ghost { background:transparent; color:#0f172a; }
+.btn-ghost:hover { background:#f1f5f9; }
+.btn-outline { background:#fff; border:1px solid #e2e8f0; color:#0f172a; }
+.btn-outline:hover { background:#f8fafc; }
+.btn-danger { background:#ef4444; color:#fff; }
+.btn-danger:hover { background:#dc2626; }
+
+/* Inputs */
+.input, .select, .textarea {
+  width:100%; height:2.6rem; padding:.5rem .75rem; border:1px solid #e2e8f0; border-radius:.55rem;
+  background:#fff; color:#0f172a; font-size:.875rem; outline:none; transition: border-color .15s, box-shadow .15s;
+}
+.textarea { height: auto; min-height: 6rem; padding: .65rem .75rem; }
+.input:focus, .select:focus, .textarea:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(27,92,255,.15); }
+
+/* Badge */
+.badge { display:inline-flex; align-items:center; gap:.25rem; padding:.2rem .55rem; border-radius:9999px; font-size:.7rem; font-weight:600; }
+.badge-blue { background: rgba(27,92,255,.1); color: var(--primary); }
+.badge-cyan { background: rgba(54,162,188,.12); color: var(--secondary); }
+.badge-yellow { background: rgba(244,218,64,.2); color:#a16207; }
+.badge-green { background: rgba(34,197,94,.12); color:#15803d; }
+.badge-red { background: rgba(239,68,68,.1); color:#b91c1c; }
+.badge-gray { background:#f1f5f9; color:#475569; }
+
+/* Sidebar */
+.sidebar-link { display:flex; align-items:center; gap:.75rem; padding:.55rem .8rem; border-radius:.55rem; color:#334155; font-size:.875rem; font-weight:500; cursor:pointer; transition: all .18s ease; }
+.sidebar-link:hover { background: rgba(27,92,255,.07); transform: translateX(2px); }
+.sidebar-link.active { background-image: linear-gradient(135deg, var(--primary), var(--secondary)); color:#fff; box-shadow: 0 6px 16px -8px rgba(27,92,255,.5); }
+.sidebar-link.active:hover { transform:none; filter: brightness(1.05); }
+.sidebar-group-title { font-size:.7rem; font-weight:700; color:#94a3b8; text-transform:uppercase; letter-spacing:.05em; padding: 0 .8rem; margin-bottom:.5rem; }
+
+/* Tablas */
+table.data { width:100%; border-collapse: collapse; font-size:.875rem; }
+table.data thead th { text-align:left; padding:.7rem 1rem; background:#f8fafc; color:#64748b; font-weight:600; font-size:.75rem; text-transform:uppercase; letter-spacing:.04em; border-bottom:1px solid #e2e8f0; }
+table.data tbody td { padding:.7rem 1rem; border-bottom:1px solid #f1f5f9; color:#0f172a; }
+table.data tbody tr:hover { background:#f8fafc; }
+
+/* KPI cards */
+.kpi { padding: 1.1rem 1.25rem; border-radius: 14px; background:#fff; border:1px solid #e2e8f0; }
+.kpi .label { font-size:.75rem; color:#64748b; font-weight:600; text-transform:uppercase; letter-spacing:.04em; }
+.kpi .value { font-size: 1.6rem; font-weight: 800; color:#0f172a; margin-top:.2rem; }
+
+/* Toast */
+.toast { background:#0f172a; color:#fff; padding:.75rem 1rem; border-radius:.6rem; box-shadow: 0 10px 30px -10px rgba(0,0,0,.3); font-size:.875rem; }
+.toast-success { background:#16a34a; }
+.toast-error { background:#dc2626; }
+
+/* Modal */
+.modal-backdrop { position:fixed; inset:0; background: rgba(15,23,42,.5); display:flex; align-items:center; justify-content:center; z-index: 60; padding:1rem; }
+.modal { background:#fff; border-radius: 14px; max-width: 540px; width:100%; max-height: 90vh; overflow:auto; }
+
+/* Animaciones */
+@keyframes fadeIn { from { opacity:0; transform: translateY(4px); } to { opacity:1; transform:none; } }
+.fade-in { animation: fadeIn .25s ease; }
+
+/* Responsive sidebar */
+@media (max-width: 768px) {
+  #sidebar { position: fixed; left:0; top: 64px; height: calc(100vh - 64px); z-index: 40; transform: translateX(-100%); transition: transform .25s ease; }
+  #sidebar.open { transform: translateX(0); }
+  #sidebar-backdrop { position: fixed; inset: 64px 0 0 0; background: rgba(0,0,0,.4); z-index: 30; }
+}
+
+/* Overlay de Carga */
+.loading-overlay {
+  position: fixed; inset: 0; background: rgba(255,255,255,0.8);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  z-index: 9999; backdrop-filter: blur(4px);
+}
+.spinner {
+  width: 40px; height: 40px; border: 4px solid #f3f3f3;
+  border-top: 4px solid var(--primary); border-radius: 50%;
+  animation: spin 1s linear infinite; margin-bottom: 1rem;
+}
+@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+/* Animación de pulso para notificaciones */
+@keyframes pulse-soft {
+  0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+  70% { transform: scale(1.05); box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
+  100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+}
+.badge-pulse {
+  animation: pulse-soft 2s infinite;
+}
