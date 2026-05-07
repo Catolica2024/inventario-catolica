@@ -12,8 +12,8 @@ window.ROLE_PERMISSIONS = {
   admin:           ['*'],
   gerente_general: ['dashboard', 'notifications', 'search', 'inventory', 'approvals', 'reports', 'history'],
   jefe_finanzas:   ['dashboard', 'notifications', 'search', 'inventory', 'approvals', 'reports', 'history'],
-  almacenero:      ['dashboard','notifications','search','inventory','assets','categories','locations','movements','maintenance','add-item','history'],
-  comprador:       ['dashboard','notifications','search','suppliers','purchases','history','documents'],
+  almacenero:      ['dashboard','notifications','search','inventory','assets','categories','locations','areas','movements','maintenance','add-item','new-purchase','history'],
+  comprador:       ['dashboard','notifications','search','suppliers','categories','purchases','new-purchase','recepcions','areas','history','documents'],
   tesoreria:       ['dashboard','notifications','search','inventory','treasury','history'],
   personal:        ['dashboard','search','inventory','notifications'],
 };

@@ -55,7 +55,7 @@ function applyInventoryFilters() {
   const cat = document.getElementById('inv-cat-filter')?.value || '';
   const filtered = _allItems.filter(item => {
     const matchQ = !q || item.nombre.toLowerCase().includes(q) || (item.codigo || '').toLowerCase().includes(q) || (item.marca || '').toLowerCase().includes(q);
-    const matchCat = !cat || String(item.categoria_id) === cat;
+    const matchCat = !cat || String(item.categoria_inventario_id) === cat;
     return matchQ && matchCat;
   });
   renderInventoryRows(filtered);
@@ -89,7 +89,7 @@ window.Views.inventory.afterMount = async function() {
   try {
     const [itemsData, catData] = await Promise.all([
       fetch('api/items.php').then(r => r.json()),
-      fetch('api/categories.php').then(r => r.json())
+      fetch('api/categories_inventario.php').then(r => r.json())
     ]);
 
     _allItems = itemsData.items || [];
@@ -147,7 +147,7 @@ window.viewItem = function(id) {
 window.editItem = async function(id) {
   const item = _allItems.find(i => i.id == id);
   if (!item) return;
-  const catData = await fetch('api/categories.php').then(r => r.json()).catch(() => ({ categories: [] }));
+  const catData = await fetch('api/categories_inventario.php').then(r => r.json()).catch(() => ({ categories: [] }));
 
   UI.modal({
     title: 'Editar ítem',
@@ -164,7 +164,7 @@ window.editItem = async function(id) {
         <div><label class="text-sm font-medium">Categoría</label>
           <select id="edit-cat" class="select mt-1 w-full">
             <option value="">Sin categoría</option>
-            ${catData.categories.map(c => `<option value="${c.id}" ${item.categoria_id == c.id ? 'selected' : ''}>${c.nombre}</option>`).join('')}
+            ${catData.categories.map(c => `<option value="${c.id}" ${item.categoria_inventario_id == c.id ? 'selected' : ''}>${c.nombre}</option>`).join('')}
           </select></div>
         <div><label class="text-sm font-medium">Stock Mínimo</label>
           <input id="edit-stock" type="number" class="input mt-1 w-full" value="${item.stock_minimo}"></div>
@@ -181,7 +181,7 @@ window.editItem = async function(id) {
         nombre,
         marca: document.getElementById('edit-marca').value.trim(),
         modelo: document.getElementById('edit-modelo').value.trim(),
-        categoria_id: document.getElementById('edit-cat').value,
+        categoria_inventario_id: document.getElementById('edit-cat').value,
         stock_minimo: document.getElementById('edit-stock').value,
         ficha_tecnica: document.getElementById('edit-ficha').value.trim()
       };
@@ -227,13 +227,13 @@ window.Views.add_item = window.Views['add-item'] = function() {
     ${UI.pageHeader('Agregar artículo','Registra un nuevo ítem en el catálogo')}
     <div class="card p-6 max-w-3xl">
       <form id="add-item-form" class="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div><label class="text-sm font-medium">Código <span class="text-xs text-muted-foreground">(asignado automáticamente)</span></label><input name="codigo" class="input mt-1 bg-muted cursor-not-allowed" readonly placeholder="Auto-generado"></div>
+        <div><label class="text-sm font-medium">Código <span class="text-xs text-muted-foreground">(automático)</span></label><input name="codigo" id="add-item-codigo" class="input mt-1 bg-muted cursor-not-allowed" readonly placeholder="Auto-generado"></div>
         <div><label class="text-sm font-medium">Nombre</label><input name="nombre" required class="input mt-1" placeholder="Ej: Laptop Dell"></div>
         <div><label class="text-sm font-medium">Marca</label><input name="marca" class="input mt-1" placeholder="Dell"></div>
         <div><label class="text-sm font-medium">Modelo</label><input name="modelo" class="input mt-1" placeholder="Latitude 5430"></div>
         <div>
           <label class="text-sm font-medium">Categoría</label>
-          <select name="categoria_id" id="item-category-select" class="select mt-1">
+          <select name="categoria_inventario_id" id="item-category-select" class="select mt-1" onchange="generateItemCode()">
             <option value="">Cargando categorías...</option>
           </select>
         </div>
@@ -255,16 +255,21 @@ window.Views.add_item.afterMount = async function() {
 
   // Cargar categorías y código automático en paralelo
   const [catResp, codeResp] = await Promise.all([
-    fetch('api/categories.php').then(r => r.json()).catch(() => ({ categories: [] })),
+    fetch('api/categories_inventario.php').then(r => r.json()).catch(() => ({ categories: [] })),
     fetch('api/items.php?action=next_code').then(r => r.json()).catch(() => ({}))
   ]);
 
   select.innerHTML = '<option value="">Seleccione una categoría</option>' +
     catResp.categories.map(c => `<option value="${c.id}">${c.nombre}</option>`).join('');
 
-  if (codeResp.next_code && codigoInput) {
-    codigoInput.value = codeResp.next_code;
-  }
+  window.generateItemCode = async function() {
+    const cat_id = select.value;
+    if (!cat_id) return;
+    try {
+        const resp = await fetch(`api/items.php?action=next_code&categoria_id=${cat_id}`).then(r => r.json());
+        if (resp.next_code) codigoInput.value = resp.next_code;
+    } catch(e) {}
+  };
 
   form.onsubmit = async (e) => {
     e.preventDefault();
@@ -295,22 +300,29 @@ const BADGE_ESTADO = { 'Operativo': 'badge-green', 'Mantenimiento': 'badge-yello
 function assetFormHTML(a, items, locations) {
   return `
     <div class="grid grid-cols-1 gap-4">
-      <div><label class="text-sm font-medium">N° de Serie <span class="text-destructive">*</span></label>
-        <input id="asset-serie" class="input mt-1 w-full" placeholder="Ej: L-205" value="${a ? a.numero_serie : ''}"></div>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div><label class="text-sm font-medium">N° de Serie <span class="text-destructive">*</span></label>
+          <input id="asset-serie" class="input mt-1 w-full" placeholder="Ej: SN-123456" value="${a ? a.numero_serie : ''}"></div>
+        <div><label class="text-sm font-medium text-primary font-bold">Código Interno <span class="text-xs text-muted-foreground">(Automático)</span></label>
+            <input id="asset-codigo-interno" class="input mt-1 w-full bg-muted font-mono text-xs cursor-not-allowed" readonly placeholder="Se generará al elegir Ítem y Ubicación" value="${a ? (a.codigo_interno || '') : ''}">
+        </div>
+      </div>
       <div><label class="text-sm font-medium">Ítem <span class="text-destructive">*</span></label>
-        <select id="asset-item" class="select mt-1 w-full">
+        <select id="asset-item" class="select mt-1 w-full" onchange="generateAssetCode()">
           <option value="">Seleccione un ítem</option>
-          ${items.map(i => `<option value="${i.id}" ${a && a.item_id == i.id ? 'selected' : ''}>${i.nombre}</option>`).join('')}
+          ${items.map(i => `<option value="${i.id}" ${a && a.item_id == i.id ? 'selected' : ''}>${i.nombre} (${i.codigo})</option>`).join('')}
         </select></div>
-      <div><label class="text-sm font-medium">Ubicación</label>
-        <select id="asset-ubicacion" class="select mt-1 w-full">
-          <option value="">Sin asignar</option>
-          ${locations.map(l => `<option value="${l.id}" ${a && a.ubicacion_id == l.id ? 'selected' : ''}>${l.nombre}</option>`).join('')}
-        </select></div>
-      <div><label class="text-sm font-medium">Estado</label>
-        <select id="asset-estado" class="select mt-1 w-full">
-          ${ESTADOS_ACTIVO.map(e => `<option value="${e}" ${a && a.estado === e ? 'selected' : ''}>${e}</option>`).join('')}
-        </select></div>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div><label class="text-sm font-medium">Ubicación</label>
+            <select id="asset-ubicacion" class="select mt-1 w-full" onchange="generateAssetCode()">
+            <option value="">Sin asignar</option>
+            ${locations.map(l => `<option value="${l.id}" ${a && a.ubicacion_id == l.id ? 'selected' : ''}>${l.nombre}</option>`).join('')}
+            </select></div>
+        <div><label class="text-sm font-medium">Estado</label>
+            <select id="asset-estado" class="select mt-1 w-full">
+            ${['Pendiente de Registro', ...ESTADOS_ACTIVO].map(e => `<option value="${e}" ${a && a.estado === e ? 'selected' : ''}>${e}</option>`).join('')}
+            </select></div>
+      </div>
     </div>`;
 }
 
@@ -325,7 +337,10 @@ async function loadAssets() {
     }
     tbody.innerHTML = data.assets.map(a => `
       <tr>
-        <td class="font-mono text-xs font-bold">${a.numero_serie}</td>
+        <td>
+            <div class="font-mono text-xs font-bold">${a.numero_serie}</div>
+            <div class="text-[10px] text-primary font-bold">${a.codigo_interno || 'SIN CÓDIGO'}</div>
+        </td>
         <td class="font-medium">${a.item_nombre}</td>
         <td class="text-xs text-muted-foreground">${a.categoria_nombre || '—'}</td>
         <td>${a.ubicacion_nombre || '<span class="text-muted-foreground">—</span>'}</td>
@@ -352,17 +367,47 @@ async function openAssetModal(assetData) {
       const serie = document.getElementById('asset-serie').value.trim();
       const item_id = document.getElementById('asset-item').value;
       if (!serie || !item_id) { UI.toast('Serie e Ítem son obligatorios', 'error'); return; }
-      const body = { numero_serie: serie, item_id, ubicacion_id: document.getElementById('asset-ubicacion').value, estado: document.getElementById('asset-estado').value };
+      const body = { 
+        numero_serie: serie, 
+        codigo_interno: document.getElementById('asset-codigo-interno').value.trim(),
+        item_id, 
+        ubicacion_id: document.getElementById('asset-ubicacion').value, 
+        estado: document.getElementById('asset-estado').value 
+      };
       if (assetData) body.id = assetData.id;
       try {
         const resp = await fetch('api/assets.php', { method: assetData ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
         const res = await resp.json();
-        if (res.ok) { UI.toast(assetData ? 'Activo actualizado' : 'Activo registrado', 'success'); loadAssets(); }
+        if (res.ok) { 
+            UI.toast(assetData ? 'Activo actualizado' : 'Activo registrado', 'success'); 
+            document.getElementById('modal-overlay')?.remove();
+            loadAssets(); 
+        }
         else UI.toast('Error: ' + res.error, 'error');
       } catch { UI.toast('Error de conexión', 'error'); }
     }
   });
+  lucide.createIcons();
 }
+
+window.generateAssetCode = async function() {
+    const item_id = document.getElementById('asset-item').value;
+    const ubicacion_id = document.getElementById('asset-ubicacion').value;
+    if (!item_id || !ubicacion_id) {
+        UI.toast('Seleccione Ítem y Ubicación primero', 'warning');
+        return;
+    }
+    try {
+        const resp = await fetch(`api/assets.php?action=next_code&item_id=${item_id}&ubicacion_id=${ubicacion_id}`).then(r => r.json());
+        if (resp.next_code) {
+            document.getElementById('asset-codigo-interno').value = resp.next_code;
+        } else {
+            UI.toast('No se pudo generar el código', 'error');
+        }
+    } catch (e) {
+        UI.toast('Error al conectar con el servidor', 'error');
+    }
+};
 
 window.newAsset = () => openAssetModal(null);
 window.editAsset = async function(id) {
@@ -402,13 +447,28 @@ window.Views.assets.afterMount = loadAssets;
 function categoryFormHTML(cat) {
   return `
     <div class="grid grid-cols-1 gap-4">
-      <div>
-        <label class="text-sm font-medium">Código <span class="text-xs text-muted-foreground">(asignado automáticamente)</span></label>
-        <input id="cat-codigo" class="input mt-1 w-full bg-muted cursor-not-allowed" readonly value="${cat ? (cat.codigo || '') : ''}">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label class="text-sm font-medium">Código <span class="text-xs text-muted-foreground">(auto)</span></label>
+          <input id="cat-codigo" class="input mt-1 w-full bg-muted cursor-not-allowed" readonly value="${cat ? (cat.codigo || '') : ''}">
+        </div>
+        <div>
+          <label class="text-sm font-medium">Tipo de Bien <span class="text-destructive">*</span></label>
+          <select id="cat-tipo" class="select mt-1 w-full">
+            <option value="insumo" ${cat && cat.tipo === 'insumo' ? 'selected' : ''}>Insumo (Consumible)</option>
+            <option value="activo" ${cat && cat.tipo === 'activo' ? 'selected' : ''}>Activo (Inventariable)</option>
+          </select>
+        </div>
       </div>
-      <div>
-        <label class="text-sm font-medium">Nombre <span class="text-destructive">*</span></label>
-        <input id="cat-nombre" class="input mt-1 w-full" placeholder="Ej: Material didáctico" value="${cat ? cat.nombre : ''}">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label class="text-sm font-medium">Nombre <span class="text-destructive">*</span></label>
+          <input id="cat-nombre" class="input mt-1 w-full" placeholder="Ej: Material didáctico" value="${cat ? cat.nombre : ''}">
+        </div>
+        <div>
+          <label class="text-sm font-medium">Prefijo Código <span class="text-xs text-muted-foreground">(3 letras)</span></label>
+          <input id="cat-prefijo" class="input mt-1 w-full font-mono uppercase" maxlength="3" placeholder="Ej: LPT" value="${cat ? (cat.prefijo || '') : ''}">
+        </div>
       </div>
       <div>
         <label class="text-sm font-medium">Descripción</label>
@@ -421,7 +481,7 @@ async function loadCategories() {
   const tbody = document.getElementById('categories-table-body');
   if (!tbody) return;
   try {
-    const resp = await fetch('api/categories.php');
+    const resp = await fetch('api/categories_inventario.php');
     const data = await resp.json();
     if (!data.categories || data.categories.length === 0) {
       tbody.innerHTML = '<tr><td colspan="4" class="text-center py-10 text-muted-foreground">No hay categorías registradas.</td></tr>';
@@ -429,11 +489,17 @@ async function loadCategories() {
     }
     tbody.innerHTML = data.categories.map(c => `
       <tr>
-        <td class="font-mono text-xs">${c.codigo || '—'}</td>
-        <td class="font-medium">${c.nombre}</td>
+        <td class="font-mono text-xs">
+            <div class="font-bold">${c.codigo || '—'}</div>
+            <div class="text-[10px] text-primary">Prefix: ${c.prefijo || '—'}</div>
+        </td>
+        <td>
+            <div class="font-medium">${c.nombre}</div>
+            <div class="text-[10px] uppercase font-bold ${c.tipo === 'activo' ? 'text-purple-600' : 'text-blue-600'}">${c.tipo || 'insumo'}</div>
+        </td>
         <td class="text-muted-foreground text-sm">${c.descripcion || '—'}</td>
         <td class="text-right">
-          <button class="btn btn-ghost p-1.5" onclick="editCategory(${c.id}, '${(c.codigo||'').replace(/'/g,"\\'")}', '${c.nombre.replace(/'/g,"\\'")}', '${(c.descripcion||'').replace(/'/g,"\\'")}')">
+          <button class="btn btn-ghost p-1.5" onclick="editCategory(${c.id}, '${(c.codigo||'').replace(/'/g,"\\'")}', '${c.nombre.replace(/'/g,"\\'")}', '${(c.descripcion||'').replace(/'/g,"\\'")}', '${c.tipo}', '${(c.prefijo||'').replace(/'/g,"\\'")}')">
             <i data-lucide="pencil" class="w-4 h-4"></i>
           </button>
           <button class="btn btn-ghost p-1.5 text-destructive" onclick="deleteCategory(${c.id}, '${c.nombre.replace(/'/g,"\\'")}')">
@@ -448,10 +514,9 @@ async function loadCategories() {
 }
 
 window.newCategory = async function() {
-  // Obtener el siguiente código disponible antes de abrir el modal
   let nextCode = '';
   try {
-    const r = await fetch('api/categories.php?action=next_code');
+    const r = await fetch('api/categories_inventario.php?action=next_code');
     const d = await r.json();
     nextCode = d.next_code || '';
   } catch { /* si falla, el campo queda vacío */ }
@@ -464,13 +529,15 @@ window.newCategory = async function() {
       const nombre = document.getElementById('cat-nombre').value.trim();
       if (!nombre) { UI.toast('El nombre es obligatorio', 'error'); return; }
       try {
-        const resp = await fetch('api/categories.php', {
+        const resp = await fetch('api/categories_inventario.php', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             codigo: document.getElementById('cat-codigo').value.trim(),
             nombre,
-            descripcion: document.getElementById('cat-descripcion').value.trim()
+            descripcion: document.getElementById('cat-descripcion').value.trim(),
+            tipo: document.getElementById('cat-tipo').value,
+            prefijo: document.getElementById('cat-prefijo').value.trim().toUpperCase()
           })
         });
         const res = await resp.json();
@@ -481,23 +548,25 @@ window.newCategory = async function() {
   });
 };
 
-window.editCategory = function(id, codigo, nombre, descripcion) {
+window.editCategory = function(id, codigo, nombre, descripcion, tipo, prefijo) {
   UI.modal({
     title: 'Editar categoría',
-    body: categoryFormHTML({ id, codigo, nombre, descripcion }),
+    body: categoryFormHTML({ id, codigo, nombre, descripcion, tipo, prefijo }),
     confirmText: 'Guardar cambios',
     onConfirm: async () => {
       const newNombre = document.getElementById('cat-nombre').value.trim();
       if (!newNombre) { UI.toast('El nombre es obligatorio', 'error'); return; }
       try {
-        const resp = await fetch('api/categories.php', {
+        const resp = await fetch('api/categories_inventario.php', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             id,
             codigo: document.getElementById('cat-codigo').value.trim(),
             nombre: newNombre,
-            descripcion: document.getElementById('cat-descripcion').value.trim()
+            descripcion: document.getElementById('cat-descripcion').value.trim(),
+            tipo: document.getElementById('cat-tipo').value,
+            prefijo: document.getElementById('cat-prefijo').value.trim().toUpperCase()
           })
         });
         const res = await resp.json();
@@ -515,7 +584,7 @@ window.deleteCategory = function(id, nombre) {
     confirmText: 'Sí, eliminar',
     onConfirm: async () => {
       try {
-        const resp = await fetch(`api/categories.php?id=${id}`, { method: 'DELETE' });
+        const resp = await fetch(`api/categories_inventario.php?id=${id}`, { method: 'DELETE' });
         const res = await resp.json();
         if (res.ok) { UI.toast('Categoría eliminada', 'success'); loadCategories(); }
         else UI.toast('Error: ' + res.error, 'error');
@@ -524,9 +593,9 @@ window.deleteCategory = function(id, nombre) {
   });
 };
 
-window.Views.categories = function() {
+window.Views['categories-inv'] = function() {
   return `
-    ${UI.pageHeader('Categorías','Agrupaciones de ítems del inventario', `
+    ${UI.pageHeader('Categorías de Inventario','Agrupaciones de insumos y activos', `
       <button class="btn btn-primary" onclick="newCategory()"><i data-lucide="plus"></i>Nueva categoría</button>
     `)}
     <div class="card overflow-hidden">
@@ -539,7 +608,7 @@ window.Views.categories = function() {
     </div>`;
 };
 
-window.Views.categories.afterMount = loadCategories;
+window.Views['categories-inv'].afterMount = loadCategories;
 
 // ---- UBICACIONES ----
 function locationFormHTML(l) {
@@ -549,10 +618,17 @@ function locationFormHTML(l) {
         <input id="loc-codigo" class="input mt-1 w-full bg-muted cursor-not-allowed" readonly value="${l ? (l.codigo || '') : ''}"></div>
       <div><label class="text-sm font-medium">Nombre <span class="text-destructive">*</span></label>
         <input id="loc-nombre" class="input mt-1 w-full" placeholder="Ej: Aula 305" value="${l ? l.nombre : ''}"></div>
-      <div><label class="text-sm font-medium">Tipo</label>
-        <select id="loc-tipo" class="select mt-1 w-full">
-          ${['Aula','Laboratorio','Depósito','Oficina','Otro'].map(t => `<option value="${t}" ${l && l.tipo === t ? 'selected' : ''}>${t}</option>`).join('')}
-        </select></div>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div><label class="text-sm font-medium">Tipo</label>
+            <select id="loc-tipo" class="select mt-1 w-full" onchange="generateLocCode()">
+            ${['Aula','Laboratorio','Depósito','Oficina','Otro'].map(t => `<option value="${t}" ${l && l.tipo === t ? 'selected' : ''}>${t}</option>`).join('')}
+            </select></div>
+        <div><label class="text-sm font-medium">Sede <span class="text-destructive">*</span></label>
+            <select id="loc-sede" class="select mt-1 w-full" onchange="generateLocCode()">
+            <option value="">Seleccione sede...</option>
+            ${(window._allSedes || []).map(s => `<option value="${s.id}" ${l && l.sede_id == s.id ? 'selected' : ''}>${s.nombre}</option>`).join('')}
+            </select></div>
+      </div>
     </div>`;
 }
 
@@ -569,10 +645,13 @@ async function loadLocations() {
       <tr>
         <td class="font-mono text-xs">${l.codigo || '—'}</td>
         <td class="font-medium">${l.nombre}</td>
-        <td>${l.tipo || '—'}</td>
+        <td>
+            <div class="text-sm">${l.tipo || '—'}</div>
+            <div class="text-[10px] font-bold text-primary uppercase">${l.sede_nombre || 'Sin Sede'}</div>
+        </td>
         <td>${l.responsable_nombre || '<span class="text-muted-foreground">—</span>'}</td>
         <td class="text-right">
-          <button class="btn btn-ghost p-1.5" onclick="editLocation(${l.id}, '${(l.codigo||'').replace(/'/g,"\\'")}', '${l.nombre.replace(/'/g,"\\'")}', '${(l.tipo||'').replace(/'/g,"\\'")}')"><i data-lucide="pencil" class="w-4 h-4"></i></button>
+          <button class="btn btn-ghost p-1.5" onclick="editLocation(${l.id}, '${(l.codigo||'').replace(/'/g,"\\'")}', '${l.nombre.replace(/'/g,"\\'")}', '${(l.tipo||'').replace(/'/g,"\\'")}', ${l.sede_id || 'null'})"><i data-lucide="pencil" class="w-4 h-4"></i></button>
           <button class="btn btn-ghost p-1.5 text-destructive" onclick="deleteLocation(${l.id}, '${l.nombre.replace(/'/g,"\\'")}')"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
         </td>
       </tr>`).join('');
@@ -580,7 +659,24 @@ async function loadLocations() {
   } catch { tbody.innerHTML = '<tr><td colspan="5" class="text-center py-10 text-destructive">Error al cargar.</td></tr>'; }
 }
 
+async function prepareLocationModal() {
+    if (!window._allSedes) {
+        const resp = await fetch('api/sedes.php').then(r => r.json());
+        window._allSedes = resp.sedes || [];
+    }
+}
+window.generateLocCode = async function() {
+    const sede_id = document.getElementById('loc-sede').value;
+    const tipo = document.getElementById('loc-tipo').value;
+    if (!sede_id || !tipo) return;
+    try {
+        const resp = await fetch(`api/locations.php?action=next_code&sede_id=${sede_id}&tipo=${tipo}`).then(r => r.json());
+        if (resp.next_code) document.getElementById('loc-codigo').value = resp.next_code;
+    } catch(e) {}
+};
+
 window.newLocation = async function() {
+  await prepareLocationModal();
   let nextCode = '';
   try {
     const r = await fetch('api/locations.php?action=next_code');
@@ -591,8 +687,9 @@ window.newLocation = async function() {
     title: 'Nueva ubicación', body: locationFormHTML({ codigo: nextCode, nombre: '', tipo: 'Aula' }), confirmText: 'Guardar',
     onConfirm: async () => {
       const nombre = document.getElementById('loc-nombre').value.trim();
-      if (!nombre) { UI.toast('El nombre es obligatorio', 'error'); return; }
-      const resp = await fetch('api/locations.php', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ codigo: document.getElementById('loc-codigo').value.trim(), nombre, tipo: document.getElementById('loc-tipo').value }) });
+      const sede_id = document.getElementById('loc-sede').value;
+      if (!nombre || !sede_id) { UI.toast('Nombre y Sede son obligatorios', 'error'); return; }
+      const resp = await fetch('api/locations.php', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ codigo: document.getElementById('loc-codigo').value.trim(), nombre, tipo: document.getElementById('loc-tipo').value, sede_id }) });
       const res = await resp.json();
       if (res.ok) { UI.toast('Ubicación creada', 'success'); loadLocations(); }
       else UI.toast('Error: ' + res.error, 'error');
@@ -600,13 +697,15 @@ window.newLocation = async function() {
   });
 };
 
-window.editLocation = function(id, codigo, nombre, tipo) {
+window.editLocation = async function(id, codigo, nombre, tipo, sede_id) {
+  await prepareLocationModal();
   UI.modal({
-    title: 'Editar ubicación', body: locationFormHTML({ id, codigo, nombre, tipo }), confirmText: 'Guardar cambios',
+    title: 'Editar ubicación', body: locationFormHTML({ id, codigo, nombre, tipo, sede_id }), confirmText: 'Guardar cambios',
     onConfirm: async () => {
       const newNombre = document.getElementById('loc-nombre').value.trim();
-      if (!newNombre) { UI.toast('El nombre es obligatorio', 'error'); return; }
-      const resp = await fetch('api/locations.php', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, codigo: document.getElementById('loc-codigo').value.trim(), nombre: newNombre, tipo: document.getElementById('loc-tipo').value }) });
+      const newSedeId = document.getElementById('loc-sede').value;
+      if (!newNombre || !newSedeId) { UI.toast('Nombre y Sede son obligatorios', 'error'); return; }
+      const resp = await fetch('api/locations.php', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, codigo: document.getElementById('loc-codigo').value.trim(), nombre: newNombre, tipo: document.getElementById('loc-tipo').value, sede_id: newSedeId }) });
       const res = await resp.json();
       if (res.ok) { UI.toast('Ubicación actualizada', 'success'); loadLocations(); }
       else UI.toast('Error: ' + res.error, 'error');
@@ -640,6 +739,141 @@ window.Views.locations = function() {
     </div>`;
 };
 window.Views.locations.afterMount = loadLocations;
+ 
+ 
+// ---- ÁREAS (Departamentos que solicitan compras) ----
+function areaFormHTML(a) {
+  return `
+    <div class="grid grid-cols-1 gap-4">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div><label class="text-sm font-medium">Código <span class="text-xs text-muted-foreground">(automático)</span></label>
+          <input id="area-codigo" class="input mt-1 w-full bg-muted cursor-not-allowed" readonly value="${a ? (a.codigo || '') : ''}"></div>
+        <div><label class="text-sm font-medium">Sede <span class="text-destructive">*</span></label>
+            <select id="area-sede" class="select mt-1 w-full" onchange="generateAreaCode()">
+            <option value="">Seleccione sede...</option>
+            ${(window._allSedes || []).map(s => `<option value="${s.id}" ${a && a.sede_id == s.id ? 'selected' : ''}>${s.nombre}</option>`).join('')}
+            </select></div>
+      </div>
+      <div><label class="text-sm font-medium">Nombre de Área <span class="text-destructive">*</span></label>
+        <input id="area-nombre" class="input mt-1 w-full" placeholder="Ej: Sistemas" value="${a ? a.nombre : ''}"></div>
+      <div><label class="text-sm font-medium">Descripción</label>
+        <input id="area-descripcion" class="input mt-1 w-full" placeholder="Breve detalle..." value="${a ? (a.descripcion || '') : ''}"></div>
+    </div>`;
+}
+
+window.generateAreaCode = async function() {
+    const sede_id = document.getElementById('area-sede').value;
+    if (!sede_id) return;
+    try {
+        const resp = await fetch(`api/areas.php?action=next_code&sede_id=${sede_id}`).then(r => r.json());
+        if (resp.next_code) document.getElementById('area-codigo').value = resp.next_code;
+    } catch(e) {}
+};
+
+async function loadAreas() {
+  const tbody = document.getElementById('areas-table-body');
+  if (!tbody) return;
+  try {
+    const data = await fetch('api/areas.php').then(r => r.json());
+    if (!data.areas || data.areas.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="3" class="text-center py-10 text-muted-foreground">No hay áreas registradas.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = data.areas.map(a => `
+      <tr>
+        <td class="font-mono text-xs">
+            <div class="font-bold">${a.codigo || '—'}</div>
+            <div class="text-[10px] text-primary uppercase">${a.sede_nombre || 'Sin Sede'}</div>
+        </td>
+        <td class="font-medium">${a.nombre}</td>
+        <td class="text-muted-foreground text-sm">${a.descripcion || '—'}</td>
+        <td class="text-right">
+          <button class="btn btn-ghost p-1.5" onclick="editArea(${a.id}, '${(a.codigo||'').replace(/'/g,"\\'")}', '${a.nombre.replace(/'/g,"\\'")}', '${(a.descripcion||'').replace(/'/g,"\\'")}', ${a.sede_id || 'null'})"><i data-lucide="pencil" class="w-4 h-4"></i></button>
+          <button class="btn btn-ghost p-1.5 text-destructive" onclick="deleteArea(${a.id}, '${a.nombre.replace(/'/g,"\\'")}')"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+        </td>
+      </tr>`).join('');
+    lucide.createIcons();
+  } catch { tbody.innerHTML = '<tr><td colspan="4" class="text-center py-10 text-destructive">Error al cargar.</td></tr>'; }
+}
+
+window.newArea = async function() {
+  if (!window._allSedes) {
+    const resp = await fetch('api/sedes.php').then(r => r.json());
+    window._allSedes = resp.sedes || [];
+  }
+  UI.modal({
+    title: 'Nueva área', body: areaFormHTML(null), confirmText: 'Guardar',
+    onConfirm: async () => {
+      const nombre = document.getElementById('area-nombre').value.trim();
+      if (!nombre) { UI.toast('El nombre es obligatorio', 'error'); return; }
+      const resp = await fetch('api/areas.php', { 
+          method: 'POST', 
+          headers: { 'Content-Type': 'application/json' }, 
+          body: JSON.stringify({ 
+              codigo: document.getElementById('area-codigo').value.trim(),
+              nombre, 
+              descripcion: document.getElementById('area-descripcion').value.trim(),
+              sede_id: document.getElementById('area-sede').value
+          }) 
+      });
+      const res = await resp.json();
+      if (res.ok) { UI.toast('Área creada', 'success'); loadAreas(); }
+      else UI.toast('Error: ' + res.error, 'error');
+    }
+  });
+};
+
+window.editArea = async function(id, codigo, nombre, descripcion, sede_id) {
+  if (!window._allSedes) {
+    const resp = await fetch('api/sedes.php').then(r => r.json());
+    window._allSedes = resp.sedes || [];
+  }
+  UI.modal({
+    title: 'Editar área', body: areaFormHTML({ id, codigo, nombre, descripcion, sede_id }), confirmText: 'Guardar cambios',
+    onConfirm: async () => {
+      const newNombre = document.getElementById('area-nombre').value.trim();
+      if (!newNombre) { UI.toast('El nombre es obligatorio', 'error'); return; }
+      const resp = await fetch('api/areas.php', { 
+          method: 'PUT', 
+          headers: { 'Content-Type': 'application/json' }, 
+          body: JSON.stringify({ 
+              id, 
+              codigo: document.getElementById('area-codigo').value.trim(),
+              nombre: newNombre, 
+              descripcion: document.getElementById('area-descripcion').value.trim(),
+              sede_id: document.getElementById('area-sede').value
+          }) 
+      });
+      const res = await resp.json();
+      if (res.ok) { UI.toast('Área actualizada', 'success'); loadAreas(); }
+      else UI.toast('Error: ' + res.error, 'error');
+    }
+  });
+};
+
+window.deleteArea = function(id, nombre) {
+  UI.modal({ title: 'Eliminar área', body: `<p>¿Eliminar el área <strong>${nombre}</strong>?</p>`, confirmText: 'Sí, eliminar',
+    onConfirm: async () => {
+      const res = await fetch(`api/areas.php?id=${id}`, { method: 'DELETE' }).then(r => r.json());
+      if (res.ok) { UI.toast('Área eliminada', 'success'); loadAreas(); }
+      else UI.toast('Error: ' + res.error, 'error');
+    }
+  });
+};
+
+window.Views.areas = function() {
+  return `
+    ${UI.pageHeader('Áreas / Departamentos','Oficinas y áreas solicitantes del colegio', `
+      <button class="btn btn-primary" onclick="newArea()"><i data-lucide="plus"></i>Nueva área</button>
+    `)}
+    <div class="card overflow-hidden">
+      <table class="data">
+        <thead><tr><th>Nombre</th><th>Descripción</th><th class="text-right">Acciones</th></tr></thead>
+        <tbody id="areas-table-body"><tr><td colspan="3" class="text-center py-10 text-muted-foreground">Cargando...</td></tr></tbody>
+      </table>
+    </div>`;
+};
+window.Views.areas.afterMount = loadAreas;
 
 
 // ---- GESTIÓN DE INSUMOS / MOVIMIENTOS ----
@@ -805,10 +1039,10 @@ function supplierFormHTML(s, categories) {
         <input id="sup-contacto" class="input mt-1 w-full" placeholder="Juan Pérez" value="${s ? (s.contacto || '') : ''}"></div>
       <div><label class="text-sm font-medium">Teléfono</label>
         <input id="sup-telefono" class="input mt-1 w-full" placeholder="987654321" value="${s ? (s.telefono || '') : ''}"></div>
-      <div><label class="text-sm font-medium">Categoría</label>
+      <div><label class="text-sm font-medium">Rubro</label>
         <select id="sup-cat" class="select mt-1 w-full">
-          <option value="">Sin categoría</option>
-          ${categories.map(c => `<option value="${c.id}" ${s && s.categoria_id == c.id ? 'selected' : ''}>${c.nombre}</option>`).join('')}
+          <option value="">Sin rubro</option>
+          ${categories.map(c => `<option value="${c.id}" ${s && s.rubro_id == c.id ? 'selected' : ''}>${c.nombre}</option>`).join('')}
         </select></div>
       <div class="md:col-span-2"><label class="text-sm font-medium">Dirección</label>
         <input id="sup-direccion" class="input mt-1 w-full" placeholder="Calle Ejemplo 123" value="${s ? (s.direccion || '') : ''}"></div>
@@ -842,7 +1076,7 @@ async function loadSuppliers() {
 }
 
 async function openSupplierModal(sData) {
-  const catData = await fetch('api/categories.php').then(r => r.json()).catch(() => ({ categories: [] }));
+  const catData = await fetch('api/rubros.php').then(r => r.json()).catch(() => ({ categories: [] }));
   const body = `
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
       <div class="md:col-span-2">
@@ -858,12 +1092,23 @@ async function openSupplierModal(sData) {
         <input id="sup-email" type="email" class="input mt-1 w-full" value="${sData ? (sData.email || '') : ''}">
       </div>
       <div>
+        <label class="text-sm font-medium">Banco</label>
+        <select id="sup-banco" class="select mt-1 w-full">
+          <option value="">Seleccione banco...</option>
+          ${['BCP', 'BBVA', 'Interbank', 'Scotiabank', 'BanBif', 'Banco de la Nación', 'Otro'].map(b => `<option value="${b}" ${sData && sData.banco == b ? 'selected' : ''}>${b}</option>`).join('')}
+        </select>
+      </div>
+      <div>
         <label class="text-sm font-medium">N° Cuenta Bancaria</label>
         <input id="sup-cuenta" class="input mt-1 w-full font-mono" value="${sData ? (sData.numero_cuenta || '') : ''}">
       </div>
       <div>
         <label class="text-sm font-medium">CCI (Interbancario)</label>
         <input id="sup-cci" class="input mt-1 w-full font-mono" value="${sData ? (sData.cci || '') : ''}">
+      </div>
+      <div>
+        <label class="text-sm font-medium">Cuenta de Detracción <span class="text-[10px] text-muted-foreground font-normal">(opcional)</span></label>
+        <input id="sup-detraccion" class="input mt-1 w-full font-mono" placeholder="Ej: 00-123456-7" value="${sData ? (sData.cuenta_detraccion || '') : ''}">
       </div>
       <div>
         <label class="text-sm font-medium">Contacto (Nombre)</label>
@@ -878,10 +1123,10 @@ async function openSupplierModal(sData) {
         <input id="sup-direccion" class="input mt-1 w-full" value="${sData ? sData.direccion : ''}">
       </div>
       <div class="md:col-span-2">
-        <label class="text-sm font-medium">Categoría</label>
+        <label class="text-sm font-medium">Rubro Comercial</label>
         <select id="sup-cat" class="select mt-1 w-full">
-          <option value="">Seleccione categoría...</option>
-          ${catData.categories.map(c => `<option value="${c.id}" ${sData && sData.categoria_id == c.id ? 'selected' : ''}>${c.nombre}</option>`).join('')}
+          <option value="">Seleccione rubro...</option>
+          ${catData.categories.map(c => `<option value="${c.id}" ${sData && sData.rubro_id == c.id ? 'selected' : ''}>${c.nombre}</option>`).join('')}
         </select>
       </div>
     </div>`;
@@ -897,13 +1142,15 @@ async function openSupplierModal(sData) {
       const bodyData = { 
         ruc, 
         razon_social: razon, 
+        banco: document.getElementById('sup-banco').value,
         numero_cuenta: document.getElementById('sup-cuenta').value.trim(),
         cci: document.getElementById('sup-cci').value.trim(),
+        cuenta_detraccion: document.getElementById('sup-detraccion').value.trim() || null,
         email: document.getElementById('sup-email').value.trim(),
         contacto: document.getElementById('sup-contacto').value.trim(), 
         telefono: document.getElementById('sup-telefono').value.trim(), 
         direccion: document.getElementById('sup-direccion').value.trim(),
-        categoria_id: document.getElementById('sup-cat').value 
+        rubro_id: document.getElementById('sup-cat').value 
       };
       if (sData) bodyData.id = sData.id;
       const resp = await fetch('api/suppliers.php', { method: sData ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(bodyData) });
@@ -936,7 +1183,7 @@ window.Views.suppliers = function() {
     `)}
     <div class="card overflow-hidden">
       <table class="data">
-        <thead><tr><th>RUC</th><th>Razón Social</th><th>Dirección</th><th>Contacto</th><th>Teléfono</th><th>Categoría</th><th class="text-right">Acciones</th></tr></thead>
+        <thead><tr><th>RUC</th><th>Razón Social</th><th>Dirección</th><th>Contacto</th><th>Teléfono</th><th>Rubro</th><th class="text-right">Acciones</th></tr></thead>
         <tbody id="suppliers-table-body"><tr><td colspan="7" class="text-center py-10 text-muted-foreground">Cargando...</td></tr></tbody>
       </table>
     </div>`;
@@ -944,8 +1191,8 @@ window.Views.suppliers = function() {
 window.Views.suppliers.afterMount = loadSuppliers;
 
 // ---- ÓRDENES DE COMPRA ----
-const OC_ESTADOS = ['Pendiente','Aprobada','Rechazada'];
-const OC_BADGE = { 'Pendiente': 'badge-yellow', 'Aprobada': 'badge-green', 'Rechazada': 'badge-red' };
+const OC_ESTADOS = ['Pendiente','Aprobada','Rechazada', 'Recibida'];
+const OC_BADGE = { 'Pendiente': 'badge-yellow', 'Aprobada': 'badge-green', 'Rechazada': 'badge-red', 'Recibida': 'badge-blue' };
 
 let _allPurchases = [];
 
@@ -970,24 +1217,38 @@ function renderPurchasesTable(list) {
     <tr>
       <td class="font-mono text-xs font-bold">${p.numero_oc}</td>
       <td class="font-medium">${p.proveedor_nombre}</td>
-      <td class="text-xs">${p.fecha || '—'}</td>
+      <td class="text-xs">
+        <div>${p.fecha || '—'}</div>
+        <div class="text-[10px] text-muted-foreground font-semibold uppercase">${p.area_nombre || '—'}</div>
+      </td>
       <td class="font-semibold">S/ ${parseFloat(p.monto || 0).toLocaleString('es-PE', {minimumFractionDigits:2})}</td>
       <td>
         <div class="flex flex-col gap-1">
           <span class="badge ${OC_BADGE[p.estado] || 'badge-gray'}">${p.estado}</span>
           <div class="flex flex-col gap-0.5 mt-1">
-            <div class="flex items-center gap-1 text-[10px] ${p.aprobado_gerente ? 'text-green-600 font-bold' : 'text-gray-400'}">
-              <i data-lucide="${p.aprobado_gerente ? 'check' : 'clock'}" class="w-3 h-3"></i> Gerente G.
+            <div class="flex items-center gap-1 text-[10px] ${p.rechazado_gerente ? 'text-destructive font-bold' : (p.aprobado_gerente ? 'text-green-600 font-bold' : 'text-gray-400')}">
+              <i data-lucide="${p.rechazado_gerente ? 'x' : (p.aprobado_gerente ? 'check' : 'clock')}" class="w-3 h-3"></i> Gerente G.
             </div>
-            <div class="flex items-center gap-1 text-[10px] ${p.aprobado_finanzas ? 'text-green-600 font-bold' : 'text-gray-400'}">
-              <i data-lucide="${p.aprobado_finanzas ? 'check' : 'clock'}" class="w-3 h-3"></i> J. Finanzas
+            <div class="flex items-center gap-1 text-[10px] ${p.rechazado_finanzas ? 'text-destructive font-bold' : (p.aprobado_finanzas ? 'text-green-600 font-bold' : 'text-gray-400')}">
+              <i data-lucide="${p.rechazado_finanzas ? 'x' : (p.aprobado_finanzas ? 'check' : 'clock')}" class="w-3 h-3"></i> J. Finanzas
             </div>
           </div>
         </div>
       </td>
       <td class="text-right">
-        <button class="btn btn-ghost p-1.5" onclick="editPurchase(${p.id})"><i data-lucide="pencil" class="w-4 h-4"></i></button>
-        <button class="btn btn-ghost p-1.5 text-destructive" onclick="deletePurchase(${p.id}, '${p.numero_oc}')"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+        ${p.estado === 'Aprobada' && p.pagado && !p.fecha_recepcion ? `
+          <button class="btn btn-ghost p-1.5 text-blue-600" onclick="openReceiveModal(${p.id}, '${p.numero_oc}', '${p.fecha_pago}')" title="Registrar Recepción">
+            <i data-lucide="package-check" class="w-4 h-4"></i>
+          </button>
+        ` : ''}
+        <button class="btn btn-ghost p-1.5" onclick="editPurchase(${p.id})" title="${Auth.getUser()?.role === 'admin' ? 'Editar' : 'Ver Detalle'}">
+            <i data-lucide="${Auth.getUser()?.role === 'admin' ? 'pencil' : 'eye'}" class="w-4 h-4"></i>
+        </button>
+        ${Auth.getUser()?.role === 'admin' ? `
+            <button class="btn btn-ghost p-1.5 text-destructive" onclick="deletePurchase(${p.id}, '${p.numero_oc}')" title="Eliminar">
+                <i data-lucide="trash-2" class="w-4 h-4"></i>
+            </button>
+        ` : ''}
       </td>
     </tr>`).join('');
   lucide.createIcons();
@@ -1011,36 +1272,75 @@ window.filterPurchases = function() {
 };
 
 async function openPurchaseModal(pData) {
-  const suppData = await fetch('api/suppliers.php').then(r => r.json()).catch(() => ({ suppliers: [] }));
+  const id = pData ? pData.id : null;
+  const [suppData, areaData, fullData] = await Promise.all([
+    fetch('api/suppliers.php').then(r => r.json()).catch(() => ({ suppliers: [] })),
+    fetch('api/areas.php').then(r => r.json()).catch(() => ({ areas: [] })),
+    id ? fetch(`api/purchases.php?id=${id}`).then(r => r.json()).catch(() => null) : null
+  ]);
+
+  const p = (fullData && fullData.purchase) ? fullData.purchase : pData;
+  const cuotas = p?.cuotas || [];
+  
+  // Generar sección de estado de pago (solo si existe pData)
+  let paymentSection = '';
+  if (pData) {
+      paymentSection = `
+      <div class="mt-6 border-t pt-6">
+        <h4 class="text-sm font-bold flex items-center gap-2 mb-4 text-primary">
+            <i data-lucide="wallet" class="w-4 h-4"></i> Seguimiento de Pagos
+        </h4>
+        ${getPaymentProgressHTML(p, cuotas)}
+      </div>`;
+  }
+
+  const isAdmin = Auth.getUser()?.role === 'admin';
+  const readonly = !isAdmin ? 'readonly' : '';
+  const disabled = !isAdmin ? 'disabled' : '';
+
   const body = `
-    <div class="grid grid-cols-1 gap-4">
+    <div class="space-y-6">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
       ${pData ? `<div><label class="text-sm font-medium">N° OC <span class="text-xs text-muted-foreground">(automático)</span></label><input class="input mt-1 w-full bg-muted cursor-not-allowed" readonly value="${pData.numero_oc}"></div>` : ''}
       <div><label class="text-sm font-medium">Proveedor <span class="text-destructive">*</span></label>
-        <select id="pur-supplier" class="select mt-1 w-full">
+        <select id="pur-supplier" class="select mt-1 w-full" ${disabled}>
           <option value="">Seleccione proveedor</option>
-          ${suppData.suppliers.map(s => `<option value="${s.id}" ${pData && pData.proveedor_id == s.id ? 'selected' : ''}>${s.razon_social}</option>`).join('')}
+          ${suppData.suppliers.map(s => `<option value="${s.id}" ${p && p.proveedor_id == s.id ? 'selected' : ''}>${s.razon_social}</option>`).join('')}
+        </select></div>
+      <div><label class="text-sm font-medium">Área Solicitante <span class="text-destructive">*</span></label>
+        <select id="pur-area" class="select mt-1 w-full" ${disabled}>
+          <option value="">Seleccione área...</option>
+          ${areaData.areas.map(a => `<option value="${a.id}" ${p && p.area_id == a.id ? 'selected' : ''}>${a.nombre}</option>`).join('')}
         </select></div>
       <div><label class="text-sm font-medium">Fecha</label>
-        <input id="pur-fecha" type="date" class="input mt-1 w-full" value="${pData ? pData.fecha : new Date().toISOString().split('T')[0]}"></div>
+        <input id="pur-fecha" type="date" class="input mt-1 w-full" value="${p ? p.fecha : new Date().toISOString().split('T')[0]}" ${readonly}></div>
       <div><label class="text-sm font-medium">Monto (S/)</label>
-        <input id="pur-monto" type="number" step="0.01" class="input mt-1 w-full" placeholder="0.00" value="${pData ? pData.monto : ''}"></div>
+        <input id="pur-monto" type="number" step="0.01" class="input mt-1 w-full" placeholder="0.00" value="${p ? p.monto : ''}" ${readonly}></div>
       <div><label class="text-sm font-medium">Estado</label>
-        <select id="pur-estado" class="select mt-1 w-full">
-          ${OC_ESTADOS.map(e => `<option value="${e}" ${pData && pData.estado === e ? 'selected' : ''}>${e}</option>`).join('')}
+        <select id="pur-estado" class="select mt-1 w-full" ${disabled}>
+          ${OC_ESTADOS.map(e => `<option value="${e}" ${p && p.estado === e ? 'selected' : ''}>${e}</option>`).join('')}
         </select></div>
       <div class="md:col-span-2">
         <label class="text-sm font-medium">Observaciones / Sustento</label>
-        <textarea id="pur-obs" class="textarea mt-1 w-full h-20 resize-none" placeholder="Opcional...">${pData ? (pData.observaciones || '') : ''}</textarea>
+        <textarea id="pur-obs" class="textarea mt-1 w-full h-20 resize-none" placeholder="Opcional..." ${readonly}>${p ? (p.observaciones || '') : ''}</textarea>
       </div>
+    </div>
+    ${paymentSection}
     </div>`;
   UI.modal({
-    title: pData ? 'Editar orden' : 'Nueva orden de compra', body,
-    confirmText: pData ? 'Guardar cambios' : 'Crear orden',
+    title: pData ? (isAdmin ? 'Editar orden' : 'Detalle de Orden') : 'Nueva orden de compra', 
+    body,
+    confirmText: isAdmin ? (pData ? 'Guardar cambios' : 'Crear orden') : 'Cerrar',
     onConfirm: async () => {
+      if (!isAdmin) { document.getElementById('modal-overlay')?.remove(); return; }
+      
       const proveedor_id = document.getElementById('pur-supplier').value;
+      const area_id = document.getElementById('pur-area').value;
       if (!proveedor_id) { UI.toast('Seleccione un proveedor', 'error'); return; }
+      if (!area_id) { UI.toast('Seleccione el área solicitante', 'error'); return; }
       const payload = { 
         proveedor_id, 
+        area_id,
         fecha: document.getElementById('pur-fecha').value, 
         monto: document.getElementById('pur-monto').value, 
         estado: document.getElementById('pur-estado').value,
@@ -1051,20 +1351,233 @@ async function openPurchaseModal(pData) {
       const res = await resp.json();
       if (res.ok) { 
         UI.toast(pData ? 'Orden actualizada' : `Orden ${res.numero_oc} creada`, 'success'); 
+        document.getElementById('modal-overlay')?.remove();
         loadPurchases(); 
       }
       else UI.toast('Error: ' + res.error, 'error');
     },
     extraButtons: pData ? [
       {
-        text: 'Exportar a Drive',
+        text: 'Exportar PDF',
+        class: 'btn-outline',
+        icon: 'file-text',
+        onClick: () => window.generateOC(pData.id)
+      },
+      {
+        text: 'Subir a Drive',
         class: 'btn-outline',
         icon: 'upload-cloud',
         onClick: () => window.exportOCById(pData.id)
-      }
+      },
+      ...(isAdmin ? [{
+        text: 'Eliminar Orden',
+        class: 'btn-ghost text-destructive hover:bg-destructive/10',
+        icon: 'trash-2',
+        onClick: () => {
+            // No cerrar aquí, el confirm de deletePurchase se encargará o lo cerramos manual para evitar overlays dobles
+            window.deletePurchase(pData.id, pData.numero_oc);
+        }
+      }] : [])
     ] : []
   });
+  lucide.createIcons();
 }
+
+function getPaymentProgressHTML(p, cuotas) {
+    const monSym = p.moneda === 'USD' ? '$' : (p.moneda === 'EUR' ? '€' : 'S/');
+    
+    // Si la orden NO está aprobada, mostrar estado de aprobación
+    if (p.estado === 'Pendiente') {
+        return `
+        <div class="p-4 rounded-xl border bg-orange-50 border-orange-200">
+            <h4 class="text-sm font-bold text-orange-800 mb-2 flex items-center gap-2">
+                <i data-lucide="clock" class="w-4 h-4"></i> ESPERANDO APROBACIÓN
+            </h4>
+            <p class="text-xs text-orange-700 mb-3">Esta orden aún no puede ser procesada por Tesorería porque faltan las siguientes aprobaciones:</p>
+            <div class="space-y-2">
+                <div class="flex items-center gap-2 text-[11px] ${p.aprobado_gerente ? 'text-green-700 font-bold' : 'text-orange-600'}">
+                    <i data-lucide="${p.aprobado_gerente ? 'check-circle' : 'circle'}" class="w-3.5 h-3.5"></i>
+                    Gerente General: ${p.aprobado_gerente ? 'APROBADO' : 'PENDIENTE'}
+                </div>
+                <div class="flex items-center gap-2 text-[11px] ${p.aprobado_finanzas ? 'text-green-700 font-bold' : 'text-orange-600'}">
+                    <i data-lucide="${p.aprobado_finanzas ? 'check-circle' : 'circle'}" class="w-3.5 h-3.5"></i>
+                    Jefe de Finanzas: ${p.aprobado_finanzas ? 'APROBADO' : 'PENDIENTE'}
+                </div>
+            </div>
+        </div>`;
+    }
+
+    if (p.estado === 'Rechazada') {
+        return `
+        <div class="p-4 rounded-xl border bg-red-50 border-red-200">
+            <h4 class="text-sm font-bold text-red-800 mb-1 flex items-center gap-2">
+                <i data-lucide="x-circle" class="w-4 h-4"></i> ORDEN RECHAZADA
+            </h4>
+            <p class="text-xs text-red-700">Esta orden fue rechazada y no procederá a pago.</p>
+        </div>`;
+    }
+    
+    // CASO 1: ADELANTO + SALDO
+    if (p.condicion_pago === 'Adelanto + Saldo') {
+        const isAdelantoPagado = p.adelanto_pagado == 1;
+        const isTotalPagado = p.pagado == 1;
+        return `
+        <div class="space-y-3">
+            <div class="flex items-center justify-between p-3 rounded-lg border ${isAdelantoPagado ? 'bg-green-50 border-green-200' : 'bg-white border-border shadow-sm'}">
+                <div class="flex items-center gap-3">
+                    <div class="w-8 h-8 rounded-full flex items-center justify-center ${isAdelantoPagado ? 'bg-green-600 text-white' : 'bg-muted text-muted-foreground'}">
+                        ${isAdelantoPagado ? '✓' : '1'}
+                    </div>
+                    <div>
+                        <div class="text-xs font-bold uppercase">Adelanto (${p.adelanto_porcentaje}%)</div>
+                        <div class="text-[10px] ${isAdelantoPagado ? 'text-green-700' : 'text-muted-foreground'}">
+                            ${isAdelantoPagado ? 'Pagado el ' + new Date(p.adelanto_fecha).toLocaleDateString() : 'Pendiente de pago'}
+                        </div>
+                    </div>
+                </div>
+                <div class="flex flex-col items-end gap-1">
+                    <div class="font-bold text-sm ${isAdelantoPagado ? 'text-green-700' : 'text-primary'}">${monSym} ${parseFloat(p.adelanto_monto).toFixed(2)}</div>
+                    ${isAdelantoPagado ? `
+                        <button class="btn btn-outline h-6 px-2 text-[9px] border-green-600 text-green-700 hover:bg-green-50" onclick="sendPaymentNotification(${p.id}, 'adelanto')">
+                            <i data-lucide="mail" class="w-3 h-3 mr-1"></i> Enviar Correo
+                        </button>
+                    ` : ''}
+                </div>
+            </div>
+            <div class="flex items-center justify-between p-3 rounded-lg border ${isTotalPagado ? 'bg-green-50 border-green-200' : 'bg-white border-border shadow-sm'}">
+                <div class="flex items-center gap-3">
+                    <div class="w-8 h-8 rounded-full flex items-center justify-center ${isTotalPagado ? 'bg-green-600 text-white' : 'bg-muted text-muted-foreground'}">
+                        ${isTotalPagado ? '✓' : '2'}
+                    </div>
+                    <div>
+                        <div class="text-xs font-bold uppercase">Saldo Final</div>
+                        <div class="text-[10px] ${isTotalPagado ? 'text-green-700' : 'text-muted-foreground'}">
+                            ${isTotalPagado ? 'Pagado el ' + new Date(p.fecha_pago).toLocaleDateString() : (isAdelantoPagado ? 'Pendiente tras entrega' : 'Esperando adelanto')}
+                        </div>
+                    </div>
+                </div>
+                <div class="flex flex-col items-end gap-1">
+                    <div class="font-bold text-sm ${isTotalPagado ? 'text-green-700' : 'text-primary'}">${monSym} ${parseFloat(p.saldo_monto).toFixed(2)}</div>
+                    ${isTotalPagado ? `
+                        <button class="btn btn-outline h-6 px-2 text-[9px] border-green-600 text-green-700 hover:bg-green-50" onclick="sendPaymentNotification(${p.id}, 'saldo')">
+                            <i data-lucide="mail" class="w-3 h-3 mr-1"></i> Enviar Correo
+                        </button>
+                    ` : ''}
+                </div>
+            </div>
+        </div>`;
+    }
+
+    // CASO 2: CUOTAS
+    if (cuotas.length > 0) {
+        const pagadas = cuotas.filter(c => c.pagado == 1).length;
+        const cuotasList = cuotas.map(c => {
+            const isPagada = c.pagado == 1;
+            const vence = new Date(c.fecha_vencimiento);
+            const hoy = new Date();
+            const estaVencida = !isPagada && vence < hoy;
+            
+            return `
+            <div class="flex items-center justify-between p-2 border-b border-muted/50 last:border-0">
+                <div class="flex items-center gap-2">
+                    <div class="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${isPagada ? 'bg-green-100 text-green-700' : 'bg-muted text-muted-foreground'}">
+                        ${c.numero_cuota}
+                    </div>
+                    <div>
+                        <div class="text-[10px] font-bold ${isPagada ? 'text-green-700' : (estaVencida ? 'text-red-600' : '')}">Cuota ${c.numero_cuota}</div>
+                        <div class="text-[9px] text-muted-foreground">Vence: ${vence.toLocaleDateString()} ${isPagada ? '· Pagado' : ''}</div>
+                    </div>
+                </div>
+                <div class="flex flex-col items-end gap-1">
+                    <div class="text-[10px] font-bold">${monSym} ${parseFloat(c.monto_cuota).toFixed(2)}</div>
+                    ${isPagada ? `
+                        <button class="btn btn-outline h-5 px-1.5 text-[8px] border-green-600 text-green-700 hover:bg-green-50" onclick="sendPaymentNotification(${p.id}, 'cuota', ${c.id})">
+                            <i data-lucide="mail" class="w-2.5 h-2.5 mr-1"></i> Notificar Pago
+                        </button>
+                    ` : (estaVencida ? '<div class="text-[8px] bg-red-100 text-red-700 px-1 rounded font-bold uppercase">Atrasado</div>' : '')}
+                </div>
+            </div>`;
+        }).join('');
+
+        return `
+        <div class="space-y-2">
+            <div class="flex items-center justify-between text-xs mb-1">
+                <span class="font-semibold">Progreso de pagos</span>
+                <span class="font-bold text-primary">${pagadas} de ${cuotas.length}</span>
+            </div>
+            <div class="w-full bg-muted rounded-full h-1.5 mb-4">
+                <div class="bg-primary h-1.5 rounded-full transition-all" style="width:${(pagadas/cuotas.length*100)}%"></div>
+            </div>
+            <div class="max-h-48 overflow-y-auto border rounded-lg bg-muted/10 p-1">
+                ${cuotasList}
+            </div>
+        </div>`;
+    }
+
+    // CASO 3: AL CONTADO / OTROS
+    return `
+    <div class="p-4 rounded-xl border ${p.pagado == 1 ? 'bg-green-50 border-green-200' : 'bg-yellow-50 border-yellow-200'}">
+        <div class="flex items-center justify-between">
+            <div>
+                <div class="text-sm font-bold ${p.pagado == 1 ? 'text-green-700' : 'text-yellow-700'}">${p.pagado == 1 ? 'Totalmente Pagado' : 'Pendiente de Pago'}</div>
+                <p class="text-xs text-muted-foreground mt-1">${p.pagado == 1 ? 'El pago se realizó el ' + new Date(p.fecha_pago).toLocaleDateString() : 'La orden está aprobada y esperando ser procesada por Tesorería.'}</p>
+            </div>
+            <div class="text-right flex flex-col items-end gap-2">
+                <div class="text-lg font-black ${p.pagado == 1 ? 'text-green-700' : 'text-primary'}">${monSym} ${parseFloat(p.monto).toFixed(2)}</div>
+                ${p.pagado == 1 ? `
+                    <button class="btn btn-outline h-7 px-3 text-xs border-green-600 text-green-700 hover:bg-green-50" onclick="sendPaymentNotification(${p.id}, 'contado')">
+                        <i data-lucide="mail" class="w-3.5 h-3.5 mr-1"></i> Enviar Comprobante al Proveedor
+                    </button>
+                ` : ''}
+            </div>
+        </div>
+    </div>`;
+}
+
+window.sendPaymentNotification = async function(id, type, paymentId = null) {
+    UI.modal({
+        title: 'Confirmar Notificación',
+        body: `
+            <div class="text-center py-4">
+                <div class="w-16 h-16 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <i data-lucide="mail-check" class="w-8 h-8"></i>
+                </div>
+                <h3 class="text-lg font-bold mb-2">¿Enviar comprobante al proveedor?</h3>
+                <p class="text-sm text-muted-foreground">
+                    Se enviará un correo formal con el voucher de pago y copia automática a 
+                    <span class="font-bold text-primary">compras@colegiolacatolica.edu.pe</span>.
+                </p>
+            </div>
+        `,
+        confirmText: 'Sí, enviar ahora',
+        cancelText: 'Cancelar',
+        onConfirm: async () => {
+            UI.toast('Enviando correo...', 'info');
+            try {
+                const resp = await fetch('api/purchases.php', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action: 'notify_payment',
+                        id,
+                        payment_type: type,
+                        payment_id: paymentId
+                    })
+                }).then(r => r.json());
+
+                if (resp.ok) {
+                    UI.toast('Correo enviado correctamente al proveedor', 'success');
+                } else {
+                    UI.toast('Error: ' + (resp.error || 'No se pudo enviar el correo'), 'error');
+                }
+            } catch (err) {
+                UI.toast('Error de conexión con el servidor', 'error');
+                console.error(err);
+            }
+        }
+    });
+    lucide.createIcons();
+};
 
 window.newPurchase = () => openPurchaseModal(null);
 window.editPurchase = async function(id) {
@@ -1072,11 +1585,152 @@ window.editPurchase = async function(id) {
   const p = data.purchases.find(x => x.id == id);
   if (p) openPurchaseModal(p);
 };
+let _allRecepcionsData = [];
+window.openReceiveModal = function(id) {
+  const p = _allRecepcionsData.find(x => x.id == id);
+  if (!p) return;
+
+  const hasConformidad = !!p.conformidad_url;
+  const hasComprobante = !!p.comprobante_url;
+
+  const body = `
+    <div class="space-y-4">
+      <div class="p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-800">
+        <div class="flex items-center gap-2">
+            <i data-lucide="info" class="w-4 h-4"></i>
+            <strong>Orden: ${p.numero_oc}</strong>
+        </div>
+        <p class="text-[11px] mt-1 opacity-80">Proveedor: ${p.proveedor_nombre} | Condición: ${p.condicion_pago}</p>
+      </div>
+
+      <div class="grid grid-cols-1 gap-4">
+        <!-- Conformidad -->
+        <div class="p-4 rounded-xl border-2 ${hasConformidad ? 'bg-green-50/50 border-green-200' : 'border-dashed border-muted hover:border-primary/40'}">
+            <div class="flex items-center justify-between mb-2">
+                <h4 class="text-sm font-bold flex items-center gap-2">
+                    <i data-lucide="check-circle" class="w-4 h-4 ${hasConformidad ? 'text-green-600' : 'text-muted-foreground'}"></i>
+                    1. Conformidad de Servicio / Recepción
+                </h4>
+                ${hasConformidad ? '<span class="text-[10px] bg-green-600 text-white px-2 py-0.5 rounded-full font-bold">CARGADO</span>' : ''}
+            </div>
+            
+            ${hasConformidad ? `
+                <a href="${p.conformidad_url}" target="_blank" class="text-xs text-primary font-medium flex items-center gap-1 hover:underline">
+                    <i data-lucide="external-link" class="w-3 h-3"></i> Ver documento cargado
+                </a>
+            ` : `
+                <p class="text-[11px] text-muted-foreground mb-3">Suba el documento que avala la entrega o término del servicio.</p>
+                <div class="flex items-center gap-2">
+                    <input type="file" id="file-conformidad" class="hidden" accept="image/*,application/pdf" onchange="document.getElementById('name-conf').textContent = this.files[0]?.name">
+                    <button class="btn btn-outline btn-sm text-xs" onclick="document.getElementById('file-conformidad').click()">
+                        <i data-lucide="upload" class="w-3 h-3"></i> Seleccionar Archivo
+                    </button>
+                    <span id="name-conf" class="text-[10px] text-muted-foreground truncate max-w-[150px]"></span>
+                </div>
+            `}
+        </div>
+
+        <!-- Factura -->
+        <div class="p-4 rounded-xl border-2 ${hasComprobante ? 'bg-green-50/50 border-green-200' : 'border-dashed border-muted hover:border-primary/40'}">
+            <div class="flex items-center justify-between mb-2">
+                <h4 class="text-sm font-bold flex items-center gap-2">
+                    <i data-lucide="file-text" class="w-4 h-4 ${hasComprobante ? 'text-green-600' : 'text-muted-foreground'}"></i>
+                    2. Factura / Boleta / RxH
+                </h4>
+                ${hasComprobante ? '<span class="text-[10px] bg-green-600 text-white px-2 py-0.5 rounded-full font-bold">CARGADO</span>' : ''}
+            </div>
+            
+            ${hasComprobante ? `
+                <a href="${p.comprobante_url}" target="_blank" class="text-xs text-primary font-medium flex items-center gap-1 hover:underline">
+                    <i data-lucide="external-link" class="w-3 h-3"></i> Ver documento cargado
+                </a>
+            ` : `
+                <p class="text-[11px] text-muted-foreground mb-3">Suba el comprobante oficial de pago (SUNAT).</p>
+                <div class="flex items-center gap-2">
+                    <input type="file" id="file-comprobante" class="hidden" accept="image/*,application/pdf" onchange="document.getElementById('name-comp').textContent = this.files[0]?.name">
+                    <button class="btn btn-outline btn-sm text-xs" onclick="document.getElementById('file-comprobante').click()">
+                        <i data-lucide="upload" class="w-3 h-3"></i> Seleccionar Archivo
+                    </button>
+                    <span id="name-comp" class="text-[10px] text-muted-foreground truncate max-w-[150px]"></span>
+                </div>
+            `}
+        </div>
+      </div>
+    </div>`;
+
+  UI.modal({
+    title: 'Procesar Recepción: ' + p.numero_oc,
+    body,
+    confirmText: 'Guardar Documentos',
+    onConfirm: async () => {
+      const fConf = document.getElementById('file-conformidad');
+      const fComp = document.getElementById('file-comprobante');
+      
+      if ((!fConf || !fConf.files[0]) && (!fComp || !fComp.files[0])) {
+          UI.toast('Debe subir al menos un documento nuevo', 'info');
+          return;
+      }
+
+      UI.toast('Subiendo a Google Drive...', 'info');
+
+      try {
+        const token = await new Promise((resolve) => {
+            google.accounts.oauth2.initTokenClient({
+                client_id: '180581650294-1hq62hvc88ucednj1a4ksbccaj6vfhdg.apps.googleusercontent.com',
+                scope: 'https://www.googleapis.com/auth/drive.file',
+                callback: resolve
+            }).requestAccessToken();
+        });
+
+        const upload = async (file, type) => {
+            const metadata = { 
+                name: `${type}_${p.numero_oc}_${new Date().getTime()}.${file.name.split('.').pop()}`, 
+                parents: ['1SM2SDdbypPMkNN-VAAyA5q9WSkszWjSs'] 
+            };
+            const form = new FormData();
+            form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+            form.append('file', file);
+            const resp = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=webViewLink', {
+                method: 'POST', headers: { Authorization: 'Bearer ' + token.access_token }, body: form
+            }).then(r => r.json());
+            return resp.webViewLink;
+        };
+
+        const payload = { action: 'receive', id: p.id };
+        if (fConf && fConf.files[0]) payload.conformidad_url = await upload(fConf.files[0], 'Conformidad');
+        if (fComp && fComp.files[0]) payload.comprobante_url = await upload(fComp.files[0], 'Factura');
+
+        const resp = await fetch('api/purchases.php', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        }).then(r => r.json());
+
+        if (resp.ok) {
+          UI.toast('Documento(s) guardado(s) correctamente', 'success');
+          document.getElementById('modal-overlay')?.remove();
+          loadRecepcions();
+        } else {
+          UI.toast('Error: ' + resp.error, 'error');
+        }
+      } catch (err) {
+        console.error(err);
+        UI.toast('Error al procesar: ' + err.message, 'error');
+      }
+    }
+  });
+  lucide.createIcons();
+};
+
 window.deletePurchase = function(id, oc) {
   UI.modal({ title: 'Eliminar orden', body: `<p>¿Eliminar la orden <strong>${oc}</strong>?</p>`, confirmText: 'Sí, eliminar',
     onConfirm: async () => {
       const res = await fetch(`api/purchases.php?id=${id}`, { method: 'DELETE' }).then(r => r.json());
-      if (res.ok) { UI.toast('Orden eliminada', 'success'); loadPurchases(); }
+      if (res.ok) { 
+        UI.toast('Orden eliminada', 'success'); 
+        document.getElementById('modal-overlay')?.remove();
+        loadPurchases(); 
+      }
     }
   });
 };
@@ -1120,7 +1774,7 @@ window.Views.purchases = function() {
 window.Views.purchases.afterMount = loadPurchases;
 
 // ---- PERSONAL ----
-function staffFormHTML(s) {
+function staffFormHTML(s, areas) {
   return `
     <div class="grid grid-cols-1 gap-4">
       <div><label class="text-sm font-medium">DNI</label>
@@ -1129,8 +1783,11 @@ function staffFormHTML(s) {
         <input id="stf-nombre" class="input mt-1 w-full" placeholder="Juan Pérez García" value="${s ? s.nombre : ''}"></div>
       <div><label class="text-sm font-medium">Cargo</label>
         <input id="stf-cargo" class="input mt-1 w-full" placeholder="Docente" value="${s ? (s.cargo || '') : ''}"></div>
-      <div><label class="text-sm font-medium">Área</label>
-        <input id="stf-area" class="input mt-1 w-full" placeholder="Secundaria" value="${s ? (s.area || '') : ''}"></div>
+      <div><label class="text-sm font-medium">Área / Departamento</label>
+        <select id="stf-area" class="select mt-1 w-full">
+          <option value="">Sin área</option>
+          ${areas.map(a => `<option value="${a.id}" ${s && s.area_id == a.id ? 'selected' : ''}>${a.nombre}</option>`).join('')}
+        </select></div>
       <div><label class="text-sm font-medium">Teléfono</label>
         <input id="stf-tel" class="input mt-1 w-full" placeholder="987654321" value="${s ? (s.telefono || '') : ''}"></div>
     </div>`;
@@ -1150,7 +1807,7 @@ async function loadStaff() {
         <td class="font-mono text-xs">${s.dni || '—'}</td>
         <td class="font-medium">${s.nombre}</td>
         <td>${s.cargo || '—'}</td>
-        <td>${s.area || '—'}</td>
+        <td>${s.area_nombre || '<span class="text-muted-foreground">—</span>'}</td>
         <td>${s.telefono || '—'}</td>
         <td class="text-right">
           <button class="btn btn-ghost p-1.5" onclick="editStaff(${s.id})"><i data-lucide="pencil" class="w-4 h-4"></i></button>
@@ -1161,15 +1818,22 @@ async function loadStaff() {
   } catch { tbody.innerHTML = '<tr><td colspan="6" class="text-center py-10 text-destructive">Error al cargar.</td></tr>'; }
 }
 
-function openStaffModal(sData) {
+async function openStaffModal(sData) {
+  const areaData = await fetch('api/areas.php').then(r => r.json()).catch(() => ({ areas: [] }));
   UI.modal({
     title: sData ? 'Editar personal' : 'Nuevo personal',
-    body: staffFormHTML(sData),
+    body: staffFormHTML(sData, areaData.areas),
     confirmText: sData ? 'Guardar cambios' : 'Registrar',
     onConfirm: async () => {
       const nombre = document.getElementById('stf-nombre').value.trim();
       if (!nombre) { UI.toast('El nombre es obligatorio', 'error'); return; }
-      const body = { dni: document.getElementById('stf-dni').value.trim(), nombre, cargo: document.getElementById('stf-cargo').value.trim(), area: document.getElementById('stf-area').value.trim(), telefono: document.getElementById('stf-tel').value.trim() };
+      const body = { 
+        dni: document.getElementById('stf-dni').value.trim(), 
+        nombre, 
+        cargo: document.getElementById('stf-cargo').value.trim(), 
+        area_id: document.getElementById('stf-area').value || null, 
+        telefono: document.getElementById('stf-tel').value.trim() 
+      };
       if (sData) body.id = sData.id;
       const resp = await fetch('api/staff.php', { method: sData ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       const res = await resp.json();
@@ -1207,3 +1871,143 @@ window.Views.staff = function() {
     </div>`;
 };
 window.Views.staff.afterMount = loadStaff;
+
+// ---- RECEPCIONES ----
+async function loadRecepcions() {
+  const tbodyPend = document.getElementById('recepcions-table-body');
+  const tbodyHist = document.getElementById('recepcions-hist-body');
+  if (!tbodyPend) return;
+  
+  try {
+    const data = await fetch('api/purchases.php').then(r => r.json());
+    _allRecepcionsData = data.purchases || [];
+    const purchases = _allRecepcionsData;
+    
+    // 1. Pendientes: Aprobadas/Recibidas que les falte algún documento
+    const pend = purchases.filter(p => {
+        if (p.estado !== 'Aprobada' && p.estado !== 'Recibida') return false;
+        
+        // Si ya tiene ambos, no es pendiente (debería estar en historial)
+        const faltaDoc = !p.conformidad_url || !p.comprobante_url;
+        if (!faltaDoc) return false;
+
+        if (p.condicion_pago === 'Adelanto + Saldo') {
+            return p.adelanto_pagado == 1; // Tras adelanto
+        }
+        if (p.condicion_pago === 'Credito' && p.total_cuotas_reg > 0) {
+            return p.pagado == 1; // Tras pago total
+        }
+        return p.pagado == 1; // Al contado, etc
+    });
+
+    if (pend.length === 0) {
+      tbodyPend.innerHTML = '<tr><td colspan="6" class="text-center py-6 text-muted-foreground text-sm">No hay recepciones pendientes.</td></tr>';
+    } else {
+      tbodyPend.innerHTML = pend.map(p => {
+        const isAdelanto = p.condicion_pago === 'Adelanto + Saldo';
+        const labelPago = isAdelanto ? 'Adelanto Pagado' : 'Pagado';
+        const fechaRef = isAdelanto ? p.adelanto_fecha : p.fecha_pago;
+        
+        let nextStep = '';
+        if (!p.conformidad_url && !p.comprobante_url) nextStep = 'Conformidad y Factura';
+        else if (!p.conformidad_url) nextStep = 'Subir Conformidad';
+        else if (!p.comprobante_url) nextStep = 'Subir Factura / RxH';
+
+        return `
+        <tr>
+          <td class="font-mono text-xs font-bold">${p.numero_oc}</td>
+          <td class="font-medium">
+            <div>${p.proveedor_nombre}</div>
+            <div class="text-[10px] text-muted-foreground font-normal">${p.condicion_pago}</div>
+          </td>
+          <td class="text-xs text-muted-foreground">${p.area_nombre || '—'}</td>
+          <td class="text-xs">
+              <div class="font-semibold text-green-600">${labelPago}</div>
+              <div class="text-[10px] text-muted-foreground">${fechaRef ? new Date(fechaRef).toLocaleDateString() : '—'}</div>
+          </td>
+          <td class="text-xs">
+              <span class="badge ${nextStep.includes('Factura') && !nextStep.includes('Conformidad') ? 'badge-orange' : 'badge-blue'} text-[10px]">${nextStep}</span>
+          </td>
+          <td class="text-right">
+            <button class="btn btn-primary btn-sm px-2 py-1 text-xs" onclick="openReceiveModal(${p.id})">
+              <i data-lucide="package-check" class="w-3.5 h-3.5"></i> Procesar
+            </button>
+          </td>
+        </tr>`;
+      }).join('');
+    }
+
+    // 2. Historial: Recibidas (con AMBOS documentos)
+    const hist = purchases.filter(p => p.conformidad_url && p.comprobante_url);
+    if (tbodyHist) {
+      if (hist.length === 0) {
+        tbodyHist.innerHTML = '<tr><td colspan="5" class="text-center py-6 text-muted-foreground text-sm">El historial está vacío.</td></tr>';
+      } else {
+        tbodyHist.innerHTML = hist.map(p => `
+          <tr>
+            <td class="font-mono text-xs font-bold">${p.numero_oc}</td>
+            <td class="font-medium">${p.proveedor_nombre}</td>
+            <td class="text-xs">
+              <div class="font-semibold text-blue-600">Completada</div>
+              <div class="text-[10px] text-muted-foreground">${new Date(p.fecha_recepcion || p.fecha_conformidad).toLocaleDateString()}</div>
+            </td>
+            <td>
+              <div class="flex flex-col gap-1">
+                ${p.conformidad_url ? `
+                    <a href="${p.conformidad_url}" target="_blank" class="text-[10px] text-primary hover:underline flex items-center gap-1">
+                        <i data-lucide="file-check" class="w-3 h-3"></i> Conformidad
+                    </a>` : ''}
+                ${p.comprobante_url ? `
+                    <a href="${p.comprobante_url}" target="_blank" class="text-[10px] text-orange-600 hover:underline flex items-center gap-1">
+                        <i data-lucide="file-text" class="w-3 h-3"></i> Factura / RxH
+                    </a>` : ''}
+              </div>
+            </td>
+            <td class="text-right">
+               <button class="btn btn-ghost p-1.5" onclick="editPurchase(${p.id})"><i data-lucide="eye" class="w-4 h-4"></i></button>
+            </td>
+          </tr>`).join('');
+      }
+    }
+
+    lucide.createIcons();
+  } catch { 
+    if (tbodyPend) tbodyPend.innerHTML = '<tr><td colspan="5" class="text-center py-10 text-destructive">Error al cargar datos.</td></tr>'; 
+  }
+}
+
+window.Views.recepcions = function() {
+  return `
+    ${UI.pageHeader('Gestión de Recepciones','Control de entrada de insumos, activos y servicios finalizados', '')}
+    
+    <div class="grid grid-cols-1 gap-6">
+      <!-- Tabla de Pendientes -->
+      <div class="card overflow-hidden">
+        <div class="p-4 border-b border-border bg-muted/30 flex items-center justify-between">
+          <h3 class="font-bold text-sm flex items-center gap-2 text-primary">
+            <i data-lucide="clock" class="w-4 h-4"></i> Recepciones Pendientes
+          </h3>
+          <span class="text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded-full font-bold uppercase">Requiere Acción</span>
+        </div>
+        <table class="data">
+          <thead><tr><th>N° Doc</th><th>Proveedor</th><th>Área</th><th>Estado Pago</th><th>Próximo Paso</th><th class="text-right">Acciones</th></tr></thead>
+          <tbody id="recepcions-table-body"><tr><td colspan="5" class="text-center py-10 text-muted-foreground">Cargando...</td></tr></tbody>
+        </table>
+      </div>
+
+      <!-- Historial -->
+      <div class="card overflow-hidden">
+        <div class="p-4 border-b border-border bg-muted/10 flex items-center justify-between">
+          <h3 class="font-bold text-sm flex items-center gap-2 text-muted-foreground">
+            <i data-lucide="history" class="w-4 h-4"></i> Historial de Recepciones
+          </h3>
+        </div>
+        <table class="data">
+          <thead><tr><th>N° Doc</th><th>Proveedor</th><th>Fecha Rec.</th><th>Comprobante</th><th class="text-right">Detalle</th></tr></thead>
+          <tbody id="recepcions-hist-body"><tr><td colspan="5" class="text-center py-10 text-muted-foreground">Cargando...</td></tr></tbody>
+        </table>
+      </div>
+    </div>`;
+};
+window.Views.recepcions.afterMount = loadRecepcions;
+

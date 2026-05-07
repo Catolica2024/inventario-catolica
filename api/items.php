@@ -9,20 +9,33 @@ try {
         case 'GET':
             // Acción especial: siguiente código de ítem disponible
             if (isset($_GET['action']) && $_GET['action'] === 'next_code') {
-                $rows = $pdo->query("SELECT codigo FROM items WHERE codigo LIKE 'ITM-%'")->fetchAll();
+                $cat_id = $_GET['categoria_id'] ?? null;
+                if (!$cat_id) json_response(['error' => 'categoria_id requerido'], 400);
+
+                // Obtener prefijo de la categoría
+                $stmtCat = $pdo->prepare("SELECT prefijo FROM categorias_inventario WHERE id = ?");
+                $stmtCat->execute([$cat_id]);
+                $cat = $stmtCat->fetch();
+                $prefix = ($cat && $cat['prefijo']) ? $cat['prefijo'] : 'ITM';
+
+                $rows = $pdo->prepare("SELECT codigo FROM items WHERE codigo LIKE ? ORDER BY id DESC LIMIT 50");
+                $rows->execute([$prefix . '-%']);
+                $data = $rows->fetchAll();
+
                 $max = 0;
-                foreach ($rows as $row) {
-                    $n = intval(substr($row['codigo'], 4));
+                foreach ($data as $row) {
+                    $parts = explode('-', $row['codigo']);
+                    $n = intval(end($parts));
                     if ($n > $max) $max = $n;
                 }
-                $next = 'ITM-' . str_pad($max + 1, 3, '0', STR_PAD_LEFT);
+                $next = $prefix . '-' . str_pad($max + 1, 4, '0', STR_PAD_LEFT);
                 json_response(['next_code' => $next]);
                 break;
             }
             $stmt = $pdo->query("
                 SELECT i.*, c.nombre as categoria_nombre 
                 FROM items i 
-                LEFT JOIN categorias c ON i.categoria_id = c.id 
+                LEFT JOIN categorias_inventario c ON i.categoria_inventario_id = c.id 
                 ORDER BY i.id DESC
             ");
             $rows = $stmt->fetchAll();
@@ -31,14 +44,14 @@ try {
             
         case 'POST':
             $b = get_body();
-            $sql = "INSERT INTO items (codigo, nombre, marca, modelo, categoria_id, stock_minimo) VALUES (?,?,?,?,?,?)";
+            $sql = "INSERT INTO items (codigo, nombre, marca, modelo, categoria_inventario_id, stock_minimo) VALUES (?,?,?,?,?,?)";
             $stmt = $pdo->prepare($sql);
             $stmt->execute([
                 $b['codigo'] ?? null,
                 $b['nombre'],
                 $b['marca'] ?? null,
                 $b['modelo'] ?? null,
-                $b['categoria_id'] ?? null,
+                $b['categoria_inventario_id'] ?? null,
                 $b['stock_minimo'] ?? 0
             ]);
             json_response(['ok' => true, 'id' => $pdo->lastInsertId()]);
@@ -47,14 +60,14 @@ try {
         case 'PUT':
             $b = get_body();
             if (!isset($b['id'])) json_response(['error' => 'ID requerido'], 400);
-            $sql = "UPDATE items SET codigo=?, nombre=?, marca=?, modelo=?, categoria_id=?, stock_minimo=? WHERE id=?";
+            $sql = "UPDATE items SET codigo=?, nombre=?, marca=?, modelo=?, categoria_inventario_id=?, stock_minimo=? WHERE id=?";
             $stmt = $pdo->prepare($sql);
             $stmt->execute([
                 $b['codigo'] ?? null,
                 $b['nombre'],
                 $b['marca'] ?? null,
                 $b['modelo'] ?? null,
-                $b['categoria_id'] ?? null,
+                $b['categoria_inventario_id'] ?? null,
                 $b['stock_minimo'] ?? 0,
                 $b['id']
             ]);

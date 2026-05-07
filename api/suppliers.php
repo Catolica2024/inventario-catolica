@@ -8,9 +8,9 @@ try {
     switch ($method) {
         case 'GET':
             $rows = $pdo->query("
-                SELECT p.*, c.nombre as categoria_nombre
+                SELECT p.*, r.nombre as categoria_nombre
                 FROM proveedores p
-                LEFT JOIN categorias c ON p.categoria_id = c.id
+                LEFT JOIN rubros r ON p.rubro_id = r.id
                 ORDER BY p.razon_social ASC
             ")->fetchAll();
             json_response(['suppliers' => $rows]);
@@ -21,15 +21,15 @@ try {
             if (empty($b['ruc']) || empty($b['razon_social'])) {
                 json_response(['error' => 'RUC y Razón social son obligatorios'], 400);
             }
-            $stmt = $pdo->prepare("INSERT INTO proveedores (ruc, razon_social, numero_cuenta, cci, email, contacto, telefono, direccion, categoria_id) VALUES (?,?,?,?,?,?,?,?,?)");
-            $stmt->execute([$b['ruc'], $b['razon_social'], $b['numero_cuenta'] ?? null, $b['cci'] ?? null, $b['email'] ?? null, $b['contacto'], $b['telefono'], $b['direccion'], $b['categoria_id']]);
+            $stmt = $pdo->prepare("INSERT INTO proveedores (ruc, razon_social, banco, numero_cuenta, cci, cuenta_detraccion, email, contacto, telefono, direccion, rubro_id) VALUES (?,?,?,?,?,?,?,?,?,?,?)");
+            $stmt->execute([$b['ruc'], $b['razon_social'], $b['banco'] ?? null, $b['numero_cuenta'] ?? null, $b['cci'] ?? null, $b['cuenta_detraccion'] ?? null, $b['email'] ?? null, $b['contacto'], $b['telefono'], $b['direccion'], $b['rubro_id']]);
             json_response(['ok' => true, 'id' => $pdo->lastInsertId()]);
             break;
 
         case 'PUT':
             $b = get_body();
-            $stmt = $pdo->prepare("UPDATE proveedores SET ruc=?, razon_social=?, numero_cuenta=?, cci=?, email=?, contacto=?, telefono=?, direccion=?, categoria_id=? WHERE id=?");
-            $stmt->execute([$b['ruc'], $b['razon_social'], $b['numero_cuenta'] ?? null, $b['cci'] ?? null, $b['email'] ?? null, $b['contacto'], $b['telefono'], $b['direccion'], $b['categoria_id'], $b['id']]);
+            $stmt = $pdo->prepare("UPDATE proveedores SET ruc=?, razon_social=?, banco=?, numero_cuenta=?, cci=?, cuenta_detraccion=?, email=?, contacto=?, telefono=?, direccion=?, rubro_id=? WHERE id=?");
+            $stmt->execute([$b['ruc'], $b['razon_social'], $b['banco'] ?? null, $b['numero_cuenta'] ?? null, $b['cci'] ?? null, $b['cuenta_detraccion'] ?? null, $b['email'] ?? null, $b['contacto'], $b['telefono'], $b['direccion'], $b['rubro_id'], $b['id']]);
             json_response(['ok' => true]);
             break;
 

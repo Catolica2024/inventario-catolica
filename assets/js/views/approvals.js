@@ -85,9 +85,21 @@ window.viewOrderDetails = async function(id) {
           <div><p class="text-muted-foreground">RUC</p><p class="font-semibold">${oc.ruc || '—'}</p></div>
           <div><p class="text-muted-foreground">Área Solicitante</p><p class="font-semibold">${oc.area_solicitante || '—'}</p></div>
           <div><p class="text-muted-foreground">Fecha Requerida</p><p class="font-semibold">${oc.fecha_requerida || '—'}</p></div>
-          <div><p class="text-muted-foreground">Condición Pago</p><p class="font-semibold">${oc.condicion_pago || '—'}</p></div>
+          <div>
+            <p class="text-muted-foreground">Condición Pago</p>
+            <p class="font-semibold">
+                ${oc.condicion_pago || '—'} 
+                ${oc.condicion_pago === 'Adelanto + Saldo' ? `<span class="text-[10px] text-primary">(${parseFloat(oc.adelanto_porcentaje).toFixed(0)}% / ${(100 - parseFloat(oc.adelanto_porcentaje)).toFixed(0)}%)</span>` : ''}
+            </p>
+          </div>
           <div><p class="text-muted-foreground">Moneda</p><p class="font-semibold">${oc.moneda || 'PEN'}</p></div>
         </div>
+
+        ${oc.condicion_pago === 'Adelanto + Saldo' ? `
+        <div class="p-3 rounded-lg bg-blue-50 border border-blue-100 flex justify-between text-xs">
+            <div><span class="text-blue-700 font-bold">Adelanto (${parseFloat(oc.adelanto_porcentaje).toFixed(0)}%):</span> S/ ${parseFloat(oc.adelanto_monto).toFixed(2)}</div>
+            <div><span class="text-blue-700 font-bold">Saldo:</span> S/ ${parseFloat(oc.saldo_monto).toFixed(2)}</div>
+        </div>` : ''}
 
         <div class="flex gap-4 p-4 rounded-xl bg-muted/30 border border-dashed">
             <div class="flex-1 text-center">

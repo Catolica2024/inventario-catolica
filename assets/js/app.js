@@ -11,16 +11,18 @@
     { label:'Almacén', items:[
       { id:'inventory',   label:'Inventario',         icon:'package' },
       { id:'assets',      label:'Gestión de Activos', icon:'boxes' },
-      { id:'categories',  label:'Categorías',         icon:'tag' },
       { id:'locations',   label:'Ubicaciones',        icon:'map-pin' },
+      { id:'areas',       label:'Áreas',              icon:'building-2' },
+      { id:'categories-inv', label:'Categorías',          icon:'tag' },
       { id:'movements',   label:'Gestión de Insumos', icon:'layers' },
       { id:'maintenance', label:'Mantenimientos',     icon:'wrench' },
       { id:'add-item',    label:'Agregar Artículo',   icon:'plus', hidden:true },
-      { id:'new-purchase', label:'Nueva Orden de Compra', icon:'file-plus', hidden:true },
     ]},
     { label:'Compras', items:[
       { id:'suppliers',  label:'Proveedores',         icon:'truck' },
+      { id:'rubros',     label:'Rubros',              icon:'bookmark' },
       { id:'purchases',  label:'Órdenes de Compra',   icon:'shopping-cart' },
+      { id:'recepcions', label:'Recepciones',         icon:'package-check' },
       { id:'approvals',  label:'Aprobaciones',        icon:'check-square' },
     ]},
     { label:'Finanzas', items:[
@@ -36,6 +38,7 @@
     ]},
     { label:'Configuración', items:[
       { id:'users',      label:'Usuarios y Roles',    icon:'shield-check' },
+      { id:'sedes',      label:'Gestión de Sedes',    icon:'school' },
       { id:'settings',   label:'Configuración',       icon:'settings' },
     ]},
   ];
