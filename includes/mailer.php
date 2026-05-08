@@ -48,6 +48,61 @@ class Mailer {
         );
     }
 
+    public static function sendConformityNotification($orden_id, $is_absence = false) {
+        $pdo = db();
+        $stmt = $pdo->prepare("SELECT oc.*, p.razon_social as proveedor_nombre FROM ordenes_compra oc JOIN proveedores p ON oc.proveedor_id = p.id WHERE oc.id = ?");
+        $stmt->execute([$orden_id]);
+        $oc = $stmt->fetch();
+        
+        $subject = "Documentación subida: {$oc['numero_oc']} - Lista para pago";
+        $title = $is_absence ? "Ausencia de Documento Marcada" : "Conformidad de Servicio Subida";
+        $msg = $is_absence ? "El encargado de compras ha marcado que no existe documento físico para esta orden." : "El encargado de compras ha subido el documento de conformidad para esta orden.";
+
+        $html = self::getSimpleTemplate($title, $msg, $oc);
+        
+        self::sendHTML(self::$EMAILS['tesoreria'], $subject, $html);
+        self::sendHTML(self::$EMAILS['finanzas'], $subject, $html);
+    }
+
+    public static function sendPaymentReminder($orden_id, $monto, $fecha, $detalle = '') {
+        $pdo = db();
+        $stmt = $pdo->prepare("SELECT oc.*, p.razon_social as proveedor_nombre FROM ordenes_compra oc JOIN proveedores p ON oc.proveedor_id = p.id WHERE oc.id = ?");
+        $stmt->execute([$orden_id]);
+        $oc = $stmt->fetch();
+
+        $subject = "Recordatorio de Pago Próximo: {$oc['numero_oc']}";
+        $title = "Recordatorio de Vencimiento de Pago";
+        $msg = "Se le informa que el pago de la orden <strong>{$oc['numero_oc']}</strong> vence el día de mañana (<strong>{$fecha}</strong>). <br><br> Detalle: " . ($detalle ?: "Pago único / Crédito");
+
+        $html = self::getSimpleTemplate($title, $msg, $oc, $monto);
+        
+        self::sendHTML(self::$EMAILS['tesoreria'], $subject, $html);
+    }
+
+    private static function getSimpleTemplate($title, $msg, $oc, $monto = null) {
+        $monto_html = $monto ? "<p style='margin:0; color: #1b5cff; font-size: 18px;'><strong>Monto: S/ " . number_format($monto, 2) . "</strong></p>" : "";
+        return "
+        <div style='font-family: sans-serif; color: #333; max-width: 600px; margin: auto; border: 1px solid #ddd; border-radius: 8px; overflow: hidden;'>
+            <div style='background: #1b5cff; color: white; padding: 20px; text-align: center;'>
+                <h1 style='margin:0; font-size: 20px;'>CATÓLICA SCHOOL</h1>
+                <p style='margin:5px 0 0; opacity: 0.8;'>{$title}</p>
+            </div>
+            <div style='padding: 20px;'>
+                <p>{$msg}</p>
+                <div style='background: #f8fafc; padding: 15px; border-radius: 8px; margin-bottom: 20px;'>
+                    <p style='margin:0 0 5px;'><strong>Documento:</strong> {$oc['numero_oc']}</p>
+                    <p style='margin:0 0 5px;'><strong>Proveedor:</strong> {$oc['proveedor_nombre']}</p>
+                    {$monto_html}
+                </div>
+                <p style='font-size: 13px; color: #64748b;'>Por favor, ingrese al sistema para procesar el pago o verificar la documentación.</p>
+            </div>
+            <div style='background: #f1f5f9; padding: 15px; text-align: center; font-size: 11px; color: #64748b;'>
+                Este es un correo automático, por favor no lo responda.<br>
+                © " . date('Y') . " Católica School - Gestión de Tesorería.
+            </div>
+        </div>";
+    }
+
     private static function sendHTML($to, $subject, $html) {
         $headers = "MIME-Version: 1.0" . "\r\n";
         $headers .= "Content-type:text/html;charset=UTF-8" . "\r\n";
@@ -92,8 +147,13 @@ class Mailer {
                         "<p style='margin:0 0 5px; font-size:12px; color:#1b5cff;'><strong>Adelanto (" . number_format($oc['adelanto_porcentaje'], 0) . "%): S/ " . number_format($oc['adelanto_monto'], 2) . "</strong> / Saldo: S/ " . number_format($oc['saldo_monto'], 2) . "</p>" : "") . "
                     " . (strpos($oc['condicion_detalle'], 'cuotas') !== false ? 
                         "<p style='margin:0 0 5px; font-size:12px; color:#666;'><em>* Se cancelará en " . intval($oc['condicion_detalle']) . " cuotas de S/ " . number_format($oc['total'] / max(1, intval($oc['condicion_detalle'])), 2) . " c/u.</em></p>" : "") . "
-                    <p style='margin:0; color: #1b5cff; font-size: 18px;'><strong>Total: S/ " . number_format($oc['total'], 2) . "</strong> <span style='font-size:12px; color:#666;'>(Inc. " . ($oc['igv_porcentaje'] ?? 18) . "% IGV)</span></p>
+                    <p style='margin:0; color: #1b5cff; font-size: 18px;'><strong>Total OC: S/ " . number_format($oc['total'], 2) . "</strong> <span style='font-size:12px; color:#666;'>(Inc. " . ($oc['igv_porcentaje'] ?? 18) . "% IGV)</span></p>
                 </div>
+                " . ($oc['monto_movilidad'] > 0 ? "
+                <div style='background: #fff7ed; padding: 12px; border-left: 4px solid #f97316; border-radius: 4px; margin-bottom: 15px;'>
+                    <p style='margin:0; color: #c2410c; font-size: 14px;'><strong>Movilidad (Pago por separado):</strong> S/ " . number_format($oc['monto_movilidad'], 2) . "</p>
+                    <p style='margin:5px 0 0; color: #1e293b; font-size: 18px;'><strong>TOTAL OPERACIÓN: S/ " . number_format($oc['total'] + $oc['monto_movilidad'], 2) . "</strong></p>
+                </div>" : "") . "
 
                 <table style='width: 100%; border-collapse: collapse; font-size: 13px;'>
                     <thead>

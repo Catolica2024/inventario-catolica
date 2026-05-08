@@ -8,6 +8,9 @@
       { id:'search',        label:'Buscar',            icon:'search' },
       { id:'notifications', label:'Notificaciones',    icon:'bell' },
     ]},
+    { label:'Gestión', items:[
+      { id:'approvals',  label:'Aprobaciones',        icon:'check-square' },
+    ]},
     { label:'Almacén', items:[
       { id:'inventory',   label:'Inventario',         icon:'package' },
       { id:'assets',      label:'Gestión de Activos', icon:'boxes' },
@@ -23,7 +26,6 @@
       { id:'rubros',     label:'Rubros',              icon:'bookmark' },
       { id:'purchases',  label:'Órdenes de Compra',   icon:'shopping-cart' },
       { id:'recepcions', label:'Recepciones',         icon:'package-check' },
-      { id:'approvals',  label:'Aprobaciones',        icon:'check-square' },
     ]},
     { label:'Finanzas', items:[
       { id:'treasury',   label:'Tesorería',           icon:'landmark' },

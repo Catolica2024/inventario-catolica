@@ -29,6 +29,16 @@ try {
                 $cuotas = $pdo->prepare("SELECT * FROM ordenes_cuotas WHERE orden_id = ? ORDER BY numero_cuota");
                 $cuotas->execute([$_GET['id']]);
                 $oc['cuotas'] = $cuotas->fetchAll();
+
+                // Movilidad si aplica
+                $mob = $pdo->prepare("SELECT m.*, p.razon_social as proveedor_nombre, p.banco, p.numero_cuenta, p.cci 
+                                     FROM ordenes_movilidad m 
+                                     LEFT JOIN proveedores p ON m.proveedor_id = p.id 
+                                     WHERE m.orden_id = ? 
+                                     LIMIT 1");
+                $mob->execute([$_GET['id']]);
+                $oc['mobility'] = $mob->fetch();
+
                 json_response(['purchase' => $oc]);
                 break;
             }
@@ -36,7 +46,10 @@ try {
             $rows = $pdo->query("
                 SELECT oc.*, p.razon_social as proveedor_nombre, a.nombre as area_nombre,
                        (SELECT COUNT(*) FROM ordenes_cuotas WHERE orden_id = oc.id) as total_cuotas_reg,
-                       (SELECT COUNT(*) FROM ordenes_cuotas WHERE orden_id = oc.id AND pagado = 1) as cuotas_pagadas
+                       (SELECT COUNT(*) FROM ordenes_cuotas WHERE orden_id = oc.id AND pagado = 1) as cuotas_pagadas,
+                       (SELECT pagado FROM ordenes_movilidad WHERE orden_id = oc.id LIMIT 1) as mobility_pagado,
+                       (SELECT voucher_url FROM ordenes_movilidad WHERE orden_id = oc.id LIMIT 1) as mobility_voucher,
+                       (SELECT p2.razon_social FROM ordenes_movilidad m2 JOIN proveedores p2 ON m2.proveedor_id = p2.id WHERE m2.orden_id = oc.id LIMIT 1) as mobility_proveedor_nombre
                 FROM ordenes_compra oc
                 JOIN proveedores p ON oc.proveedor_id = p.id
                 LEFT JOIN areas a ON oc.area_id = a.id
@@ -80,8 +93,8 @@ try {
             $pdo->beginTransaction();
             $stmt = $pdo->prepare("
                 INSERT INTO ordenes_compra
-                  (creado_por, numero_oc, tipo, proveedor_id, fecha, area_id, moneda, condicion_pago, condicion_detalle, adelanto_porcentaje, adelanto_monto, saldo_monto, fecha_requerida, subtotal, igv, igv_porcentaje, precios_con_igv, total, monto, estado, observaciones)
-                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                  (creado_por, numero_oc, tipo, proveedor_id, fecha, area_id, moneda, condicion_pago, condicion_detalle, adelanto_porcentaje, adelanto_monto, saldo_monto, fecha_requerida, subtotal, igv, igv_porcentaje, precios_con_igv, total, monto, estado, observaciones, incluye_movilidad, monto_movilidad)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             ");
             $stmt->execute([
                 $b['usuario_id'] ?? null,
@@ -104,16 +117,35 @@ try {
                 $total,
                 $total,
                 'Pendiente',
-                $b['observaciones'] ?? null
+                $b['observaciones'] ?? null,
+                $b['incluye_movilidad'] ?? 1,
+                $b['monto_movilidad'] ?? 0
             ]);
             $orden_id = $pdo->lastInsertId();
 
             // Insertar ítems
             if (!empty($items)) {
-                $si = $pdo->prepare("INSERT INTO ordenes_compra_items (orden_id, item_id, descripcion, unidad, cantidad, precio_unitario, total) VALUES (?,?,?,?,?,?,?)");
+                $si = $pdo->prepare("INSERT INTO ordenes_compra_items (orden_id, item_id, categoria_nombre, prefijo, descripcion, unidad, cantidad, precio_unitario, total) VALUES (?,?,?,?,?,?,?,?,?)");
                 foreach ($items as $it) {
-                    $si->execute([$orden_id, $it['item_id'] ?? null, $it['descripcion'], $it['unidad'] ?? 'Unidad', $it['cantidad'], $it['precio_unitario'], $it['total']]);
+                    $si->execute([
+                        $orden_id,
+                        $it['item_id'] ?? null,
+                        $it['categoria_nombre'] ?? null,
+                        $it['prefijo'] ?? null,
+                        $it['descripcion'],
+                        $it['unidad'] ?? 'Unidad',
+                        $it['cantidad'],
+                        $it['precio_unitario'],
+                        $it['total']
+                    ]);
                 }
+            }
+
+            // Insertar movilidad si es por separado
+            if (isset($b['mobility']) && !empty($b['mobility'])) {
+                $mob = $b['mobility'];
+                $sm = $pdo->prepare("INSERT INTO ordenes_movilidad (orden_id, monto, descripcion, fecha, proveedor_id) VALUES (?,?,?,?,?)");
+                $sm->execute([$orden_id, $mob['monto'], $mob['desc'] ?? null, $mob['fecha'] ?? date('Y-m-d'), $mob['proveedor_id'] ?? null]);
             }
 
             // Calcular y guardar fecha_vencimiento para crédito
@@ -175,6 +207,20 @@ try {
             $b = get_body();
             $id = $b['id'] ?? null;
             if (!$id) json_response(['error' => 'ID requerido'], 400);
+
+            // ── Guardar links de Google Drive (solo URLs, sin datos extra) ──
+            if (($b['action'] ?? '') === 'save_drive_links') {
+                $fields = [];
+                $vals   = [];
+                if (isset($b['pdf_oc_url']))  { $fields[] = 'pdf_oc_url = ?';  $vals[] = $b['pdf_oc_url'];  }
+                if (isset($b['pdf_mov_url'])) { $fields[] = 'pdf_mov_url = ?'; $vals[] = $b['pdf_mov_url']; }
+                if (empty($fields)) json_response(['error' => 'Sin campos para actualizar'], 400);
+                $vals[] = $id;
+                $pdo->prepare("UPDATE ordenes_compra SET " . implode(', ', $fields) . " WHERE id = ?")
+                    ->execute($vals);
+                json_response(['ok' => true]);
+                break;
+            }
 
             // Si es una actualización completa (desde edición)
             if (isset($b['proveedor_id'])) {
@@ -244,21 +290,97 @@ try {
             } else if (($b['action'] ?? '') === 'pay') {
                 $stmt = $pdo->prepare("UPDATE ordenes_compra SET pagado = 1, fecha_pago = NOW(), voucher_url = ? WHERE id = ?");
                 $stmt->execute([$b['voucher_url'], $id]);
+
+                // Notificar al proveedor principal
+                $ocFull = $pdo->prepare("SELECT oc.*, p.razon_social as proveedor_nombre, p.email as proveedor_email FROM ordenes_compra oc JOIN proveedores p ON oc.proveedor_id = p.id WHERE oc.id = ?");
+                $ocFull->execute([$id]);
+                $ocData = $ocFull->fetch();
+
+                if ($ocData && $ocData['proveedor_email'] && $b['voucher_url']) {
+                    require_once '../includes/mailer.php';
+                    Mailer::sendPaymentVoucherToSupplier([
+                        'to' => $ocData['proveedor_email'],
+                        'subject' => "Confirmación de Pago: {$ocData['numero_oc']}",
+                        'provider' => $ocData['proveedor_nombre'],
+                        'oc_number' => $ocData['numero_oc'],
+                        'monto' => $ocData['total'],
+                        'moneda' => $ocData['moneda'],
+                        'voucher_url' => $b['voucher_url']
+                    ]);
+                }
+
+                // Pagar movilidad si viene el voucher por separado
+                if (isset($b['voucher_movilidad_url']) && $b['voucher_movilidad_url']) {
+                    $stmtMob = $pdo->prepare("UPDATE ordenes_movilidad SET pagado = 1, fecha_pago = NOW(), voucher_url = ? WHERE orden_id = ?");
+                    $stmtMob->execute([$b['voucher_movilidad_url'], $id]);
+
+                    // Notificar al proveedor de movilidad
+                    $mobFull = $pdo->prepare("SELECT m.*, p.razon_social as proveedor_nombre, p.email as proveedor_email 
+                                            FROM ordenes_movilidad m 
+                                            JOIN proveedores p ON m.proveedor_id = p.id 
+                                            WHERE m.orden_id = ?");
+                    $mobFull->execute([$id]);
+                    $mobData = $mobFull->fetch();
+
+                    if ($mobData && $mobData['proveedor_email']) {
+                        require_once '../includes/mailer.php';
+                        Mailer::sendPaymentVoucherToSupplier([
+                            'to' => $mobData['proveedor_email'],
+                            'subject' => "Confirmación de Pago de Movilidad: {$ocData['numero_oc']}",
+                            'provider' => $mobData['proveedor_nombre'],
+                            'oc_number' => $ocData['numero_oc'] . " (MOVILIDAD)",
+                            'monto' => $mobData['monto'],
+                            'moneda' => $ocData['moneda'],
+                            'voucher_url' => $b['voucher_movilidad_url']
+                        ]);
+                    }
+                }
+                json_response(['ok' => true]);
+            } else if (($b['action'] ?? '') === 'pay_mobility') {
+                $stmtMob = $pdo->prepare("UPDATE ordenes_movilidad SET pagado = 1, fecha_pago = NOW(), voucher_url = ? WHERE orden_id = ?");
+                $stmtMob->execute([$b['voucher_url'], $id]);
+
+                // Notificar al proveedor de movilidad
+                $mobFull = $pdo->prepare("SELECT m.*, p.razon_social as proveedor_nombre, p.email as proveedor_email, oc.numero_oc, oc.moneda
+                                        FROM ordenes_movilidad m 
+                                        JOIN proveedores p ON m.proveedor_id = p.id 
+                                        JOIN ordenes_compra oc ON m.orden_id = oc.id
+                                        WHERE m.orden_id = ?");
+                $mobFull->execute([$id]);
+                $mobData = $mobFull->fetch();
+
+                if ($mobData && $mobData['proveedor_email']) {
+                    require_once '../includes/mailer.php';
+                    Mailer::sendPaymentVoucherToSupplier([
+                        'to' => $mobData['proveedor_email'],
+                        'subject' => "Confirmación de Pago de Movilidad: {$mobData['numero_oc']}",
+                        'provider' => $mobData['proveedor_nombre'],
+                        'oc_number' => $mobData['numero_oc'] . " (MOVILIDAD)",
+                        'monto' => $mobData['monto'],
+                        'moneda' => $mobData['moneda'],
+                        'voucher_url' => $b['voucher_url']
+                    ]);
+                }
                 json_response(['ok' => true]);
             } else if (($b['action'] ?? '') === 'receive') {
                 $conformidad = $b['conformidad_url'] ?? null;
                 $comprobante = $b['comprobante_url'] ?? null;
+                $sin_conformidad = $b['sin_conformidad'] ?? 0;
                 
                 $sets = [];
                 $params = [];
                 
                 if ($conformidad) {
-                    $sets[] = "conformidad_url = ?, fecha_conformidad = NOW()";
+                    $sets[] = "conformidad_url = ?, fecha_conformidad = NOW(), sin_conformidad = 0";
                     $params[] = $conformidad;
                 }
                 if ($comprobante) {
                     $sets[] = "comprobante_url = ?, fecha_recepcion = NOW()";
                     $params[] = $comprobante;
+                }
+                if (isset($b['sin_conformidad'])) {
+                    $sets[] = "sin_conformidad = ?";
+                    $params[] = $sin_conformidad;
                 }
                 
                 if (empty($sets)) json_response(['error' => 'No se proporcionó documento'], 400);
@@ -267,12 +389,28 @@ try {
                 $params[] = $id;
                 $pdo->prepare($sql)->execute($params);
                 
+                // --- NOTIFICACIONES A TESORERÍA ---
+                if ($conformidad || $sin_conformidad == 1) {
+                    // Notificación solo en el sistema y solo a tesoreros activos
+                    $stmtTes = $pdo->prepare("SELECT u.id FROM usuarios u JOIN roles r ON u.rol_id = r.id WHERE r.id = 'tesoreria' AND u.estado = 'activo'");
+                    $stmtTes->execute();
+                    $tesoreros = $stmtTes->fetchAll();
+                    
+                    $ocNum = $pdo->query("SELECT numero_oc FROM ordenes_compra WHERE id = $id")->fetchColumn();
+                    $msg = "Se ha subido la " . ($sin_conformidad == 1 ? 'ausencia de ' : '') . "conformidad para la orden $ocNum. Ya puede procesar el pago.";
+                    
+                    foreach ($tesoreros as $t) {
+                        $pdo->prepare("INSERT INTO notificaciones (usuario_id, titulo, mensaje, tipo) VALUES (?, 'Documentación Lista', ?, 'info')")
+                            ->execute([$t['id'], $msg]);
+                    }
+                }
+
                 // Verificar si ambos están para cambiar estado a 'Recibida'
-                $check = $pdo->prepare("SELECT conformidad_url, comprobante_url, tipo, numero_oc, creado_por FROM ordenes_compra oc JOIN proveedores p ON oc.proveedor_id = p.id WHERE oc.id = ?");
+                $check = $pdo->prepare("SELECT conformidad_url, comprobante_url, sin_conformidad, tipo, numero_oc, creado_por FROM ordenes_compra WHERE id = ?");
                 $check->execute([$id]);
                 $curr = $check->fetch();
                 
-                if ($curr['conformidad_url'] && $curr['comprobante_url']) {
+                if (($curr['conformidad_url'] || $curr['sin_conformidad'] == 1) && $curr['comprobante_url']) {
                     $pdo->prepare("UPDATE ordenes_compra SET estado = 'Recibida' WHERE id = ?")->execute([$id]);
                     
                     // --- INTEGRACIÓN CON INVENTARIO ---
@@ -372,6 +510,28 @@ try {
                     $voucher_url = $c['voucher_url'];
                     $concepto = "Cuota N° " . $c['numero_cuota'];
                     $monto = $c['monto_cuota'];
+                } else if ($type === 'mobility') {
+                    $sqlMob = "SELECT oc.*, m.voucher_url as mob_voucher, m.monto as mob_monto,
+                                      p.razon_social as mob_razon, p.email as mob_email, p.contacto as mob_contacto 
+                               FROM ordenes_compra oc 
+                               JOIN ordenes_movilidad m ON oc.id = m.orden_id
+                               JOIN proveedores p ON m.proveedor_id = p.id 
+                               WHERE oc.id = ?";
+                    $stmtMob = $pdo->prepare($sqlMob);
+                    $stmtMob->execute([$id]);
+                    $mobInfo = $stmtMob->fetch();
+                    
+                    if (!$mobInfo) json_response(['error' => 'No hay movilidad registrada para esta orden'], 404);
+                    if (empty($mobInfo['mob_email'])) json_response(['error' => 'El transportista no tiene correo registrado'], 400);
+                    
+                    // Sobrescribir datos del receptor para el Mailer
+                    $oc['proveedor_email'] = $mobInfo['mob_email'];
+                    $oc['razon_social'] = $mobInfo['mob_razon'];
+                    $oc['proveedor_contacto'] = $mobInfo['mob_contacto'];
+                    
+                    $voucher_url = $mobInfo['mob_voucher'];
+                    $concepto = "Servicio de Movilidad / Transporte";
+                    $monto = $mobInfo['mob_monto'];
                 }
                 
                 if (empty($voucher_url)) json_response(['error' => 'No hay voucher registrado para este pago'], 400);

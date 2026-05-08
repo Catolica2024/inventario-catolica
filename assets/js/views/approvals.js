@@ -54,7 +54,10 @@ function renderPending() {
             <span class="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded ${p.aprobado_finanzas ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-400'}">Finanzas</span>
           </div>
           <div class="text-sm text-muted-foreground mt-2">${p.proveedor_nombre} · ${p.fecha || '—'}</div>
-          <div class="text-2xl font-bold mt-2">S/ ${parseFloat(p.monto || 0).toLocaleString('es-PE', {minimumFractionDigits:2})}</div>
+          <div class="text-2xl font-bold mt-2">
+            S/ ${parseFloat(p.total || 0).toLocaleString('es-PE', {minimumFractionDigits:2})}
+            ${p.monto_movilidad > 0 ? `<span class="text-xs text-orange-600 block mt-1">+ S/ ${parseFloat(p.monto_movilidad).toFixed(2)} Movilidad (Total: S/ ${ (parseFloat(p.total) + parseFloat(p.monto_movilidad)).toFixed(2) })</span>` : ''}
+          </div>
           ${p.observaciones ? `<div class="mt-2 p-2 rounded bg-muted text-[11px] italic text-muted-foreground line-clamp-2">"${p.observaciones}"</div>` : ''}
         </div>
         <div class="flex flex-col gap-2 shrink-0" onclick="event.stopPropagation()">
@@ -141,6 +144,22 @@ window.viewOrderDetails = async function(id) {
                   </tr>
                 `).join('')}
               </tbody>
+              <tfoot class="bg-muted/50 font-bold border-t">
+                <tr>
+                  <td colspan="2" class="p-2 text-right uppercase text-[9px]">Subtotal OC</td>
+                  <td class="p-2 text-right">S/ ${parseFloat(oc.total).toFixed(2)}</td>
+                </tr>
+                ${oc.monto_movilidad > 0 ? `
+                <tr>
+                  <td colspan="2" class="p-2 text-right uppercase text-[9px] text-orange-600">Movilidad (Sep.)</td>
+                  <td class="p-2 text-right text-orange-600">S/ ${parseFloat(oc.monto_movilidad).toFixed(2)}</td>
+                </tr>
+                <tr class="bg-primary/5 text-primary">
+                  <td colspan="2" class="p-2 text-right uppercase">Total Operación</td>
+                  <td class="p-2 text-right font-black border-t border-primary/20">S/ ${(parseFloat(oc.total) + parseFloat(oc.monto_movilidad)).toFixed(2)}</td>
+                </tr>
+                ` : ''}
+              </tfoot>
             </table>
           </div>
         </div>
@@ -194,6 +213,7 @@ window.approveOrder = function(id) {
     body: `<p>¿Confirmas la aprobación de la orden <strong>${oc ? oc.numero_oc : ''}</strong> por <strong>S/ ${oc ? parseFloat(oc.monto).toLocaleString('es-PE', {minimumFractionDigits:2}) : ''}</strong>?</p>`,
     confirmText: 'Sí, aprobar',
     onConfirm: async () => {
+      UI.loading('Registrando aprobación...');
       const user = Auth.getUser();
       const resp = await fetch('api/purchases.php', {
         method: 'PUT',
@@ -201,6 +221,7 @@ window.approveOrder = function(id) {
         body: JSON.stringify({ id, action: 'approve', role: user?.role })
       });
       const res = await resp.json();
+      UI.stopLoading();
       if (res.ok) { UI.toast('Aprobación registrada', 'success'); loadApprovals(); }
       else UI.toast('Error: ' + res.error, 'error');
     }
@@ -226,6 +247,7 @@ window.rejectOrder = function(id) {
     onConfirm: async () => {
       const motivo = document.getElementById('reject-motivo')?.value.trim();
       if (!motivo) { UI.toast('El motivo de rechazo es obligatorio', 'error'); return; }
+      UI.loading('Procesando rechazo...');
       const user = Auth.getUser();
       const resp = await fetch('api/purchases.php', {
         method: 'PUT',
@@ -233,6 +255,7 @@ window.rejectOrder = function(id) {
         body: JSON.stringify({ id, action: 'reject', role: user?.role, motivo_rechazo: motivo })
       });
       const res = await resp.json();
+      UI.stopLoading();
       if (res.ok) { UI.toast(`Orden ${oc ? oc.numero_oc : ''} rechazada`, 'success'); loadApprovals(); }
       else UI.toast('Error: ' + res.error, 'error');
     }

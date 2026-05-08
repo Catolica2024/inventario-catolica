@@ -49,5 +49,24 @@ window.UI = {
   },
   emptyState(text='Sin datos disponibles') {
     return `<div class="card p-10 text-center text-muted-foreground"><i data-lucide="inbox" class="mx-auto mb-2"></i><div>${text}</div></div>`;
+  },
+  loading(message = 'Procesando...') {
+    let loader = document.getElementById('global-loader');
+    if (!loader) {
+      loader = document.createElement('div');
+      loader.id = 'global-loader';
+      loader.className = 'loading-overlay fade-in';
+      loader.innerHTML = `
+        <div class="spinner"></div>
+        <p class="text-sm font-bold text-primary animate-pulse">${message}</p>
+      `;
+      document.body.appendChild(loader);
+    } else {
+      loader.querySelector('p').textContent = message;
+    }
+  },
+  stopLoading() {
+    const loader = document.getElementById('global-loader');
+    if (loader) loader.remove();
   }
 };

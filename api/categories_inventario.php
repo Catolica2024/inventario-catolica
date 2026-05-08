@@ -20,12 +20,31 @@ try {
                 json_response(['next_code' => $next]);
                 break;
             }
+            
+            // Acción especial: generar prefijo único
+            if (isset($_GET['action']) && $_GET['action'] === 'generate_prefix') {
+                $name = $_GET['name'] ?? '';
+                $excludeId = $_GET['exclude_id'] ?? null;
+                $prefix = generateUniquePrefix($pdo, $name, $excludeId);
+                json_response(['prefix' => $prefix]);
+                break;
+            }
+
             $rows = $pdo->query("SELECT * FROM categorias_inventario ORDER BY nombre ASC")->fetchAll();
             json_response(['categories' => $rows]);
             break;
             
         case 'POST':
             $b = get_body();
+            if (empty($b['nombre'])) json_response(['error' => 'Nombre requerido'], 400);
+            
+            // Validar prefijo único
+            if (!empty($b['prefijo'])) {
+                $check = $pdo->prepare("SELECT id FROM categorias_inventario WHERE prefijo = ?");
+                $check->execute([$b['prefijo']]);
+                if ($check->fetch()) json_response(['error' => 'El prefijo ya está en uso'], 400);
+            }
+
             $sql = "INSERT INTO categorias_inventario (codigo, nombre, descripcion, tipo, prefijo) VALUES (?,?,?,?,?)";
             $stmt = $pdo->prepare($sql);
             $stmt->execute([
@@ -40,6 +59,15 @@ try {
 
         case 'PUT':
             $b = get_body();
+            if (empty($b['id']) || empty($b['nombre'])) json_response(['error' => 'ID y Nombre requeridos'], 400);
+
+            // Validar prefijo único (excluyendo el actual)
+            if (!empty($b['prefijo'])) {
+                $check = $pdo->prepare("SELECT id FROM categorias_inventario WHERE prefijo = ? AND id != ?");
+                $check->execute([$b['prefijo'], $b['id']]);
+                if ($check->fetch()) json_response(['error' => 'El prefijo ya está en uso'], 400);
+            }
+
             $sql = "UPDATE categorias_inventario SET codigo=?, nombre=?, descripcion=?, tipo=?, prefijo=? WHERE id=?";
             $stmt = $pdo->prepare($sql);
             $stmt->execute([
@@ -65,4 +93,33 @@ try {
     }
 } catch (Throwable $e) {
     json_response(['error' => 'Error: ' . $e->getMessage()], 500);
+}
+
+function generateUniquePrefix($pdo, $name, $excludeId = null) {
+    // Normalizar: quitar acentos, caracteres especiales, pasar a mayúsculas
+    $clean = strtoupper(preg_replace('/[^a-zA-Z]/', '', iconv('UTF-8', 'ASCII//TRANSLIT', $name)));
+    if (strlen($clean) < 2) $clean .= "CAT";
+    
+    $base = substr($clean, 0, 3);
+    $prefix = $base;
+    
+    $sql = "SELECT COUNT(*) FROM categorias_inventario WHERE prefijo = ?";
+    if ($excludeId) $sql .= " AND id != " . intval($excludeId);
+    $stmt = $pdo->prepare($sql);
+    
+    $attempt = 1;
+    while (true) {
+        $stmt->execute([$prefix]);
+        if ($stmt->fetchColumn() == 0) return $prefix;
+        
+        // Si hay colisión, intentamos variaciones
+        if ($attempt < strlen($clean) - 2) {
+            $prefix = substr($clean, 0, 3 + $attempt);
+        } else {
+            // Si ya no hay letras, usamos las 2 primeras + un número
+            $prefix = substr($base, 0, 2) . ($attempt - (strlen($clean) - 3));
+        }
+        $attempt++;
+        if ($attempt > 99) return $base . rand(10,99); // Último recurso
+    }
 }

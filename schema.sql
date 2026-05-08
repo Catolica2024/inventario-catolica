@@ -119,6 +119,7 @@ CREATE TABLE proveedores (
     contacto VARCHAR(100),
     telefono VARCHAR(20),
     categoria_id INT,
+    estado ENUM('activo', 'inactivo') DEFAULT 'activo',
     FOREIGN KEY (categoria_id) REFERENCES categorias(id)
 );
 

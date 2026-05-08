@@ -26,6 +26,7 @@ window.Views.treasury = function() {
               <th>Condición de Pago</th>
               <th>Monto Total</th>
               <th>Estado Pago</th>
+              <th>Documentación</th>
               <th class="text-right">Acciones</th>
             </tr>
           </thead>
@@ -56,12 +57,15 @@ window.Views.treasury.afterMount = loadTreasuryData;
 async function loadTreasuryData() {
     const tbody = document.getElementById('treasury-table-body');
     if (!tbody) return;
+    UI.loading('Cargando datos de tesorería...');
     try {
         const resp = await fetch('api/purchases.php').then(r => r.json());
         _treasuryData = (resp.purchases || []).filter(p => p.estado === 'Aprobada' || p.estado === 'Recibida');
         renderTreasuryTable();
     } catch {
         tbody.innerHTML = '<tr><td colspan="6" class="text-center py-10 text-destructive">Error al cargar datos.</td></tr>';
+    } finally {
+        UI.stopLoading();
     }
 }
 
@@ -70,19 +74,28 @@ function renderTreasuryTable() {
     if (!tbody) return;
 
     const list = _treasuryData.filter(p => {
-        const esCuotas = p.total_cuotas_reg > 0;
-        const esAdelanto = p.condicion_pago === 'Adelanto + Saldo';
-        const cuotasEnCurso = esCuotas && p.cuotas_pagadas > 0 && p.pagado == 0;
-        const adelantoEnCurso = esAdelanto && p.adelanto_pagado == 1 && p.pagado == 0;
+        const tieneMovilidad = parseFloat(p.monto_movilidad || 0) > 0;
+        const movilidadPagada = tieneMovilidad ? (p.mobility_pagado == 1) : true;
+        const ocPagada = p.pagado == 1;
         
-        if (_treasuryCurrentTab === 'pending') return p.pagado == 0 && !cuotasEnCurso && !adelantoEnCurso;
-        if (_treasuryCurrentTab === 'partial') return cuotasEnCurso || adelantoEnCurso;
-        return p.pagado == 1;
+        // 1. Historial: AMBOS deben estar pagados (OC/OS + Movilidad)
+        const esHistorial = ocPagada && movilidadPagada;
+        if (_treasuryCurrentTab === 'history') return esHistorial;
+
+        // 2. Cuotas en Curso: SOLO para Crédito en Cuotas que no han terminado
+        const esCreditoCuotas = p.condicion_pago === 'Credito' && p.total_cuotas_reg > 0;
+        const esParcialCuotas = esCreditoCuotas && !esHistorial;
+        
+        if (_treasuryCurrentTab === 'partial') return esParcialCuotas;
+        
+        // 3. Pendientes: Todo lo demás que no esté pagado totalmente
+        // Esto incluye: Al contado, Crédito en Días, Adelanto + Saldo, y OCs pagadas con movilidad pendiente
+        return !esHistorial && !esParcialCuotas;
     });
 
     if (list.length === 0) {
         const msgs = { pending: 'No hay pagos pendientes.', partial: 'No hay cuotas en curso.', history: 'No hay historial de pagos.' };
-        tbody.innerHTML = `<tr><td colspan="6" class="text-center py-10 text-muted-foreground">${msgs[_treasuryCurrentTab]}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="7" class="text-center py-10 text-muted-foreground">${msgs[_treasuryCurrentTab]}</td></tr>`;
         return;
     }
 
@@ -144,6 +157,21 @@ function renderTreasuryTable() {
         } else {
             estadoBadge = '<span class="badge badge-yellow"><i data-lucide="clock" class="w-3 h-3"></i> Pendiente</span>';
         }
+ 
+        // --- Badge de Documentación ---
+        let docStatusBadge = '';
+        const hasConf = p.conformidad_url || p.sin_conformidad == 1;
+        const hasComp = p.comprobante_url;
+
+        if (!hasConf) {
+            docStatusBadge = '<span class="text-[10px] text-red-600 font-bold flex items-center gap-1"><i data-lucide="alert-triangle" class="w-3 h-3"></i> Compras aún no subió conformidad</span>';
+        } else if (hasConf && p.pagado == 0) {
+            docStatusBadge = '<span class="text-[10px] text-blue-600 font-bold flex items-center gap-1"><i data-lucide="check-circle" class="w-3 h-3"></i> Conformidad lista, es hora de cancelar</span>';
+        } else if (p.pagado == 1 && !hasComp) {
+            docStatusBadge = '<span class="text-[10px] text-orange-600 font-bold flex items-center gap-1"><i data-lucide="file-warning" class="w-3 h-3"></i> Compras aún no sube la factura</span>';
+        } else if (hasConf && hasComp) {
+            docStatusBadge = '<span class="text-[10px] text-green-600 font-bold flex items-center gap-1"><i data-lucide="check-check" class="w-3 h-3"></i> Toda la documentación se subió</span>';
+        }
 
         return `
         <tr>
@@ -153,8 +181,12 @@ function renderTreasuryTable() {
             </td>
             <td class="font-medium text-sm">${p.proveedor_nombre}</td>
             <td>${condBadge}</td>
-            <td class="font-bold text-primary">${monSym(p)} ${parseFloat(p.total || 0).toLocaleString('es-PE', {minimumFractionDigits:2})}</td>
+            <td class="font-bold text-primary">
+                ${monSym(p)} ${parseFloat(p.total || 0).toLocaleString('es-PE', {minimumFractionDigits:2})}
+                ${p.monto_movilidad > 0 ? `<div class="text-[9px] text-orange-600 font-medium flex items-center gap-1 mt-0.5"><i data-lucide="truck" class="w-2.5 h-2.5"></i> + ${monSym(p)} ${parseFloat(p.monto_movilidad).toFixed(2)} Mov.</div>` : ''}
+            </td>
             <td>${estadoBadge}</td>
+            <td>${docStatusBadge}</td>
             <td class="text-right">
                 <button class="btn btn-primary btn-sm" onclick="openPaymentDetails(${p.id})">
                     <i data-lucide="${p.pagado == 1 ? 'eye' : 'credit-card'}" class="w-3.5 h-3.5"></i>
@@ -286,7 +318,7 @@ window.openPaymentDetails = async function(id) {
                         <div class="flex items-center gap-2">
                             <span class="font-bold text-sm ${p.pagado == 1 ? 'text-green-700' : 'text-primary'}">${monSym} ${parseFloat(p.saldo_monto).toFixed(2)}</span>
                             ${p.pagado == 0 && isAdelantoPagado ? `
-                                <button class="btn btn-primary btn-sm text-xs px-2 py-1" onclick="openFinalPayment(${p.id}, '${p.numero_oc}-SALDO', '${p.conformidad_url || ''}')">
+                                <button class="btn btn-primary btn-sm text-xs px-2 py-1" onclick="openFinalPayment(${p.id}, '${p.numero_oc}-SALDO', '${p.conformidad_url || ''}', ${p.sin_conformidad})">
                                     <i data-lucide="credit-card" class="w-3 h-3"></i> Pagar Saldo
                                 </button>
                             ` : ''}
@@ -331,19 +363,30 @@ window.openPaymentDetails = async function(id) {
     const body = `
         <div class="space-y-4">
             <!-- Resumen del documento -->
-            <div class="grid grid-cols-3 gap-3 text-sm">
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
                 <div class="p-3 bg-muted/30 rounded-lg">
                     <div class="text-[10px] uppercase font-bold text-muted-foreground mb-0.5">Documento</div>
                     <div class="font-bold font-mono text-xs">${p.numero_oc}</div>
                 </div>
                 <div class="p-3 bg-muted/30 rounded-lg">
-                    <div class="text-[10px] uppercase font-bold text-muted-foreground mb-0.5">Monto Total</div>
-                    <div class="font-bold text-primary">${monSym} ${parseFloat(p.total || 0).toLocaleString('es-PE', {minimumFractionDigits:2})}</div>
+                    <div class="text-[10px] uppercase font-bold text-muted-foreground mb-0.5">Total OC</div>
+                    <div class="font-bold">${monSym} ${parseFloat(p.total || 0).toLocaleString('es-PE', {minimumFractionDigits:2})}</div>
                 </div>
-                <div class="p-3 bg-muted/30 rounded-lg">
+                ${p.monto_movilidad > 0 ? `
+                <div class="p-3 bg-orange-50 rounded-lg border border-orange-100">
+                    <div class="text-[10px] uppercase font-bold text-orange-600 mb-0.5">Movilidad (Sep.)</div>
+                    <div class="font-bold text-orange-700">${monSym} ${parseFloat(p.monto_movilidad).toFixed(2)}</div>
+                </div>
+                <div class="p-3 bg-primary/10 rounded-lg border border-primary/20">
+                    <div class="text-[10px] uppercase font-bold text-primary mb-0.5">Total Operación</div>
+                    <div class="font-black text-primary">${monSym} ${(parseFloat(p.total) + parseFloat(p.monto_movilidad)).toFixed(2)}</div>
+                </div>
+                ` : `
+                <div class="p-3 bg-muted/30 rounded-lg sm:col-span-2">
                     <div class="text-[10px] uppercase font-bold text-muted-foreground mb-0.5">Condición</div>
                     <div class="font-medium text-xs">${p.condicion_pago}${p.condicion_detalle ? ' — ' + p.condicion_detalle : ''}</div>
                 </div>
+                `}
             </div>
 
             ${condPagoSection ? `<div class="card p-3 border-primary/20">${condPagoSection}</div>` : ''}
@@ -389,16 +432,68 @@ window.openPaymentDetails = async function(id) {
                 </div>
             </div>
 
+            ${fullOC.mobility ? `
+            <div class="card p-4 border-orange-200 bg-orange-50/50">
+                <div class="flex items-center justify-between mb-3">
+                    <h4 class="font-bold flex items-center gap-2 text-orange-700 text-sm"><i data-lucide="truck" class="w-4 h-4"></i>Pago de Movilidad</h4>
+                    ${fullOC.mobility.pagado == 1 
+                        ? '<span class="badge badge-green text-[10px]">PAGADO</span>' 
+                        : '<span class="badge badge-orange text-[10px]">PENDIENTE</span>'}
+                </div>
+                
+                <div class="grid grid-cols-2 gap-3 text-xs mb-4">
+                    <div class="col-span-1">
+                        <div class="text-orange-600/70 uppercase font-bold text-[10px] mb-1">Proveedor Transportista</div>
+                        <div class="font-medium text-orange-900">${fullOC.mobility.proveedor_nombre || '—'}</div>
+                    </div>
+                    <div class="col-span-1">
+                        <div class="text-orange-600/70 uppercase font-bold text-[10px] mb-1">Monto a Pagar</div>
+                        <div class="font-bold text-lg text-orange-700">${monSym} ${parseFloat(fullOC.mobility.monto).toFixed(2)}</div>
+                    </div>
+                    <div>
+                        <div class="text-orange-600/70 uppercase font-bold text-[10px] mb-1">Banco / Cuenta</div>
+                        <div class="font-medium text-orange-900">${fullOC.mobility.banco || '—'} / ${fullOC.mobility.numero_cuenta || '—'}</div>
+                    </div>
+                    <div>
+                        <div class="text-orange-600/70 uppercase font-bold text-[10px] mb-1">CCI</div>
+                        <div class="font-medium text-orange-900">${fullOC.mobility.cci || '—'}</div>
+                    </div>
+                </div>
+
+                ${fullOC.mobility.pagado == 0 ? `
+                    <div class="space-y-2 border-t border-orange-200 pt-3">
+                        <p class="text-[10px] text-orange-800 font-bold uppercase mb-1">Procesar Pago de Movilidad</p>
+                        <div class="flex gap-2">
+                            <div class="flex-1 border-2 border-dashed border-orange-300 rounded-lg p-2 text-center cursor-pointer hover:bg-orange-100 transition-colors" onclick="document.getElementById('pay-voucher-mob-indep').click()">
+                                <i data-lucide="upload-cloud" class="w-4 h-4 text-orange-600 mx-auto"></i>
+                                <p id="mob-v-name-indep" class="text-[9px] text-orange-700 font-bold truncate">Subir Voucher Movilidad</p>
+                                <input type="file" id="pay-voucher-mob-indep" class="hidden" accept="image/*,application/pdf" onchange="document.getElementById('mob-v-name-indep').textContent = this.files[0]?.name || ''">
+                            </div>
+                            <button class="btn btn-primary btn-sm px-4" onclick="pagarMovilidad(${fullOC.id})">
+                                <i data-lucide="check" class="w-4 h-4"></i> Confirmar Pago
+                            </button>
+                        </div>
+                    </div>
+                ` : `
+                    <div class="border-t border-orange-200 pt-2 flex justify-between items-center">
+                        <span class="text-[10px] text-green-700 font-medium italic">Pagado el ${new Date(fullOC.mobility.fecha_pago).toLocaleDateString('es-PE')}</span>
+                        ${fullOC.mobility.voucher_url ? `<a href="${fullOC.mobility.voucher_url}" target="_blank" class="text-[10px] text-primary hover:underline font-bold flex items-center gap-1"><i data-lucide="external-link" class="w-3 h-3"></i>Ver Voucher</a>` : ''}
+                    </div>
+                `}
+            </div>` : ''}
+
             ${showPayForm ? `
                 <!-- Formulario pago total -->
-                <div class="space-y-3">
-                    <h4 class="font-bold text-sm flex items-center gap-2"><i data-lucide="upload" class="w-4 h-4"></i>Cargar Voucher de Pago</h4>
-                    <div class="border-2 border-dashed border-muted rounded-xl p-5 text-center cursor-pointer hover:border-primary/40 transition-colors" onclick="document.getElementById('pay-voucher').click()">
-                        <i data-lucide="upload-cloud" class="w-8 h-8 text-muted-foreground mx-auto mb-2"></i>
-                        <p class="text-xs text-muted-foreground">Haga clic para subir el voucher (imagen o PDF)</p>
-                        <input type="file" id="pay-voucher" class="hidden" accept="image/*,application/pdf" onchange="document.getElementById('pay-voucher-name').textContent = this.files[0]?.name || ''">
+                <div class="space-y-4">
+                    <div class="p-4 border rounded-xl bg-primary/5 border-primary/20">
+                        <h4 class="font-bold text-sm flex items-center gap-2 mb-3"><i data-lucide="upload" class="w-4 h-4 text-primary"></i>Voucher Pago Proveedor OC</h4>
+                        <div class="border-2 border-dashed border-primary/20 rounded-lg p-4 text-center cursor-pointer hover:bg-primary/10 transition-colors" onclick="document.getElementById('pay-voucher').click()">
+                            <i data-lucide="upload-cloud" class="w-6 h-6 text-primary mx-auto mb-1"></i>
+                            <p class="text-[10px] text-muted-foreground font-medium">Subir voucher para ${sup.razon_social}</p>
+                            <input type="file" id="pay-voucher" class="hidden" accept="image/*,application/pdf" onchange="document.getElementById('pay-voucher-name').textContent = this.files[0]?.name || ''">
+                        </div>
+                        <div id="pay-voucher-name" class="text-[10px] text-primary font-bold text-center mt-2"></div>
                     </div>
-                    <div id="pay-voucher-name" class="text-xs text-primary font-medium text-center"></div>
                 </div>
             ` : ''}
 
@@ -419,18 +514,24 @@ window.openPaymentDetails = async function(id) {
         onConfirm: async () => {
             const fileInput = document.getElementById('pay-voucher');
             if (!fileInput?.files[0]) { UI.toast('Adjunte el voucher de pago', 'error'); return; }
-            UI.toast('Subiendo voucher a Google Drive...', 'info');
+
+            UI.loading('Subiendo voucher a Google Drive...');
             const driveUrl = await uploadVoucherToDrive(fileInput.files[0], p.numero_oc);
-            if (!driveUrl) return;
+            if (!driveUrl) { UI.stopLoading(); return; }
+
+            UI.loading('Registrando pago en el sistema...');
             const resp = await fetch('api/purchases.php', {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ id: p.id, action: 'pay', voucher_url: driveUrl })
             }).then(r => r.json());
+            
+            UI.stopLoading();
             if (resp.ok) {
                 UI.toast('Pago registrado con éxito', 'success');
-                document.getElementById('modal-overlay')?.remove();
-                loadTreasuryData();
+                // Cerrar todos los modales y recargar
+                document.querySelectorAll('.modal-backdrop').forEach(m => m.remove());
+                setTimeout(() => location.reload(), 800);
             } else { UI.toast('Error: ' + resp.error, 'error'); }
         }
     });
@@ -457,26 +558,31 @@ window.pagarAdelanto = function(ordenId, nombre) {
         onConfirm: async () => {
             const fi = document.getElementById('adelanto-voucher');
             if (!fi?.files[0]) { UI.toast('Adjunte el voucher', 'error'); return; }
-            UI.toast('Subiendo a Drive...', 'info');
+            UI.loading('Subiendo a Drive...');
             const driveUrl = await uploadVoucherToDrive(fi.files[0], nombre);
-            if (!driveUrl) return;
+            if (!driveUrl) { UI.stopLoading(); return; }
+
+            UI.loading('Procesando Adelanto...');
             const resp = await fetch('api/purchases.php', {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ id: ordenId, action: 'pay_adelanto', voucher_url: driveUrl })
             }).then(r => r.json());
+
+            UI.stopLoading();
             if (resp.ok) {
                 UI.toast('Adelanto registrado con éxito', 'success');
-                document.getElementById('modal-overlay')?.remove();
-                loadTreasuryData();
+                // Cerrar todos los modales y recargar
+                document.querySelectorAll('.modal-backdrop').forEach(m => m.remove());
+                setTimeout(() => location.reload(), 800);
             } else { UI.toast('Error: ' + resp.error, 'error'); }
         }
     });
     lucide.createIcons();
 };
 
-window.openFinalPayment = function(ordenId, nombre, comprobanteUrl) {
-    const hasDoc = comprobanteUrl && comprobanteUrl !== '' && comprobanteUrl !== 'null';
+window.openFinalPayment = function(ordenId, nombre, comprobanteUrl, sinConformidad) {
+    const hasDoc = (comprobanteUrl && comprobanteUrl !== '' && comprobanteUrl !== 'null') || sinConformidad == 1;
     
     let body = '';
     if (!hasDoc) {
@@ -484,15 +590,15 @@ window.openFinalPayment = function(ordenId, nombre, comprobanteUrl) {
             <div class="p-4 bg-red-50 border border-red-200 rounded-xl text-center">
                 <i data-lucide="alert-circle" class="w-10 h-10 text-red-500 mx-auto mb-2"></i>
                 <h3 class="font-bold text-red-800 text-sm">PAGO BLOQUEADO</h3>
-                <p class="text-xs text-red-600 mt-1">El encargado de compras aún no ha subido la <strong>Conformidad de Servicio</strong> o <strong>Recepción</strong>.</p>
-                <p class="text-[10px] text-red-500 mt-2">Es obligatorio que el área de compras valide la entrega antes de proceder con el saldo final.</p>
+                <p class="text-xs text-red-600 mt-1">El encargado de compras aún no ha subido la <strong>Conformidad de Servicio</strong> o marcado su ausencia.</p>
+                <p class="text-[10px] text-red-500 mt-2">Es obligatorio validar la entrega antes de proceder con el saldo final.</p>
             </div>`;
     } else {
         body = `
             <div class="space-y-3">
                 <div class="p-2.5 bg-green-50 border border-green-200 rounded-lg flex items-center gap-2 mb-3">
                     <i data-lucide="check-square" class="w-4 h-4 text-green-600"></i>
-                    <span class="text-xs text-green-700 font-medium">Conformidad de compras verificada</span>
+                    <span class="text-xs text-green-700 font-medium">${sinConformidad == 1 ? 'Ausencia de conformidad física validada' : 'Conformidad de compras verificada'}</span>
                 </div>
                 <p class="text-sm text-muted-foreground">Adjunte el voucher de pago para el <strong>Saldo Final</strong>.</p>
                 <div class="border-2 border-dashed border-muted rounded-xl p-5 text-center cursor-pointer hover:border-primary/40 transition-colors" onclick="document.getElementById('saldo-voucher').click()">
@@ -513,18 +619,23 @@ window.openFinalPayment = function(ordenId, nombre, comprobanteUrl) {
             if (!hasDoc) return;
             const fi = document.getElementById('saldo-voucher');
             if (!fi?.files[0]) { UI.toast('Adjunte el voucher', 'error'); return; }
-            UI.toast('Subiendo a Drive...', 'info');
+            UI.loading('Subiendo a Drive...');
             const driveUrl = await uploadVoucherToDrive(fi.files[0], nombre);
-            if (!driveUrl) return;
+            if (!driveUrl) { UI.stopLoading(); return; }
+
+            UI.loading('Procesando Pago Final...');
             const resp = await fetch('api/purchases.php', {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ id: ordenId, action: 'pay', voucher_url: driveUrl })
             }).then(r => r.json());
+
+            UI.stopLoading();
             if (resp.ok) {
                 UI.toast('Saldo final registrado con éxito', 'success');
-                document.getElementById('modal-overlay')?.remove();
-                loadTreasuryData();
+                // Cerrar todos los modales y recargar
+                document.querySelectorAll('.modal-backdrop').forEach(m => m.remove());
+                setTimeout(() => location.reload(), 800);
             } else { UI.toast('Error: ' + resp.error, 'error'); }
         }
     });
@@ -551,22 +662,52 @@ window.pagarCuota = function(ordenId, cuotaId, nombre) {
         onConfirm: async () => {
             const fi = document.getElementById('cuota-voucher');
             if (!fi?.files[0]) { UI.toast('Adjunte el voucher', 'error'); return; }
-            UI.toast('Subiendo a Drive...', 'info');
+            UI.loading('Subiendo a Drive...');
             const driveUrl = await uploadVoucherToDrive(fi.files[0], nombre);
-            if (!driveUrl) return;
+            if (!driveUrl) { UI.stopLoading(); return; }
+
+            UI.loading('Procesando Pago de Cuota...');
             const resp = await fetch('api/purchases.php', {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ id: ordenId, action: 'pay_cuota', cuota_id: cuotaId, voucher_url: driveUrl })
             }).then(r => r.json());
+
+            UI.stopLoading();
             if (resp.ok) {
                 UI.toast('Cuota registrada con éxito', 'success');
-                document.getElementById('modal-overlay')?.remove();
-                loadTreasuryData();
+                // Cerrar todos los modales y recargar
+                document.querySelectorAll('.modal-backdrop').forEach(m => m.remove());
+                setTimeout(() => location.reload(), 800);
             } else { UI.toast('Error: ' + resp.error, 'error'); }
         }
     });
     lucide.createIcons();
+};
+
+// Pagar movilidad de forma independiente
+window.pagarMovilidad = async function(ordenId) {
+    const fi = document.getElementById('pay-voucher-mob-indep');
+    if (!fi?.files[0]) { UI.toast('Adjunte el voucher de movilidad', 'error'); return; }
+    
+    UI.loading('Subiendo voucher a Drive...');
+    const driveUrl = await uploadVoucherToDrive(fi.files[0], 'MOB-' + ordenId);
+    if (!driveUrl) { UI.stopLoading(); return; }
+
+    UI.loading('Registrando pago de movilidad...');
+    const resp = await fetch('api/purchases.php', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: ordenId, action: 'pay_mobility', voucher_url: driveUrl })
+    }).then(r => r.json());
+    
+    UI.stopLoading();
+    if (resp.ok) {
+        UI.toast('Pago de movilidad registrado con éxito', 'success');
+        // Cerrar todos los modales y recargar
+        document.querySelectorAll('.modal-backdrop').forEach(m => m.remove());
+        setTimeout(() => location.reload(), 800);
+    } else { UI.toast('Error: ' + resp.error, 'error'); }
 };
 
 window.copyToClipboard = function(text) {

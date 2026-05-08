@@ -463,11 +463,12 @@ function categoryFormHTML(cat) {
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
           <label class="text-sm font-medium">Nombre <span class="text-destructive">*</span></label>
-          <input id="cat-nombre" class="input mt-1 w-full" placeholder="Ej: Material didáctico" value="${cat ? cat.nombre : ''}">
+          <input id="cat-nombre" class="input mt-1 w-full" placeholder="Ej: Material didáctico" value="${cat ? cat.nombre : ''}" 
+                 oninput="generateCategoryPrefix(${cat?.id || 'null'})">
         </div>
         <div>
-          <label class="text-sm font-medium">Prefijo Código <span class="text-xs text-muted-foreground">(3 letras)</span></label>
-          <input id="cat-prefijo" class="input mt-1 w-full font-mono uppercase" maxlength="3" placeholder="Ej: LPT" value="${cat ? (cat.prefijo || '') : ''}">
+          <label class="text-sm font-medium">Prefijo Código <span class="text-xs text-muted-foreground">(auto-generado)</span></label>
+          <input id="cat-prefijo" class="input mt-1 w-full font-mono uppercase bg-muted cursor-not-allowed" readonly placeholder="Auto" value="${cat ? (cat.prefijo || '') : ''}">
         </div>
       </div>
       <div>
@@ -476,6 +477,22 @@ function categoryFormHTML(cat) {
       </div>
     </div>`;
 }
+
+let _catPrefixTimeout = null;
+window.generateCategoryPrefix = function(excludeId = null) {
+    clearTimeout(_catPrefixTimeout);
+    _catPrefixTimeout = setTimeout(async () => {
+        const nombre = document.getElementById('cat-nombre').value.trim();
+        const prefijoEl = document.getElementById('cat-prefijo');
+        if (nombre.length < 2) return;
+        
+        try {
+            const url = `api/categories_inventario.php?action=generate_prefix&name=${encodeURIComponent(nombre)}${excludeId ? `&exclude_id=${excludeId}` : ''}`;
+            const resp = await fetch(url).then(r => r.json());
+            if (resp.prefix) prefijoEl.value = resp.prefix;
+        } catch (e) {}
+    }, 400);
+};
 
 async function loadCategories() {
   const tbody = document.getElementById('categories-table-body');
@@ -1061,7 +1078,10 @@ async function loadSuppliers() {
     tbody.innerHTML = data.suppliers.map(s => `
       <tr>
         <td class="font-mono text-xs">${s.ruc}</td>
-        <td class="font-medium">${s.razon_social}</td>
+        <td class="font-medium">
+          <div>${s.razon_social}</div>
+          <span class="badge ${s.estado === 'activo' ? 'badge-green' : 'badge-red'} text-[9px] uppercase py-0 px-1">${s.estado}</span>
+        </td>
         <td class="text-xs text-muted-foreground">${s.direccion || '—'}</td>
         <td>${s.contacto || '—'}</td>
         <td>${s.telefono || '—'}</td>
@@ -1122,11 +1142,18 @@ async function openSupplierModal(sData) {
         <label class="text-sm font-medium">Dirección</label>
         <input id="sup-direccion" class="input mt-1 w-full" value="${sData ? sData.direccion : ''}">
       </div>
-      <div class="md:col-span-2">
+      <div class="md:col-span-1">
         <label class="text-sm font-medium">Rubro Comercial</label>
         <select id="sup-cat" class="select mt-1 w-full">
           <option value="">Seleccione rubro...</option>
           ${catData.categories.map(c => `<option value="${c.id}" ${sData && sData.rubro_id == c.id ? 'selected' : ''}>${c.nombre}</option>`).join('')}
+        </select>
+      </div>
+      <div class="md:col-span-1">
+        <label class="text-sm font-medium">Estado del Proveedor</label>
+        <select id="sup-estado" class="select mt-1 w-full">
+          <option value="activo" ${sData && sData.estado === 'activo' ? 'selected' : (!sData ? 'selected' : '')}>Activo (Disponible para OC/OS)</option>
+          <option value="inactivo" ${sData && sData.estado === 'inactivo' ? 'selected' : ''}>Inactivo (No aparecerá en OC/OS)</option>
         </select>
       </div>
     </div>`;
@@ -1150,7 +1177,8 @@ async function openSupplierModal(sData) {
         contacto: document.getElementById('sup-contacto').value.trim(), 
         telefono: document.getElementById('sup-telefono').value.trim(), 
         direccion: document.getElementById('sup-direccion').value.trim(),
-        rubro_id: document.getElementById('sup-cat').value 
+        rubro_id: document.getElementById('sup-cat').value,
+        estado: document.getElementById('sup-estado').value
       };
       if (sData) bodyData.id = sData.id;
       const resp = await fetch('api/suppliers.php', { method: sData ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(bodyData) });
@@ -1232,6 +1260,11 @@ function renderPurchasesTable(list) {
             <div class="flex items-center gap-1 text-[10px] ${p.rechazado_finanzas ? 'text-destructive font-bold' : (p.aprobado_finanzas ? 'text-green-600 font-bold' : 'text-gray-400')}">
               <i data-lucide="${p.rechazado_finanzas ? 'x' : (p.aprobado_finanzas ? 'check' : 'clock')}" class="w-3 h-3"></i> J. Finanzas
             </div>
+            ${p.incluye_movilidad == 0 && p.monto_movilidad > 0 ? `
+              <div class="flex items-center gap-1 text-[10px] ${p.mobility_pagado == 1 ? 'text-orange-600 font-bold' : 'text-orange-400/60'} pt-1 border-t border-orange-100 mt-1">
+                <i data-lucide="truck" class="w-2.5 h-2.5"></i> Mov: ${p.mobility_pagado == 1 ? 'PAGADO' : 'PEND.'}
+              </div>
+            ` : ''}
           </div>
         </div>
       </td>
@@ -1274,7 +1307,7 @@ window.filterPurchases = function() {
 async function openPurchaseModal(pData) {
   const id = pData ? pData.id : null;
   const [suppData, areaData, fullData] = await Promise.all([
-    fetch('api/suppliers.php').then(r => r.json()).catch(() => ({ suppliers: [] })),
+    fetch('api/suppliers.php' + (pData ? '' : '?active_only=1')).then(r => r.json()).catch(() => ({ suppliers: [] })),
     fetch('api/areas.php').then(r => r.json()).catch(() => ({ areas: [] })),
     id ? fetch(`api/purchases.php?id=${id}`).then(r => r.json()).catch(() => null) : null
   ]);
@@ -1416,12 +1449,48 @@ function getPaymentProgressHTML(p, cuotas) {
             <p class="text-xs text-red-700">Esta orden fue rechazada y no procederá a pago.</p>
         </div>`;
     }
+
+    // SECCIÓN DE MOVILIDAD (Si es independiente)
+    let mobilityHTML = '';
+    if (p.mobility) {
+        const m = p.mobility;
+        const isMobPagado = m.pagado == 1;
+        mobilityHTML = `
+        <div class="mt-4 pt-4 border-t border-dashed border-orange-200">
+            <h5 class="text-[10px] font-black text-orange-700 uppercase mb-2 flex items-center gap-1">
+                <i data-lucide="truck" class="w-3 h-3"></i> Pago de Movilidad (Servicio Externo)
+            </h5>
+            <div class="flex items-center justify-between p-3 rounded-lg border ${isMobPagado ? 'bg-orange-50 border-orange-200' : 'bg-white border-border shadow-sm'}">
+                <div class="flex items-center gap-3">
+                    <div class="w-8 h-8 rounded-full flex items-center justify-center ${isMobPagado ? 'bg-orange-600 text-white' : 'bg-muted text-muted-foreground'}">
+                        <i data-lucide="package" class="w-4 h-4"></i>
+                    </div>
+                    <div>
+                        <div class="text-xs font-bold uppercase truncate max-w-[150px]">${m.proveedor_nombre || 'Transportista'}</div>
+                        <div class="text-[10px] ${isMobPagado ? 'text-orange-700 font-medium' : 'text-muted-foreground'}">
+                            ${isMobPagado ? 'Pagado el ' + new Date(m.fecha_pago).toLocaleDateString() : 'Pendiente de pago en Tesorería'}
+                        </div>
+                    </div>
+                </div>
+                <div class="flex flex-col items-end gap-1">
+                    <div class="font-bold text-sm ${isMobPagado ? 'text-orange-700' : 'text-orange-600'}">${monSym} ${parseFloat(m.monto).toFixed(2)}</div>
+                    ${isMobPagado ? `
+                        <button class="btn btn-outline h-6 px-2 text-[9px] border-orange-600 text-orange-700 hover:bg-orange-50" onclick="sendPaymentNotification(${p.id}, 'mobility')">
+                            <i data-lucide="mail" class="w-3 h-3 mr-1"></i> Notificar Pago
+                        </button>
+                    ` : ''}
+                </div>
+            </div>
+        </div>`;
+    }
+
+    let mainHTML = '';
     
     // CASO 1: ADELANTO + SALDO
     if (p.condicion_pago === 'Adelanto + Saldo') {
         const isAdelantoPagado = p.adelanto_pagado == 1;
         const isTotalPagado = p.pagado == 1;
-        return `
+        mainHTML = `
         <div class="space-y-3">
             <div class="flex items-center justify-between p-3 rounded-lg border ${isAdelantoPagado ? 'bg-green-50 border-green-200' : 'bg-white border-border shadow-sm'}">
                 <div class="flex items-center gap-3">
@@ -1467,9 +1536,8 @@ function getPaymentProgressHTML(p, cuotas) {
             </div>
         </div>`;
     }
-
     // CASO 2: CUOTAS
-    if (cuotas.length > 0) {
+    else if (cuotas.length > 0) {
         const pagadas = cuotas.filter(c => c.pagado == 1).length;
         const cuotasList = cuotas.map(c => {
             const isPagada = c.pagado == 1;
@@ -1499,7 +1567,7 @@ function getPaymentProgressHTML(p, cuotas) {
             </div>`;
         }).join('');
 
-        return `
+        mainHTML = `
         <div class="space-y-2">
             <div class="flex items-center justify-between text-xs mb-1">
                 <span class="font-semibold">Progreso de pagos</span>
@@ -1513,25 +1581,28 @@ function getPaymentProgressHTML(p, cuotas) {
             </div>
         </div>`;
     }
-
     // CASO 3: AL CONTADO / OTROS
-    return `
-    <div class="p-4 rounded-xl border ${p.pagado == 1 ? 'bg-green-50 border-green-200' : 'bg-yellow-50 border-yellow-200'}">
-        <div class="flex items-center justify-between">
-            <div>
-                <div class="text-sm font-bold ${p.pagado == 1 ? 'text-green-700' : 'text-yellow-700'}">${p.pagado == 1 ? 'Totalmente Pagado' : 'Pendiente de Pago'}</div>
-                <p class="text-xs text-muted-foreground mt-1">${p.pagado == 1 ? 'El pago se realizó el ' + new Date(p.fecha_pago).toLocaleDateString() : 'La orden está aprobada y esperando ser procesada por Tesorería.'}</p>
+    else {
+        mainHTML = `
+        <div class="p-4 rounded-xl border ${p.pagado == 1 ? 'bg-green-50 border-green-200' : 'bg-yellow-50 border-yellow-200'}">
+            <div class="flex items-center justify-between">
+                <div>
+                    <div class="text-sm font-bold ${p.pagado == 1 ? 'text-green-700' : 'text-yellow-700'}">${p.pagado == 1 ? 'Totalmente Pagado' : 'Pendiente de Pago'}</div>
+                    <p class="text-xs text-muted-foreground mt-1">${p.pagado == 1 ? 'El pago se realizó el ' + new Date(p.fecha_pago).toLocaleDateString() : 'La orden está aprobada y esperando ser procesada por Tesorería.'}</p>
+                </div>
+                <div class="text-right flex flex-col items-end gap-2">
+                    <div class="text-lg font-black ${p.pagado == 1 ? 'text-green-700' : 'text-primary'}">${monSym} ${parseFloat(p.monto).toFixed(2)}</div>
+                    ${p.pagado == 1 ? `
+                        <button class="btn btn-outline h-7 px-3 text-xs border-green-600 text-green-700 hover:bg-green-50" onclick="sendPaymentNotification(${p.id}, 'contado')">
+                            <i data-lucide="mail" class="w-3.5 h-3.5 mr-1"></i> Enviar Comprobante al Proveedor
+                        </button>
+                    ` : ''}
+                </div>
             </div>
-            <div class="text-right flex flex-col items-end gap-2">
-                <div class="text-lg font-black ${p.pagado == 1 ? 'text-green-700' : 'text-primary'}">${monSym} ${parseFloat(p.monto).toFixed(2)}</div>
-                ${p.pagado == 1 ? `
-                    <button class="btn btn-outline h-7 px-3 text-xs border-green-600 text-green-700 hover:bg-green-50" onclick="sendPaymentNotification(${p.id}, 'contado')">
-                        <i data-lucide="mail" class="w-3.5 h-3.5 mr-1"></i> Enviar Comprobante al Proveedor
-                    </button>
-                ` : ''}
-            </div>
-        </div>
-    </div>`;
+        </div>`;
+    }
+
+    return mainHTML + mobilityHTML;
 }
 
 window.sendPaymentNotification = async function(id, type, paymentId = null) {
@@ -1552,7 +1623,7 @@ window.sendPaymentNotification = async function(id, type, paymentId = null) {
         confirmText: 'Sí, enviar ahora',
         cancelText: 'Cancelar',
         onConfirm: async () => {
-            UI.toast('Enviando correo...', 'info');
+            UI.loading('Enviando correo al proveedor...');
             try {
                 const resp = await fetch('api/purchases.php', {
                     method: 'PUT',
@@ -1565,12 +1636,14 @@ window.sendPaymentNotification = async function(id, type, paymentId = null) {
                     })
                 }).then(r => r.json());
 
+                UI.stopLoading();
                 if (resp.ok) {
                     UI.toast('Correo enviado correctamente al proveedor', 'success');
                 } else {
                     UI.toast('Error: ' + (resp.error || 'No se pudo enviar el correo'), 'error');
                 }
             } catch (err) {
+                UI.stopLoading();
                 UI.toast('Error de conexión con el servidor', 'error');
                 console.error(err);
             }
@@ -1605,13 +1678,13 @@ window.openReceiveModal = function(id) {
 
       <div class="grid grid-cols-1 gap-4">
         <!-- Conformidad -->
-        <div class="p-4 rounded-xl border-2 ${hasConformidad ? 'bg-green-50/50 border-green-200' : 'border-dashed border-muted hover:border-primary/40'}">
+        <div class="p-4 rounded-xl border-2 ${hasConformidad || p.sin_conformidad == 1 ? 'bg-green-50/50 border-green-200' : 'border-dashed border-muted hover:border-primary/40'}">
             <div class="flex items-center justify-between mb-2">
                 <h4 class="text-sm font-bold flex items-center gap-2">
-                    <i data-lucide="check-circle" class="w-4 h-4 ${hasConformidad ? 'text-green-600' : 'text-muted-foreground'}"></i>
+                    <i data-lucide="check-circle" class="w-4 h-4 ${hasConformidad || p.sin_conformidad == 1 ? 'text-green-600' : 'text-muted-foreground'}"></i>
                     1. Conformidad de Servicio / Recepción
                 </h4>
-                ${hasConformidad ? '<span class="text-[10px] bg-green-600 text-white px-2 py-0.5 rounded-full font-bold">CARGADO</span>' : ''}
+                ${hasConformidad ? '<span class="text-[10px] bg-green-600 text-white px-2 py-0.5 rounded-full font-bold">CARGADO</span>' : (p.sin_conformidad == 1 ? '<span class="text-[10px] bg-orange-600 text-white px-2 py-0.5 rounded-full font-bold">MARCADO: NO EXISTE</span>' : '')}
             </div>
             
             ${hasConformidad ? `
@@ -1620,12 +1693,18 @@ window.openReceiveModal = function(id) {
                 </a>
             ` : `
                 <p class="text-[11px] text-muted-foreground mb-3">Suba el documento que avala la entrega o término del servicio.</p>
-                <div class="flex items-center gap-2">
-                    <input type="file" id="file-conformidad" class="hidden" accept="image/*,application/pdf" onchange="document.getElementById('name-conf').textContent = this.files[0]?.name">
-                    <button class="btn btn-outline btn-sm text-xs" onclick="document.getElementById('file-conformidad').click()">
-                        <i data-lucide="upload" class="w-3 h-3"></i> Seleccionar Archivo
-                    </button>
-                    <span id="name-conf" class="text-[10px] text-muted-foreground truncate max-w-[150px]"></span>
+                <div class="flex items-center gap-3">
+                    <div class="flex-1">
+                        <input type="file" id="file-conformidad" class="hidden" accept="image/*,application/pdf" onchange="document.getElementById('name-conf').textContent = this.files[0]?.name">
+                        <button class="btn btn-outline btn-sm text-xs" onclick="document.getElementById('file-conformidad').click()" ${p.sin_conformidad == 1 ? 'disabled' : ''}>
+                            <i data-lucide="upload" class="w-3 h-3"></i> Seleccionar Archivo
+                        </button>
+                        <span id="name-conf" class="text-[10px] text-muted-foreground truncate max-w-[150px]"></span>
+                    </div>
+                    <div class="flex items-center gap-2 p-2 bg-muted/30 rounded border">
+                        <input type="checkbox" id="chk-no-conf" ${p.sin_conformidad == 1 ? 'checked' : ''} onchange="document.getElementById('file-conformidad').disabled = this.checked; if(this.checked) document.getElementById('name-conf').textContent=''">
+                        <label for="chk-no-conf" class="text-[10px] font-bold cursor-pointer">No existe documento físico</label>
+                    </div>
                 </div>
             `}
         </div>
@@ -1665,9 +1744,12 @@ window.openReceiveModal = function(id) {
     onConfirm: async () => {
       const fConf = document.getElementById('file-conformidad');
       const fComp = document.getElementById('file-comprobante');
+      const noConf = document.getElementById('chk-no-conf')?.checked;
       
-      if ((!fConf || !fConf.files[0]) && (!fComp || !fComp.files[0])) {
-          UI.toast('Debe subir al menos un documento nuevo', 'info');
+      const hasNewDoc = (fConf && fConf.files[0]) || (fComp && fComp.files[0]) || (noConf !== undefined && noConf != p.sin_conformidad);
+      
+      if (!hasNewDoc) {
+          UI.toast('Debe subir un documento o marcar la opción de no existencia', 'info');
           return;
       }
 
@@ -1699,6 +1781,7 @@ window.openReceiveModal = function(id) {
         const payload = { action: 'receive', id: p.id };
         if (fConf && fConf.files[0]) payload.conformidad_url = await upload(fConf.files[0], 'Conformidad');
         if (fComp && fComp.files[0]) payload.comprobante_url = await upload(fComp.files[0], 'Factura');
+        if (noConf !== undefined) payload.sin_conformidad = noConf ? 1 : 0;
 
         const resp = await fetch('api/purchases.php', {
           method: 'PUT',
@@ -1888,7 +1971,7 @@ async function loadRecepcions() {
         if (p.estado !== 'Aprobada' && p.estado !== 'Recibida') return false;
         
         // Si ya tiene ambos, no es pendiente (debería estar en historial)
-        const faltaDoc = !p.conformidad_url || !p.comprobante_url;
+        const faltaDoc = (!p.conformidad_url && p.sin_conformidad == 0) || !p.comprobante_url;
         if (!faltaDoc) return false;
 
         if (p.condicion_pago === 'Adelanto + Saldo') {
@@ -1909,8 +1992,8 @@ async function loadRecepcions() {
         const fechaRef = isAdelanto ? p.adelanto_fecha : p.fecha_pago;
         
         let nextStep = '';
-        if (!p.conformidad_url && !p.comprobante_url) nextStep = 'Conformidad y Factura';
-        else if (!p.conformidad_url) nextStep = 'Subir Conformidad';
+        if (!p.conformidad_url && p.sin_conformidad == 0 && !p.comprobante_url) nextStep = 'Conformidad y Factura';
+        else if (!p.conformidad_url && p.sin_conformidad == 0) nextStep = 'Subir Conformidad';
         else if (!p.comprobante_url) nextStep = 'Subir Factura / RxH';
 
         return `
@@ -1937,8 +2020,8 @@ async function loadRecepcions() {
       }).join('');
     }
 
-    // 2. Historial: Recibidas (con AMBOS documentos)
-    const hist = purchases.filter(p => p.conformidad_url && p.comprobante_url);
+    // 2. Historial: Recibidas (con AMBOS documentos o marcado como sin conformidad + factura)
+    const hist = purchases.filter(p => (p.conformidad_url || p.sin_conformidad == 1) && p.comprobante_url);
     if (tbodyHist) {
       if (hist.length === 0) {
         tbodyHist.innerHTML = '<tr><td colspan="5" class="text-center py-6 text-muted-foreground text-sm">El historial está vacío.</td></tr>';
