@@ -5,42 +5,31 @@
   const MENU = [
     { label:'General', items:[
       { id:'dashboard',     label:'Dashboard',         icon:'home' },
-      { id:'search',        label:'Buscar',            icon:'search' },
       { id:'notifications', label:'Notificaciones',    icon:'bell' },
     ]},
-    { label:'Gestión', items:[
-      { id:'approvals',  label:'Aprobaciones',        icon:'check-square' },
-    ]},
-    { label:'Almacén', items:[
-      { id:'inventory',   label:'Inventario',         icon:'package' },
-      { id:'assets',      label:'Gestión de Activos', icon:'boxes' },
-      { id:'locations',   label:'Ubicaciones',        icon:'map-pin' },
-      { id:'areas',       label:'Áreas',              icon:'building-2' },
+    { label:'Inventario', items:[
+      { id:'registration',   label:'Registrar Bien',      icon:'plus-circle' },
+      { id:'inventory',      label:'Inventario General',  icon:'archive' },
+      { id:'assignments',    label:'Asignaciones',        icon:'user-check' },
+      { id:'transfers',      label:'Traslados',           icon:'move' },
+      { id:'maintenance',    label:'Mantenimiento',       icon:'wrench' },
+      { id:'dispatch',       label:'Despacho Insumos',    icon:'send' },
       { id:'categories-inv', label:'Categorías',          icon:'tag' },
-      { id:'movements',   label:'Gestión de Insumos', icon:'layers' },
-      { id:'maintenance', label:'Mantenimientos',     icon:'wrench' },
-      { id:'add-item',    label:'Agregar Artículo',   icon:'plus', hidden:true },
     ]},
-    { label:'Compras', items:[
-      { id:'suppliers',  label:'Proveedores',         icon:'truck' },
-      { id:'rubros',     label:'Rubros',              icon:'bookmark' },
+    { label:'Organización', items:[
+      { id:'staff',      label:'Personal', icon:'users' },
+      { id:'locations',   label:'Aulas y Espacios',        icon:'map-pin' },
+      { id:'areas',       label:'Áreas / Niveles',         icon:'building-2' },
+    ]},
+    { label:'Gestión de Compras', items:[
       { id:'purchases',  label:'Órdenes de Compra',   icon:'shopping-cart' },
       { id:'recepcions', label:'Recepciones',         icon:'package-check' },
-    ]},
-    { label:'Finanzas', items:[
-      { id:'treasury',   label:'Tesorería',           icon:'landmark' },
-    ]},
-    { label:'Personal', items:[
-      { id:'staff',      label:'Personal',            icon:'users' },
-    ]},
-    { label:'Reportes', items:[
-      { id:'reports',    label:'Reportes',            icon:'bar-chart-3' },
-      { id:'history',    label:'Historial',           icon:'history' },
-      { id:'documents',  label:'Documentos',          icon:'file-text' },
+      { id:'suppliers',  label:'Proveedores',         icon:'truck' },
+      { id:'approvals',  label:'Aprobaciones',        icon:'check-square' },
     ]},
     { label:'Configuración', items:[
-      { id:'users',      label:'Usuarios y Roles',    icon:'shield-check' },
-      { id:'sedes',      label:'Gestión de Sedes',    icon:'school' },
+      { id:'treasury',   label:'Tesorería / Pagos',   icon:'landmark' },
+      { id:'users',      label:'Usuarios del Sistema', icon:'shield-check' },
       { id:'settings',   label:'Configuración',       icon:'settings' },
     ]},
   ];

@@ -66,6 +66,19 @@ try {
         case 'DELETE':
             $id = $_GET['id'] ?? null;
             if (!$id) json_response(['error' => 'ID requerido'], 400);
+
+            $deps = [];
+            $c = $pdo->query("SELECT COUNT(*) FROM ordenes_compra WHERE proveedor_id = $id")->fetchColumn();
+            if ($c > 0) $deps[] = "$c orden(es) de compra registradas";
+
+            $c = $pdo->query("SELECT COUNT(*) FROM ordenes_movilidad WHERE proveedor_id = $id")->fetchColumn();
+            if ($c > 0) $deps[] = "$c registro(s) de movilidad";
+
+            if (!empty($deps)) {
+                json_response(['error' => "No se puede eliminar el proveedor porque tiene: " . implode(", ", $deps) . ". Considere desactivar el proveedor en lugar de eliminarlo."], 400);
+                break;
+            }
+
             $pdo->prepare("DELETE FROM proveedores WHERE id = ?")->execute([$id]);
             json_response(['ok' => true]);
             break;

@@ -1192,3 +1192,54 @@ window.exportOCById = async function(id) {
     UI.toast('Error: ' + e.message, 'error');
   }
 };
+
+// ---- LISTADO DE ÓRDENES DE COMPRA ----
+async function loadPurchases() {
+  const tbody = document.getElementById('purchases-table-body');
+  if (!tbody) return;
+  try {
+    const data = await fetch('api/purchases.php').then(r => r.json());
+    if (!data.purchases || data.purchases.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="7" class="text-center py-10 text-muted-foreground">No hay órdenes de compra registradas.</td></tr>';
+      return;
+    }
+    const STATUS_BADGE = { 'Pendiente': 'badge-yellow', 'Aprobada': 'badge-green', 'Rechazada': 'badge-red', 'Completada': 'badge-blue' };
+    tbody.innerHTML = data.purchases.map(p => `
+      <tr>
+        <td class="font-mono text-xs font-bold text-primary">${p.numero_oc}</td>
+        <td>
+          <div class="font-bold text-sm">${p.proveedor_nombre}</div>
+          <div class="text-[10px] text-muted-foreground uppercase">${p.area_nombre || 'Sin área'}</div>
+        </td>
+        <td class="text-xs">${p.fecha || '—'}</td>
+        <td class="font-bold">S/ ${parseFloat(p.total || 0).toLocaleString('es-PE', {minimumFractionDigits:2})}</td>
+        <td><span class="badge ${STATUS_BADGE[p.estado] || 'badge-gray'}">${p.estado}</span></td>
+        <td class="text-right">
+          <div class="flex justify-end gap-1">
+            <button class="btn btn-ghost p-1.5" onclick="viewOrderDetails(${p.id})"><i data-lucide="eye" class="w-4 h-4"></i></button>
+            <button class="btn btn-ghost p-1.5 text-primary" onclick="exportOCById(${p.id})"><i data-lucide="download" class="w-4 h-4"></i></button>
+          </div>
+        </td>
+      </tr>`).join('');
+    lucide.createIcons();
+  } catch { tbody.innerHTML = '<tr><td colspan="7" class="text-center py-10 text-destructive">Error al cargar órdenes.</td></tr>'; }
+}
+
+window.Views.purchases = function() {
+  return `
+    ${UI.pageHeader('Órdenes de Compra y Servicio', 'Gestión de adquisiciones institucionales', `
+      <button class="btn btn-primary" onclick="Router.go('new-purchase')"><i data-lucide="plus"></i>Nueva Orden</button>
+    `)}
+    <div class="card overflow-hidden">
+      <table class="data">
+        <thead>
+          <tr><th>N° OC/OS</th><th>Proveedor / Área</th><th>Fecha</th><th>Monto Total</th><th>Estado</th><th class="text-right">Acciones</th></tr>
+        </thead>
+        <tbody id="purchases-table-body">
+          <tr><td colspan="6" class="text-center py-10 text-muted-foreground">Cargando órdenes...</td></tr>
+        </tbody>
+      </table>
+    </div>`;
+};
+
+window.Views.purchases.afterMount = loadPurchases;

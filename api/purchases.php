@@ -432,15 +432,15 @@ try {
                         $ocItems = $itemsStmt->fetchAll();
 
                         foreach ($ocItems as $item) {
-                            if ($item['categoria_tipo'] === 'insumo') {
+                            if ($item['categoria_tipo'] === 'insumo' || $item['categoria_tipo'] === 'mobiliario') {
                                 // Registrar movimiento de entrada automático
-                                $mov = $pdo->prepare("INSERT INTO movimientos (item_id, tipo, cantidad, observacion, fecha) VALUES (?, 'entrada', ?, ?, NOW())");
+                                $mov = $pdo->prepare("INSERT INTO movimientos (item_id, tipo, cantidad, observacion, fecha) VALUES (?, 'Entrada', ?, ?, NOW())");
                                 $mov->execute([
                                     $item['item_id'], 
                                     $item['cantidad'], 
                                     "Entrada automática por recepción de " . $ocData['numero_oc']
                                 ]);
-                            } else if ($item['categoria_tipo'] === 'activo') {
+                            } else if ($item['categoria_tipo'] === 'equipo' || $item['categoria_tipo'] === 'activo') {
                                 // Crear registros de activos pendientes (uno por cada unidad comprada)
                                 $actStmt = $pdo->prepare("INSERT INTO activos (item_id, estado, numero_serie) VALUES (?, 'Pendiente de Registro', ?)");
                                 for ($i = 0; $i < $item['cantidad']; $i++) {

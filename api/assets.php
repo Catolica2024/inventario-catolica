@@ -45,11 +45,17 @@ try {
 
             $rows = $pdo->query("
                 SELECT a.*, i.nombre as item_nombre, i.codigo as item_codigo,
-                       ci.nombre as categoria_nombre, u.nombre as ubicacion_nombre
+                       a.codigo_interno as codigo_patrimonial,
+                       ci.nombre as categoria_nombre, 
+                       u.nombre as ubicacion_nombre, u.id as ubicacion_id,
+                       s.nombre as sede_nombre, s.id as sede_id,
+                       p.nombre as responsable_nombre
                 FROM activos a
                 JOIN items i ON a.item_id = i.id
                 LEFT JOIN categorias_inventario ci ON i.categoria_inventario_id = ci.id
                 LEFT JOIN ubicaciones u ON a.ubicacion_id = u.id
+                LEFT JOIN sedes s ON u.sede_id = s.id
+                LEFT JOIN personal p ON a.personal_id = p.id
                 ORDER BY a.id DESC
             ")->fetchAll();
             json_response(['assets' => $rows]);
@@ -57,28 +63,48 @@ try {
 
         case 'POST':
             $b = get_body();
-            $sql = "INSERT INTO activos (numero_serie, codigo_interno, item_id, ubicacion_id, estado) VALUES (?,?,?,?,?)";
-            $stmt = $pdo->prepare($sql);
-            $stmt->execute([
-                $b['numero_serie'],
-                $b['codigo_interno'] ?? null,
-                $b['item_id'],
-                $b['ubicacion_id'] ?: null,
-                $b['estado'] ?? 'Operativo'
-            ]);
-            json_response(['ok' => true, 'id' => $pdo->lastInsertId()]);
+            $pdo->beginTransaction();
+            try {
+                // Si no hay número de serie, generamos uno único automáticamente
+                $serie = !empty($b['numero_serie']) ? $b['numero_serie'] : ('SN-' . time() . '-' . rand(100, 999));
+
+                $sql = "INSERT INTO activos (numero_serie, codigo_interno, item_id, ubicacion_id, personal_id, estado, observaciones_tecnicas) VALUES (?,?,?,?,?,?,?)";
+                $stmt = $pdo->prepare($sql);
+                $stmt->execute([
+                    $serie,
+                    $b['codigo_interno'] ?? null,
+                    $b['item_id'],
+                    $b['ubicacion_id'] ?: null,
+                    $b['personal_id'] ?: null,
+                    $b['estado'] ?? 'Operativo',
+                    $b['observaciones_tecnicas'] ?? null
+                ]);
+                $assetId = $pdo->lastInsertId();
+
+                // Crear movimiento de entrada automático
+                $stmtMov = $pdo->prepare("INSERT INTO movimientos (item_id, tipo, cantidad, observacion) VALUES (?, 'Entrada', 1, ?)");
+                $stmtMov->execute([$b['item_id'], "Registro de activo: Serie " . $serie]);
+
+                $pdo->commit();
+                json_response(['ok' => true, 'id' => $assetId]);
+            } catch (Exception $e) {
+                $pdo->rollBack();
+                throw $e;
+            }
             break;
 
         case 'PUT':
             $b = get_body();
-            $sql = "UPDATE activos SET numero_serie=?, codigo_interno=?, item_id=?, ubicacion_id=?, estado=? WHERE id=?";
+            $sql = "UPDATE activos SET numero_serie=?, codigo_interno=?, item_id=?, ubicacion_id=?, personal_id=?, estado=?, observaciones_tecnicas=? WHERE id=?";
             $stmt = $pdo->prepare($sql);
             $stmt->execute([
                 $b['numero_serie'],
                 $b['codigo_interno'] ?? null,
                 $b['item_id'],
                 $b['ubicacion_id'] ?: null,
+                $b['personal_id'] ?: null,
                 $b['estado'] ?? 'Operativo',
+                $b['observaciones_tecnicas'] ?? null,
                 $b['id']
             ]);
             json_response(['ok' => true]);

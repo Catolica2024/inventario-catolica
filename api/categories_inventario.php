@@ -37,22 +37,21 @@ try {
         case 'POST':
             $b = get_body();
             if (empty($b['nombre'])) json_response(['error' => 'Nombre requerido'], 400);
+            if (empty($b['prefijo'])) json_response(['error' => 'Prefijo requerido'], 400);
             
             // Validar prefijo único
-            if (!empty($b['prefijo'])) {
-                $check = $pdo->prepare("SELECT id FROM categorias_inventario WHERE prefijo = ?");
-                $check->execute([$b['prefijo']]);
-                if ($check->fetch()) json_response(['error' => 'El prefijo ya está en uso'], 400);
-            }
+            $check = $pdo->prepare("SELECT id FROM categorias_inventario WHERE prefijo = ?");
+            $check->execute([$b['prefijo']]);
+            if ($check->fetch()) json_response(['error' => 'El prefijo "' . $b['prefijo'] . '" ya está en uso'], 400);
 
-            $sql = "INSERT INTO categorias_inventario (codigo, nombre, descripcion, tipo, prefijo) VALUES (?,?,?,?,?)";
+            $sql = "INSERT INTO categorias_inventario (nombre, descripcion, tipo, stock_minimo, prefijo) VALUES (?,?,?,?,?)";
             $stmt = $pdo->prepare($sql);
             $stmt->execute([
-                $b['codigo'] ?? null,
                 $b['nombre'],
                 $b['descripcion'] ?? null,
-                $b['tipo'] ?? 'insumo',
-                $b['prefijo'] ?? null
+                (empty($b['tipo']) ? 'insumo' : $b['tipo']),
+                $b['stock_minimo'] ?? 5,
+                strtoupper($b['prefijo'])
             ]);
             json_response(['ok' => true, 'id' => $pdo->lastInsertId()]);
             break;
@@ -68,14 +67,14 @@ try {
                 if ($check->fetch()) json_response(['error' => 'El prefijo ya está en uso'], 400);
             }
 
-            $sql = "UPDATE categorias_inventario SET codigo=?, nombre=?, descripcion=?, tipo=?, prefijo=? WHERE id=?";
+            $sql = "UPDATE categorias_inventario SET nombre=?, descripcion=?, tipo=?, stock_minimo=?, prefijo=? WHERE id=?";
             $stmt = $pdo->prepare($sql);
             $stmt->execute([
-                $b['codigo'] ?? null,
                 $b['nombre'],
                 $b['descripcion'] ?? null,
-                $b['tipo'] ?? 'insumo',
-                $b['prefijo'] ?? null,
+                (empty($b['tipo']) ? 'insumo' : $b['tipo']),
+                $b['stock_minimo'] ?? 5,
+                strtoupper($b['prefijo']),
                 $b['id']
             ]);
             json_response(['ok' => true]);
@@ -84,6 +83,14 @@ try {
         case 'DELETE':
             $id = $_GET['id'] ?? null;
             if (!$id) json_response(['error' => 'ID requerido'], 400);
+
+            // Verificar si hay artículos vinculados
+            $count = $pdo->query("SELECT COUNT(*) FROM items WHERE categoria_inventario_id = $id")->fetchColumn();
+            if ($count > 0) {
+                json_response(['error' => "No se puede eliminar la categoría porque tiene $count artículo(s) vinculados en el Catálogo Maestro. Elimine o mueva esos artículos primero."], 400);
+                break;
+            }
+
             $pdo->prepare("DELETE FROM categorias_inventario WHERE id = ?")->execute([$id]);
             json_response(['ok' => true]);
             break;

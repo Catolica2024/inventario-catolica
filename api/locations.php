@@ -47,10 +47,16 @@ try {
 
         case 'POST':
             $b = get_body();
+            $codigo = $b['codigo'] ?? null;
+            if ($codigo) {
+                $check = $pdo->prepare("SELECT id FROM ubicaciones WHERE codigo = ?");
+                $check->execute([$codigo]);
+                if ($check->fetch()) json_response(['error' => 'El código "' . $codigo . '" ya está en uso por otra ubicación.'], 400);
+            }
             $sql = "INSERT INTO ubicaciones (codigo, nombre, tipo, responsable_id, sede_id) VALUES (?,?,?,?,?)";
             $stmt = $pdo->prepare($sql);
             $stmt->execute([
-                $b['codigo'] ?? null,
+                $codigo,
                 $b['nombre'],
                 $b['tipo'] ?? null,
                 $b['responsable_id'] ?: null,
@@ -61,15 +67,22 @@ try {
 
         case 'PUT':
             $b = get_body();
+            $id = $b['id'];
+            $codigo = $b['codigo'] ?? null;
+            if ($codigo) {
+                $check = $pdo->prepare("SELECT id FROM ubicaciones WHERE codigo = ? AND id != ?");
+                $check->execute([$codigo, $id]);
+                if ($check->fetch()) json_response(['error' => 'El código "' . $codigo . '" ya está en uso por otra ubicación.'], 400);
+            }
             $sql = "UPDATE ubicaciones SET codigo=?, nombre=?, tipo=?, responsable_id=?, sede_id=? WHERE id=?";
             $stmt = $pdo->prepare($sql);
             $stmt->execute([
-                $b['codigo'] ?? null,
+                $codigo,
                 $b['nombre'],
                 $b['tipo'] ?? null,
                 $b['responsable_id'] ?: null,
                 $b['sede_id'] ?: null,
-                $b['id']
+                $id
             ]);
             json_response(['ok' => true]);
             break;
@@ -77,6 +90,20 @@ try {
         case 'DELETE':
             $id = $_GET['id'] ?? null;
             if (!$id) json_response(['error' => 'ID requerido'], 400);
+
+            // Verificar dependencias
+            $deps = [];
+            $c = $pdo->query("SELECT COUNT(*) FROM activos WHERE ubicacion_id = $id")->fetchColumn();
+            if ($c > 0) $deps[] = "$c equipo(s) asignado(s)";
+
+            $c = $pdo->query("SELECT COUNT(*) FROM stock_ubicaciones WHERE ubicacion_id = $id")->fetchColumn();
+            if ($c > 0) $deps[] = "$c lote(s) de mobiliario asignado(s)";
+
+            if (!empty($deps)) {
+                json_response(['error' => "No se puede eliminar la ubicación porque tiene: " . implode(", ", $deps) . ". Reubique estos bienes primero."], 400);
+                break;
+            }
+
             $pdo->prepare("DELETE FROM ubicaciones WHERE id = ?")->execute([$id]);
             json_response(['ok' => true]);
             break;
