@@ -10,25 +10,33 @@
     { label:'Inventario', items:[
       { id:'registration',   label:'Registrar Bien',      icon:'plus-circle' },
       { id:'inventory',      label:'Inventario General',  icon:'archive' },
-      { id:'assignments',    label:'Asignaciones',        icon:'user-check' },
-      { id:'transfers',      label:'Traslados',           icon:'move' },
-      { id:'maintenance',    label:'Mantenimiento',       icon:'wrench' },
-      { id:'dispatch',       label:'Despacho Insumos',    icon:'send' },
       { id:'categories-inv', label:'Categorías',          icon:'tag' },
     ]},
-    { label:'Organización', items:[
-      { id:'staff',      label:'Personal', icon:'users' },
-      { id:'locations',   label:'Aulas y Espacios',        icon:'map-pin' },
-      { id:'areas',       label:'Áreas / Niveles',         icon:'building-2' },
+    { label:'Movimientos', items:[
+      { id:'assignments',    label:'Asignaciones',        icon:'user-check' },
+      { id:'transfers',      label:'Traslados',           icon:'move' },
+      { id:'dispatch',       label:'Despacho Insumos',    icon:'send' },
+    ]},
+    { label:'Mantenimientos y Reparaciones', items:[
+      { id:'maintenance',    label:'Mantenimiento',       icon:'wrench' },
     ]},
     { label:'Gestión de Compras', items:[
       { id:'purchases',  label:'Órdenes de Compra',   icon:'shopping-cart' },
       { id:'recepcions', label:'Recepciones',         icon:'package-check' },
       { id:'suppliers',  label:'Proveedores',         icon:'truck' },
+    ]},
+    { label:'Aprobaciones', items:[
       { id:'approvals',  label:'Aprobaciones',        icon:'check-square' },
     ]},
-    { label:'Configuración', items:[
+    { label:'Tesorería', items:[
       { id:'treasury',   label:'Tesorería / Pagos',   icon:'landmark' },
+    ]},
+    { label:'Organización', items:[
+      { id:'staff',      label:'Personal',            icon:'users' },
+      { id:'locations',  label:'Aulas y Espacios',    icon:'map-pin' },
+      { id:'areas',      label:'Áreas / Niveles',     icon:'building-2' },
+    ]},
+    { label:'Configuración', items:[
       { id:'users',      label:'Usuarios del Sistema', icon:'shield-check' },
       { id:'settings',   label:'Configuración',       icon:'settings' },
     ]},
@@ -39,8 +47,8 @@
       <header class="h-16 border-b border-border bg-white sticky top-0 z-30 flex items-center justify-between px-4 md:px-6">
         <div class="flex items-center gap-3">
           <button id="menu-toggle" class="md:hidden btn btn-ghost p-2"><i data-lucide="menu"></i></button>
-          <div class="w-9 h-9 rounded-lg bg-brand-gradient flex items-center justify-center text-white">
-            <i data-lucide="school"></i>
+          <div class="w-10 h-10 rounded-lg overflow-hidden flex items-center justify-center bg-white shadow-sm border border-border">
+            <img src="assets/images/icono.png" alt="Logo" class="w-full h-full object-cover">
           </div>
           <div class="leading-tight">
             <div class="font-bold">Católica <span class="text-primary">School</span></div>
@@ -74,7 +82,7 @@
   function renderSidebar(user) {
     const nav = document.getElementById('sidebar-nav');
     const groups = MENU
-      .map(g => ({...g, items: g.items.filter(i => canAccess(user.role, i.id))}))
+      .map(g => ({...g, items: g.items.filter(i => canAccess(user, i.id))}))
       .filter(g => g.items.length);
 
     nav.innerHTML = groups.map(g => `
@@ -119,7 +127,7 @@
         window._unreadCount = 0;
         renderSidebar(user);
     }
-    if (!canAccess(user.role, section)) {
+    if (!canAccess(user, section)) {
       document.getElementById('view').innerHTML = `
         <div class="flex flex-col items-center justify-center py-24 text-center">
           <i data-lucide="shield-alert" class="w-12 h-12 text-destructive mb-3"></i>

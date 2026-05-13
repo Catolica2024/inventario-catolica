@@ -62,7 +62,7 @@ window.newRubro = async function() {
     confirmText: 'Guardar',
     onConfirm: async () => {
       const nombre = document.getElementById('rub-nombre').value.trim();
-      if (!nombre) { UI.toast('El nombre es obligatorio', 'error'); return; }
+      if (!nombre) { UI.toast('El nombre es obligatorio', 'error'); return false; }
       try {
         const resp = await fetch('api/rubros.php', {
           method: 'POST',
@@ -88,7 +88,7 @@ window.editRubro = function(id, codigo, nombre, descripcion) {
     confirmText: 'Guardar cambios',
     onConfirm: async () => {
       const newNombre = document.getElementById('rub-nombre').value.trim();
-      if (!newNombre) { UI.toast('El nombre es obligatorio', 'error'); return; }
+      if (!newNombre) { UI.toast('El nombre es obligatorio', 'error'); return false; }
       try {
         const resp = await fetch('api/rubros.php', {
           method: 'PUT',

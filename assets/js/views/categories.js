@@ -54,7 +54,7 @@ window.newInvCategory = function() {
       const nombre = document.getElementById('cat-nombre').value.trim();
       const prefijo = document.getElementById('cat-prefijo').value.trim().toUpperCase();
       const tipo = document.getElementById('cat-tipo').value;
-      if (!nombre || !prefijo) { UI.toast('Nombre y Prefijo son obligatorios', 'error'); return; }
+      if (!nombre || !prefijo) { UI.toast('Nombre y Prefijo son obligatorios', 'error'); return false; }
       
       const res = await fetch('api/categories_inventario.php', { method: 'POST', headers: { 'Content-Type': 'application/json' }, 
         body: JSON.stringify({ 
@@ -139,7 +139,7 @@ window.editInvCategory = async function(id) {
         confirmText: 'Guardar cambios',
         onConfirm: async () => {
             const nombre = document.getElementById('cat-nombre').value.trim();
-            if (!nombre) { UI.toast('El nombre es obligatorio', 'error'); return; }
+            if (!nombre) { UI.toast('El nombre es obligatorio', 'error'); return false; }
             
             const res = await fetch('api/categories_inventario.php', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, 
                 body: JSON.stringify({ 

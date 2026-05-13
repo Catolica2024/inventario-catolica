@@ -18,8 +18,39 @@ window.ROLE_PERMISSIONS = {
   personal:        ['dashboard','search','inventory','notifications'],
 };
 
-window.canAccess = function(role, sectionId) {
-  const perms = window.ROLE_PERMISSIONS[role] || [];
+window.MODULES_LIST = [
+  { id: 'dashboard',     label: 'Dashboard' },
+  { id: 'notifications', label: 'Notificaciones' },
+  { id: 'registration',  label: 'Registrar Bien' },
+  { id: 'inventory',     label: 'Inventario General' },
+  { id: 'categories-inv',label: 'Categorías' },
+  { id: 'assignments',   label: 'Asignaciones' },
+  { id: 'transfers',     label: 'Traslados' },
+  { id: 'dispatch',      label: 'Despacho Insumos' },
+  { id: 'maintenance',   label: 'Mantenimiento' },
+  { id: 'purchases',     label: 'Órdenes de Compra' },
+  { id: 'recepcions',    label: 'Recepciones' },
+  { id: 'suppliers',     label: 'Proveedores' },
+  { id: 'approvals',     label: 'Aprobaciones' },
+  { id: 'treasury',      label: 'Tesorería / Pagos' },
+  { id: 'staff',         label: 'Personal' },
+  { id: 'locations',     label: 'Aulas y Espacios' },
+  { id: 'areas',         label: 'Áreas / Niveles' },
+  { id: 'users',         label: 'Usuarios del Sistema' },
+  { id: 'settings',      label: 'Configuración' }
+];
+
+window.canAccess = function(user, sectionId) {
+  if (!user) return false;
+  
+  // Si el usuario tiene permisos personalizados (string separado por comas)
+  if (user.permissions) {
+    const perms = user.permissions.split(',').map(p => p.trim());
+    return perms.includes('*') || perms.includes(sectionId);
+  }
+
+  // Fallback a permisos por rol
+  const perms = window.ROLE_PERMISSIONS[user.role] || [];
   return perms.includes('*') || perms.includes(sectionId);
 };
 

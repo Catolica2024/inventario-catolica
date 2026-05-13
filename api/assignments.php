@@ -32,11 +32,25 @@ try {
 
             $pdo->beginTransaction();
             try {
-                // 0. VALIDACIÓN: Verificar si el equipo ya está asignado (estado Activo)
-                $check = $pdo->prepare("SELECT id FROM asignaciones WHERE activo_id = ? AND estado = 'Activo' AND fecha_devolucion IS NULL");
+                // 0. VALIDACIÓN: Verificar si el equipo ya está asignado o está de baja
+                $check = $pdo->prepare("SELECT id, estado FROM activos WHERE id = ?");
                 $check->execute([$b['activo_id']]);
-                if ($check->fetch()) {
-                    json_response(['error' => 'Este equipo ya se encuentra asignado a alguien. Debe registrarse la devolución antes de asignarlo nuevamente.'], 400);
+                $assetStatus = $check->fetch();
+
+                if (!$assetStatus) {
+                    json_response(['error' => 'El equipo no existe.'], 404);
+                    return;
+                }
+
+                if ($assetStatus['estado'] === 'Baja') {
+                    json_response(['error' => 'Este equipo se encuentra DE BAJA y no puede ser asignado.'], 400);
+                    return;
+                }
+
+                $checkAsig = $pdo->prepare("SELECT id FROM asignaciones WHERE activo_id = ? AND estado = 'Activo' AND fecha_devolucion IS NULL");
+                $checkAsig->execute([$b['activo_id']]);
+                if ($checkAsig->fetch()) {
+                    json_response(['error' => 'Este equipo ya se encuentra asignado a alguien.'], 400);
                     return;
                 }
 
@@ -125,13 +139,21 @@ try {
                 $asset = $stmtAsset->fetch();
 
                 if ($asset) {
-                    // Registrar entrada de vuelta al stock (Almacén ID 13)
-                    $ALMACEN_ID = 13;
-                    $stmtMov = $pdo->prepare("INSERT INTO movimientos (item_id, tipo, cantidad, ubicacion_id, observacion) VALUES (?, 'Entrada', 1, ?, ?)");
-                    $stmtMov->execute([$asset['item_id'], $ALMACEN_ID, "Devolución de equipo: " . ($asset['codigo_interno'] ?? 'S/N')]);
+                    $isBaja = !empty($b['dar_de_baja']);
+                    $movType = $isBaja ? 'Baja' : 'Entrada';
+                    $movObs = $isBaja ? "BAJA POR DAÑO/OBSOLESCENCIA: " : "Devolución de equipo: ";
                     
-                    // Liberar personal del activo
-                    $pdo->prepare("UPDATE activos SET personal_id = NULL WHERE id = ?")->execute([$asig['activo_id']]);
+                    // Registrar entrada o baja de vuelta al stock (Almacén ID 13)
+                    $ALMACEN_ID = 13;
+                    $stmtMov = $pdo->prepare("INSERT INTO movimientos (item_id, tipo, cantidad, ubicacion_id, observacion) VALUES (?, ?, 1, ?, ?)");
+                    $stmtMov->execute([$asset['item_id'], $movType, $ALMACEN_ID, $movObs . ($asset['codigo_interno'] ?? 'S/N')]);
+                    
+                    // Liberar personal del activo y actualizar estado si es baja
+                    if ($isBaja) {
+                        $pdo->prepare("UPDATE activos SET personal_id = NULL, estado = 'Baja' WHERE id = ?")->execute([$asig['activo_id']]);
+                    } else {
+                        $pdo->prepare("UPDATE activos SET personal_id = NULL WHERE id = ?")->execute([$asig['activo_id']]);
+                    }
                 }
 
                 $pdo->commit();

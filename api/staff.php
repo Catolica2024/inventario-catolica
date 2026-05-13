@@ -34,15 +34,15 @@ try {
                 $b['codigo'] = 'PER-' . str_pad($max + 1, 4, '0', STR_PAD_LEFT);
             }
 
-            $stmt = $pdo->prepare("INSERT INTO personal (codigo, dni, nombre, cargo, area_id, telefono) VALUES (?,?,?,?,?,?)");
-            $stmt->execute([$b['codigo'], $b['dni'] ?? null, $b['nombre'], $b['cargo'] ?? null, $b['area_id'] ?? null, $b['telefono'] ?? null]);
+            $stmt = $pdo->prepare("INSERT INTO personal (codigo, dni, nombre, cargo, area_id, telefono, estado) VALUES (?,?,?,?,?,?,?)");
+            $stmt->execute([$b['codigo'], $b['dni'] ?? null, $b['nombre'], $b['cargo'] ?? null, $b['area_id'] ?? null, $b['telefono'] ?? null, $b['estado'] ?? 'activo']);
             json_response(['ok' => true, 'id' => $pdo->lastInsertId(), 'codigo' => $b['codigo']]);
             break;
 
         case 'PUT':
             $b = get_body();
-            $stmt = $pdo->prepare("UPDATE personal SET codigo=?, dni=?, nombre=?, cargo=?, area_id=?, telefono=? WHERE id=?");
-            $stmt->execute([$b['codigo'], $b['dni'] ?? null, $b['nombre'], $b['cargo'] ?? null, $b['area_id'] ?? null, $b['telefono'] ?? null, $b['id']]);
+            $stmt = $pdo->prepare("UPDATE personal SET codigo=?, dni=?, nombre=?, cargo=?, area_id=?, telefono=?, estado=? WHERE id=?");
+            $stmt->execute([$b['codigo'], $b['dni'] ?? null, $b['nombre'], $b['cargo'] ?? null, $b['area_id'] ?? null, $b['telefono'] ?? null, $b['estado'] ?? 'activo', $b['id']]);
             json_response(['ok' => true]);
             break;
 

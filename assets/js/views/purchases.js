@@ -8,7 +8,7 @@ let _ocCategories = [];
 let _ocItemRows = 0;
 let _ocMobilityData = null;
 
-window.Views['new-purchase'] = function() {
+window.Views['new-purchase'] = function () {
   return `
     ${UI.pageHeader('Nueva Orden de Compra / Servicio', 'Complete el formulario para generar el documento', `
       <button class="btn btn-outline" onclick="Router.go('purchases')"><i data-lucide="arrow-left"></i>Volver</button>
@@ -201,7 +201,7 @@ window.Views['new-purchase'] = function() {
     </datalist>`;
 };
 
-window.Views['new-purchase'].afterMount = async function() {
+window.Views['new-purchase'].afterMount = async function () {
   UI.loading('Cargando catálogos...');
   const [suppData, areaData, invData, catData] = await Promise.all([
     fetch('api/suppliers.php?active_only=1').then(r => r.json()).catch(() => ({ suppliers: [] })),
@@ -219,10 +219,10 @@ window.Views['new-purchase'].afterMount = async function() {
   const catList = document.getElementById('oc-categories-list');
   if (catList) {
     _ocCategories.forEach(c => {
-        const o = document.createElement('option');
-        o.value = c.nombre;
-        o.dataset.prefijo = c.prefijo;
-        catList.appendChild(o);
+      const o = document.createElement('option');
+      o.value = c.nombre;
+      o.dataset.prefijo = c.prefijo;
+      catList.appendChild(o);
     });
   }
 
@@ -234,7 +234,7 @@ window.Views['new-purchase'].afterMount = async function() {
     o.textContent = s.razon_social;
     supSel.appendChild(o);
   });
-  supSel.addEventListener('change', function() {
+  supSel.addEventListener('change', function () {
     const s = _ocSuppliers.find(x => x.id == this.value);
     document.getElementById('oc-ruc').value = s ? (s.ruc || '') : '';
     document.getElementById('oc-telefono').value = s ? (s.telefono || '') : '';
@@ -260,12 +260,12 @@ window.Views['new-purchase'].afterMount = async function() {
   lucide.createIcons();
 };
 
-window.toggleCreditDetails = function() {
+window.toggleCreditDetails = function () {
   const cond = document.getElementById('oc-condicion').value;
   const container = document.getElementById('oc-credito-container');
   const tipo = document.getElementById('oc-credito-tipo').value;
   const label = document.getElementById('oc-credito-label');
-  
+
   if (cond === 'Credito') {
     container.classList.remove('hidden');
     document.getElementById('oc-adelanto-container').classList.add('hidden');
@@ -282,11 +282,11 @@ window.toggleCreditDetails = function() {
   recalcOCTotals();
 };
 
-window.toggleMobilityPrompt = function() {
+window.toggleMobilityPrompt = function () {
   const inc = document.getElementById('oc-incluye-movilidad').checked;
   if (!inc) {
     const suppliersOptions = _ocSuppliers.map(s => `<option value="${s.id}">${s.razon_social}</option>`).join('');
-    
+
     UI.modal({
       title: 'Datos de Movilidad por separado',
       body: `
@@ -321,10 +321,10 @@ window.toggleMobilityPrompt = function() {
         const monto = document.getElementById('mob-monto').value;
         const desc = document.getElementById('mob-desc').value;
         const fecha = document.getElementById('mob-fecha').value;
-        
+
         if (!proveedor_id) { UI.toast('Seleccione un proveedor de movilidad', 'error'); return; }
         if (!monto || monto <= 0) { UI.toast('El monto es obligatorio', 'error'); return; }
-        
+
         const providerName = _ocSuppliers.find(s => s.id == proveedor_id)?.razon_social || '—';
         _ocMobilityData = { proveedor_id, proveedor_nombre: providerName, monto, desc, fecha };
         recalcOCTotals();
@@ -340,7 +340,7 @@ window.toggleMobilityPrompt = function() {
   }
 };
 
-window.addOCItem = function() {
+window.addOCItem = function () {
   const empty = document.getElementById('oc-empty-row');
   if (empty) empty.remove();
   _ocItemRows++;
@@ -370,24 +370,24 @@ window.addOCItem = function() {
   lucide.createIcons();
 };
 
-window.onCategorySelect = function(n) {
-    const input = document.getElementById(`oc-cat-${n}`);
-    const prefijoEl = document.getElementById(`oc-prefijo-${n}`);
-    const val = input.value;
-    
-    const cat = _ocCategories.find(c => c.nombre === val);
-    if (cat) {
-        prefijoEl.value = cat.prefijo || '---';
-        input.dataset.categoryId = cat.id;
-        UI.toast(`Categoría vinculada: ${cat.prefijo}`, 'info');
-    } else {
-        prefijoEl.value = '---';
-        delete input.dataset.categoryId;
-        if (val) UI.toast('Esa categoría no existe. Debe crearla primero.', 'warning');
-    }
+window.onCategorySelect = function (n) {
+  const input = document.getElementById(`oc-cat-${n}`);
+  const prefijoEl = document.getElementById(`oc-prefijo-${n}`);
+  const val = input.value;
+
+  const cat = _ocCategories.find(c => c.nombre === val);
+  if (cat) {
+    prefijoEl.value = cat.prefijo || '---';
+    input.dataset.categoryId = cat.id;
+    UI.toast(`Categoría vinculada: ${cat.prefijo}`, 'info');
+  } else {
+    prefijoEl.value = '---';
+    delete input.dataset.categoryId;
+    if (val) UI.toast('Esa categoría no existe. Debe crearla primero.', 'warning');
+  }
 };
 
-window.removeOCItem = function(n) {
+window.removeOCItem = function (n) {
   document.getElementById(`oc-row-${n}`)?.remove();
   recalcOCTotals();
   if (!document.getElementById('oc-items-body').querySelector('tr')) {
@@ -396,7 +396,7 @@ window.removeOCItem = function(n) {
   }
 };
 
-window.recalcOCRow = function(n) {
+window.recalcOCRow = function (n) {
   const qty = parseFloat(document.getElementById(`oc-qty-${n}`)?.value || 0);
   const pu = parseFloat(document.getElementById(`oc-pu-${n}`)?.value || 0);
   const total = qty * pu;
@@ -431,21 +431,21 @@ function recalcOCTotals() {
   document.getElementById('oc-subtotal').textContent = moneda + ' ' + subtotal.toFixed(2);
   document.getElementById('oc-igv').textContent = moneda + ' ' + igv.toFixed(2);
   document.getElementById('oc-total').textContent = moneda + ' ' + total.toFixed(2);
- 
+
   // Mostrar movilidad si existe
   const mobRow = document.getElementById('oc-mob-row');
   const mobDisp = document.getElementById('oc-mob-monto-display');
   const totalGenDisp = document.getElementById('oc-total-general');
-  
+
   let mobMonto = 0;
   if (_ocMobilityData && _ocMobilityData.monto) {
-      mobMonto = parseFloat(_ocMobilityData.monto);
-      mobRow.classList.remove('hidden');
-      mobDisp.textContent = moneda + ' ' + mobMonto.toFixed(2);
+    mobMonto = parseFloat(_ocMobilityData.monto);
+    mobRow.classList.remove('hidden');
+    mobDisp.textContent = moneda + ' ' + mobMonto.toFixed(2);
   } else {
-      mobRow.classList.add('hidden');
+    mobRow.classList.add('hidden');
   }
-  
+
   const totalGeneral = total + mobMonto;
   totalGenDisp.textContent = moneda + ' ' + totalGeneral.toFixed(2);
 
@@ -512,25 +512,25 @@ function getOCItems() {
     // Categoría válida: limpiar estilos de error si hubiera
     catEl?.classList.remove('border-red-500', 'ring-2', 'ring-red-400');
 
-    items.push({ 
-        item_id: catValida.id || null,
-        categoria_nombre: catNombre,
-        prefijo: catValida.prefijo || prefijo,
-        descripcion: desc, 
-        unidad: document.getElementById(`oc-unidad-${i}`)?.value || 'Unidad', 
-        cantidad: qty, 
-        precio_unitario: pu, 
-        total: qty * pu 
+    items.push({
+      item_id: catValida.id || null,
+      categoria_nombre: catNombre,
+      prefijo: catValida.prefijo || prefijo,
+      descripcion: desc,
+      unidad: document.getElementById(`oc-unidad-${i}`)?.value || 'Unidad',
+      cantidad: qty,
+      precio_unitario: pu,
+      total: qty * pu
     });
   }
   return { items, invalidRow };
 }
 
-window.generateOC = async function() {
+window.generateOC = async function () {
   const proveedor_id = document.getElementById('oc-proveedor').value;
   const area = document.getElementById('oc-area').value;
   const fecha_req = document.getElementById('oc-fecha-req').value;
-  
+
   if (!proveedor_id) { UI.toast('Seleccione un proveedor', 'error'); return; }
   if (!area) { UI.toast('Seleccione el área solicitante', 'error'); return; }
 
@@ -551,7 +551,7 @@ window.generateOC = async function() {
     const cond = document.getElementById('oc-condicion').value;
     const cTipo = document.getElementById('oc-credito-tipo').value;
     const cVal = document.getElementById('oc-condicion-val').value;
-    
+
     const porcIgv = parseFloat(document.getElementById('oc-igv-porcentaje').value || 18) / 100;
     const incluido = document.getElementById('oc-precios-con-igv').checked;
     const base = items.reduce((a, it) => a + (parseFloat(it.total) || 0), 0);
@@ -594,12 +594,12 @@ window.generateOC = async function() {
       items
     };
 
-    const resp = await fetch('api/purchases.php', { 
-      method: 'POST', 
-      headers: { 'Content-Type': 'application/json' }, 
-      body: JSON.stringify(payload) 
+    const resp = await fetch('api/purchases.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
     });
-    
+
     let res;
     try {
       res = await resp.json();
@@ -681,7 +681,7 @@ window.generateOC = async function() {
 
       try {
         const driveLinks = {};
-        if (ocDoc)  driveLinks.pdf_oc_url  = await uploadToDrive(ocDoc,  res.numero_oc);
+        if (ocDoc) driveLinks.pdf_oc_url = await uploadToDrive(ocDoc, res.numero_oc);
         if (mobDoc) driveLinks.pdf_mov_url = await uploadToDrive(mobDoc, res.numero_oc + '-MOV');
 
         // Guardar SOLO los links (VARCHAR) en la BD — cero datos binarios
@@ -714,7 +714,7 @@ window.generateOC = async function() {
   }
 };
 
-window.updateOCTypeLabels = function() {
+window.updateOCTypeLabels = function () {
   const tipo = document.getElementById('oc-tipo').value;
   const title = document.querySelector('#view h1');
   if (title) {
@@ -722,29 +722,29 @@ window.updateOCTypeLabels = function() {
   }
 };
 
-window.generateOCPDF = function(numero_oc, sup, area, body, items) {
+window.generateOCPDF = function (numero_oc, sup, area, body, items) {
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
   const W = 210, H = 297;
 
   // --- PALETA DE COLORES INSTITUCIONAL ---
-  const C_NAVY   = [27, 92, 255];   // #1b5cff (Principal)
-  const C_BLUE   = [54, 162, 188];   // #36a2bc (Secundario)
-  const C_LGRAY  = [243, 244, 244]; // #f3f4f4 (Fondo/Acento)
-  const C_MGRAY  = [200, 200, 200]; // Gris para bordes
-  const C_DARK   = [31, 41, 55];    // Gris muy oscuro (Texto)
-  const C_GRAY   = [100, 110, 130]; 
-  const C_WHITE  = [255, 255, 255];
-  const C_GREEN  = [22, 163, 74];
+  const C_NAVY = [27, 92, 255];   // #1b5cff (Principal)
+  const C_BLUE = [54, 162, 188];   // #36a2bc (Secundario)
+  const C_LGRAY = [243, 244, 244]; // #f3f4f4 (Fondo/Acento)
+  const C_MGRAY = [200, 200, 200]; // Gris para bordes
+  const C_DARK = [31, 41, 55];    // Gris muy oscuro (Texto)
+  const C_GRAY = [100, 110, 130];
+  const C_WHITE = [255, 255, 255];
+  const C_GREEN = [22, 163, 74];
 
   // --- CÁLCULOS PREVIOS ---
   const isServicio = body.tipo === 'servicio';
-  const docTitle   = isServicio ? 'ORDEN DE SERVICIO' : 'ORDEN DE COMPRA';
-  const monSym     = body.moneda === 'PEN' ? 'S/' : (body.moneda === 'USD' ? '$' : '\u20ac');
-  const porcIgv    = parseFloat(body.igv_porcentaje || 18) / 100;
-  const incluido   = !!body.precios_con_igv;
-  const base       = items.reduce((a, it) => a + (parseFloat(it.total) || 0), 0);
-  
+  const docTitle = isServicio ? 'ORDEN DE SERVICIO' : 'ORDEN DE COMPRA';
+  const monSym = body.moneda === 'PEN' ? 'S/' : (body.moneda === 'USD' ? '$' : '\u20ac');
+  const porcIgv = parseFloat(body.igv_porcentaje || 18) / 100;
+  const incluido = !!body.precios_con_igv;
+  const base = items.reduce((a, it) => a + (parseFloat(it.total) || 0), 0);
+
   const fM = (val) => {
     const n = parseFloat(val);
     return isNaN(n) ? '0.00' : n.toFixed(2);
@@ -763,14 +763,14 @@ window.generateOCPDF = function(numero_oc, sup, area, body, items) {
   // Logo e info Colegio (Izquierda - Fondo Blanco)
   const img = new Image();
   img.src = 'assets/images/icono.png';
-  try { doc.addImage(img, 'PNG', 10, 8, 25, 20); } catch(e) {}
+  try { doc.addImage(img, 'PNG', 10, 8, 25, 20); } catch (e) { }
 
   doc.setTextColor(...C_NAVY);
   doc.setFontSize(16); doc.setFont('helvetica', 'bold');
   doc.text('CAT\u00d3LICA SCHOOL', 40, 15);
   doc.setTextColor(...C_BLUE); doc.setFontSize(8); doc.setFont('helvetica', 'italic');
   doc.text('Explora \u00b7 Descubre \u00b7 Aprende', 40, 20);
-  
+
   doc.setTextColor(...C_GRAY); doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5);
   doc.text('RUC: 20515381539', 40, 26);
   doc.text('Direcci\u00f3n: VII Etapa, C. San Pedro Clavers 1582, Carabayllo 15318', 40, 31);
@@ -784,10 +784,10 @@ window.generateOCPDF = function(numero_oc, sup, area, body, items) {
   doc.text(docTitle, W - 42.5, 16, { align: 'center' });
   doc.setFontSize(10);
   doc.text('N\u00b0 ' + numero_oc, W - 42.5, 23, { align: 'center' });
-  
+
   const fechaEmision = body.fecha ? new Date(body.fecha + 'T12:00:00').toLocaleDateString('es-PE') : new Date().toLocaleDateString('es-PE');
   const fechaValida = body.fecha_vencimiento ? new Date(body.fecha_vencimiento + 'T12:00:00').toLocaleDateString('es-PE') : '---';
-  
+
   doc.setFontSize(7.5); doc.setFont('helvetica', 'normal');
   doc.text('Emisi\u00f3n: ' + fechaEmision, W - 42.5, 30, { align: 'center' });
   doc.text('V\u00e1lida hasta: ' + fechaValida, W - 42.5, 36, { align: 'center' });
@@ -796,16 +796,16 @@ window.generateOCPDF = function(numero_oc, sup, area, body, items) {
   // BLOQUES DE DATOS (PROVEEDOR / ENTREGA)
   // =============================================
   let y = 48;
-  
+
   const drawGridBlock = (title, lines, x, bw) => {
     doc.setFillColor(...C_NAVY);
     doc.rect(x, y, bw, 6, 'F');
     doc.setTextColor(...C_WHITE); doc.setFontSize(8); doc.setFont('helvetica', 'bold');
     doc.text(title, x + 2, y + 4.5);
-    
+
     let curY = y + 6;
     doc.setDrawColor(...C_MGRAY); doc.setLineWidth(0.2);
-    
+
     lines.forEach(([lbl, val]) => {
       const labelWidth = 32;
       const textVal = String(val || '---');
@@ -815,12 +815,12 @@ window.generateOCPDF = function(numero_oc, sup, area, body, items) {
 
       doc.setFillColor(...C_LGRAY);
       doc.rect(x, curY, labelWidth, rowH, 'F');
-      doc.rect(x, curY, bw, rowH); 
-      doc.line(x + labelWidth, curY, x + labelWidth, curY + rowH); 
-      
+      doc.rect(x, curY, bw, rowH);
+      doc.line(x + labelWidth, curY, x + labelWidth, curY + rowH);
+
       doc.setTextColor(...C_NAVY); doc.setFont('helvetica', 'bold');
       doc.text(lbl, x + 2, curY + 4);
-      
+
       doc.setTextColor(...C_DARK); doc.setFont('helvetica', 'normal');
       doc.text(wrappedVal, x + labelWidth + 2, curY + 4);
       curY += rowH;
@@ -900,9 +900,9 @@ window.generateOCPDF = function(numero_oc, sup, area, body, items) {
       doc.setFillColor(isFinal ? C_NAVY : C_LGRAY);
       doc.rect(W - 55, y, 20, 6, 'F');
       doc.rect(W - 35, y, 25, 6, 'F');
-      doc.rect(W - 55, y, 45, 6); 
-      doc.line(W - 35, y, W - 35, y + 6); 
-      
+      doc.rect(W - 55, y, 45, 6);
+      doc.line(W - 35, y, W - 35, y + 6);
+
       doc.setTextColor(isFinal ? C_WHITE : C_NAVY); doc.setFontSize(8); doc.setFont('helvetica', 'bold');
       doc.text(lbl + ':', W - 53, y + 4.5);
       doc.text(`${monSym}  ${fM(val)}`, W - 12, y + 4.5, { align: 'right' });
@@ -930,7 +930,7 @@ window.generateOCPDF = function(numero_oc, sup, area, body, items) {
     doc.setTextColor(...C_WHITE); doc.setFontSize(8); doc.setFont('helvetica', 'bold');
     doc.text('OBSERVACIONES Y CONDICIONES ESPECIALES:', 12, y + 4.5);
     y += 6;
-    
+
     doc.setDrawColor(...C_MGRAY);
     const obsText = body.observaciones || 'Sin observaciones adicionales.';
     const obsLines = doc.splitTextToSize(obsText, W - 24);
@@ -938,7 +938,7 @@ window.generateOCPDF = function(numero_oc, sup, area, body, items) {
     doc.rect(10, y, W - 20, obsH);
     doc.setTextColor(...C_DARK); doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5);
     doc.text(obsLines, 12, y + 5);
-    
+
     if (body.incluye_movilidad) {
       doc.setTextColor(...C_NAVY); doc.setFont('helvetica', 'bold');
       doc.text('\u2713 ESTE DOCUMENTO INCLUYE EL COSTO DE MOVILIDAD / TRANSPORTE', 12, y + obsH - 2);
@@ -957,13 +957,13 @@ window.generateOCPDF = function(numero_oc, sup, area, body, items) {
     const drawFirma = (lbl, x) => {
       doc.setFillColor(...C_LGRAY);
       doc.rect(x, y, colW, 6, 'F');
-      doc.rect(x, y, colW, 25); 
-      doc.rect(x, y, colW, 6); 
-      doc.rect(x, y + 25, colW, 4); 
-      
+      doc.rect(x, y, colW, 25);
+      doc.rect(x, y, colW, 6);
+      doc.rect(x, y + 25, colW, 4);
+
       doc.setTextColor(...C_NAVY); doc.setFontSize(7.5); doc.setFont('helvetica', 'bold');
       doc.text(lbl, x + colW / 2, y + 4.5, { align: 'center' });
-      
+
       doc.setTextColor(...C_GRAY); doc.setFont('helvetica', 'italic'); doc.setFontSize(6.5);
       doc.text('Firma y Sello', x + colW / 2, y + 28, { align: 'center' });
     };
@@ -981,32 +981,32 @@ window.generateOCPDF = function(numero_oc, sup, area, body, items) {
   return doc;
 }
 
-window.generateMobilityPDF = function(numero_oc, mob, sup, moneda, mobProviderName) {
+window.generateMobilityPDF = function (numero_oc, mob, sup, moneda, mobProviderName) {
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
   const W = 210, H = 297;
 
   // --- COLORES ---
-  const C_NAVY   = [27, 92, 255];
-  const C_BLUE   = [54, 162, 188];
-  const C_LGRAY  = [243, 244, 244];
-  const C_MGRAY  = [220, 225, 235];
-  const C_DARK   = [31, 41, 55];
-  const C_GRAY   = [100, 116, 139];
-  const C_WHITE  = [255, 255, 255];
+  const C_NAVY = [27, 92, 255];
+  const C_BLUE = [54, 162, 188];
+  const C_LGRAY = [243, 244, 244];
+  const C_MGRAY = [220, 225, 235];
+  const C_DARK = [31, 41, 55];
+  const C_GRAY = [100, 116, 139];
+  const C_WHITE = [255, 255, 255];
   const monSym = moneda === 'PEN' ? 'S/' : (moneda === 'USD' ? '$' : '€');
 
   // 1. Cabecera (Estilo Imagen)
   const img = new Image();
   img.src = 'assets/images/icono.png';
-  try { doc.addImage(img, 'PNG', 10, 8, 25, 20); } catch(e) {}
+  try { doc.addImage(img, 'PNG', 10, 8, 25, 20); } catch (e) { }
 
   doc.setTextColor(...C_NAVY);
   doc.setFontSize(16); doc.setFont('helvetica', 'bold');
   doc.text('CAT\u00d3LICA SCHOOL', 40, 15);
   doc.setTextColor(...C_BLUE); doc.setFontSize(8); doc.setFont('helvetica', 'italic');
   doc.text('Explora \u00b7 Descubre \u00b7 Aprende', 40, 20);
-  
+
   doc.setTextColor(...C_GRAY); doc.setFontSize(7.5); doc.setFont('helvetica', 'normal');
   doc.text('RUC: 20515381539', 40, 26);
   doc.text('Direcci\u00f3n: VII Etapa, C. San Pedro Clavers 1582, Carabayllo 15318', 40, 31);
@@ -1042,12 +1042,12 @@ window.generateMobilityPDF = function(numero_oc, mob, sup, moneda, mobProviderNa
     doc.setDrawColor(...C_MGRAY); doc.setLineWidth(0.2);
     doc.setFillColor(...C_LGRAY);
     doc.rect(10, y, labelWidth, rowH, 'F');
-    doc.rect(10, y, W - 20, rowH); 
-    doc.line(10 + labelWidth, y, 10 + labelWidth, y + rowH); 
-    
+    doc.rect(10, y, W - 20, rowH);
+    doc.line(10 + labelWidth, y, 10 + labelWidth, y + rowH);
+
     doc.setTextColor(...C_NAVY); doc.setFont('helvetica', 'bold');
     doc.text(wrappedLabel, 12, y + 4);
-    
+
     doc.setTextColor(...C_DARK); doc.setFont('helvetica', 'normal');
     doc.text(wrappedVal, 10 + labelWidth + 2, y + 4);
     y += rowH;
@@ -1055,7 +1055,7 @@ window.generateMobilityPDF = function(numero_oc, mob, sup, moneda, mobProviderNa
 
   drawMobLine('PROVEEDOR TRANSPORTISTA:', mobProviderName);
   drawMobLine('CONCEPTO / RUTA:', mob.desc || 'Servicio de movilidad vinculado a la orden ' + numero_oc, 12);
-  
+
   // Monto Destacado
   doc.setFillColor(...C_NAVY);
   doc.rect(W - 65, y + 4, 55, 10, 'F');
@@ -1076,10 +1076,10 @@ window.generateMobilityPDF = function(numero_oc, mob, sup, moneda, mobProviderNa
     doc.rect(x, y, colW, 6, 'F');
     doc.rect(x, y, colW, 25);
     doc.rect(x, y, colW, 6);
-    
+
     doc.setTextColor(...C_NAVY); doc.setFontSize(7.5); doc.setFont('helvetica', 'bold');
     doc.text(lbl, x + colW / 2, y + 4.5, { align: 'center' });
-    
+
     doc.setTextColor(...C_GRAY); doc.setFont('helvetica', 'italic'); doc.setFontSize(6.5);
     doc.text('Firma y Sello', x + colW / 2, y + 28, { align: 'center' });
   };
@@ -1092,7 +1092,7 @@ window.generateMobilityPDF = function(numero_oc, mob, sup, moneda, mobProviderNa
   doc.setFillColor(...C_NAVY);
   doc.rect(0, H - 10, W, 10, 'F');
   doc.setTextColor(...C_WHITE); doc.setFontSize(7);
-  doc.text('\u00a9 ' + new Date().getFullYear() + ' CAT\u00d3LICA SCHOOL - ANEXO DE MOVILIDAD', W/2, H - 4.5, { align: 'center' });
+  doc.text('\u00a9 ' + new Date().getFullYear() + ' CAT\u00d3LICA SCHOOL - ANEXO DE MOVILIDAD', W / 2, H - 4.5, { align: 'center' });
 
   doc.save('MOVILIDAD-' + numero_oc + '.pdf');
   return doc;
@@ -1102,12 +1102,12 @@ window.generateMobilityPDF = function(numero_oc, mob, sup, moneda, mobProviderNa
 const DRIVE_CLIENT_ID = '180581650294-1hq62hvc88ucednj1a4ksbccaj6vfhdg.apps.googleusercontent.com';
 const DRIVE_FOLDER_ID = '1SM2SDdbypPMkNN-VAAyA5q9WSkszWjSs';
 
-window.exportToDrive = function(specificDoc, specificName) {
+window.exportToDrive = function (specificDoc, specificName) {
   if (!DRIVE_CLIENT_ID) {
     UI.toast('Configura el Client ID de Google Drive primero', 'error');
     return;
   }
-  
+
   const doc = specificDoc || window._lastOCDoc;
   const name = specificName || window._lastOCNumero;
 
@@ -1132,27 +1132,27 @@ window.exportToDrive = function(specificDoc, specificName) {
       form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
       form.append('file', pdfBlob);
       try {
-          const resp = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
-            method: 'POST',
-            headers: { Authorization: 'Bearer ' + token.access_token },
-            body: form
-          });
-          UI.stopLoading();
-          if (resp.ok) UI.toast('PDF exportado a Google Drive', 'success');
-          else {
-              const err = await resp.json();
-              console.error('Drive Error:', err);
-              UI.toast('Error al exportar: ' + (err.error?.message || 'Error desconocido'), 'error');
-          }
+        const resp = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+          method: 'POST',
+          headers: { Authorization: 'Bearer ' + token.access_token },
+          body: form
+        });
+        UI.stopLoading();
+        if (resp.ok) UI.toast('PDF exportado a Google Drive', 'success');
+        else {
+          const err = await resp.json();
+          console.error('Drive Error:', err);
+          UI.toast('Error al exportar: ' + (err.error?.message || 'Error desconocido'), 'error');
+        }
       } catch (e) {
-          UI.stopLoading();
-          UI.toast('Error de red al subir a Drive', 'error');
+        UI.stopLoading();
+        UI.toast('Error de red al subir a Drive', 'error');
       }
     }
   }).requestAccessToken();
 };
 
-window.exportOCById = async function(id) {
+window.exportOCById = async function (id) {
   try {
     UI.toast('Preparando exportación...', 'info');
     const resp = await fetch(`api/purchases.php?id=${id}`);
@@ -1184,7 +1184,7 @@ window.exportOCById = async function(id) {
     };
 
     const doc = window.generateOCPDF(oc.numero_oc, sup, oc.area_nombre, body, oc.items, false); // false para no descargar automáticamente
-    
+
     // Llamar a Drive inmediatamente para que el navegador lo vea como acción del usuario
     window.exportToDrive(doc, oc.numero_oc);
 
@@ -1212,12 +1212,13 @@ async function loadPurchases() {
           <div class="text-[10px] text-muted-foreground uppercase">${p.area_nombre || 'Sin área'}</div>
         </td>
         <td class="text-xs">${p.fecha || '—'}</td>
-        <td class="font-bold">S/ ${parseFloat(p.total || 0).toLocaleString('es-PE', {minimumFractionDigits:2})}</td>
+        <td class="font-bold">S/ ${parseFloat(p.total || 0).toLocaleString('es-PE', { minimumFractionDigits: 2 })}</td>
         <td><span class="badge ${STATUS_BADGE[p.estado] || 'badge-gray'}">${p.estado}</span></td>
         <td class="text-right">
           <div class="flex justify-end gap-1">
-            <button class="btn btn-ghost p-1.5" onclick="viewOrderDetails(${p.id})"><i data-lucide="eye" class="w-4 h-4"></i></button>
-            <button class="btn btn-ghost p-1.5 text-primary" onclick="exportOCById(${p.id})"><i data-lucide="download" class="w-4 h-4"></i></button>
+            <button class="btn btn-ghost p-1.5" title="Ver detalles" onclick="viewOrderDetails(${p.id})"><i data-lucide="eye" class="w-4 h-4"></i></button>
+            <button class="btn btn-ghost p-1.5 text-primary" title="Exportar a Drive" onclick="exportOCById(${p.id})"><i data-lucide="download" class="w-4 h-4"></i></button>
+            <button class="btn btn-ghost p-1.5 text-destructive" title="Eliminar orden" onclick="confirmDeleteOC(${p.id}, '${p.numero_oc}')"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
           </div>
         </td>
       </tr>`).join('');
@@ -1225,7 +1226,7 @@ async function loadPurchases() {
   } catch { tbody.innerHTML = '<tr><td colspan="7" class="text-center py-10 text-destructive">Error al cargar órdenes.</td></tr>'; }
 }
 
-window.Views.purchases = function() {
+window.Views.purchases = function () {
   return `
     ${UI.pageHeader('Órdenes de Compra y Servicio', 'Gestión de adquisiciones institucionales', `
       <button class="btn btn-primary" onclick="Router.go('new-purchase')"><i data-lucide="plus"></i>Nueva Orden</button>
@@ -1243,3 +1244,28 @@ window.Views.purchases = function() {
 };
 
 window.Views.purchases.afterMount = loadPurchases;
+
+window.confirmDeleteOC = function(id, numero) {
+  UI.modal({
+    title: 'Eliminar Orden',
+    body: `<p>¿Está seguro de que desea eliminar la orden <strong>${numero}</strong>? Esta acción no se puede deshacer y eliminará todos los registros asociados (ítems, cuotas, etc.).</p>`,
+    confirmText: 'Sí, eliminar',
+    onConfirm: async () => {
+      UI.loading('Eliminando orden...');
+      try {
+        const resp = await fetch(`api/purchases.php?id=${id}`, { method: 'DELETE' });
+        const res = await resp.json();
+        UI.stopLoading();
+        if (res.ok) {
+          UI.toast('Orden eliminada correctamente', 'success');
+          loadPurchases();
+        } else {
+          UI.toast('Error: ' + (res.error || 'No se pudo eliminar'), 'error');
+        }
+      } catch (e) {
+        UI.stopLoading();
+        UI.toast('Error de red al eliminar', 'error');
+      }
+    }
+  });
+};

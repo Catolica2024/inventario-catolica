@@ -29,8 +29,8 @@ try {
             $pdo->beginTransaction();
             try {
                 // 1. Registrar mantenimiento
-                $sql = "INSERT INTO mantenimientos (activo_id, item_id, cantidad, proveedor_id, tipo, estado, fecha_inicio, descripcion_problema, costo) 
-                        VALUES (?,?,?,?,?,?,?,?,?)";
+                $sql = "INSERT INTO mantenimientos (activo_id, item_id, cantidad, proveedor_id, tipo, estado, fecha_inicio, descripcion_problema, costo, orden_compra_id) 
+                        VALUES (?,?,?,?,?,?,?,?,?,?)";
                 $stmt = $pdo->prepare($sql);
                 $stmt->execute([
                     $b['activo_id'] ?: null,
@@ -41,7 +41,8 @@ try {
                     $b['estado'] ?? 'En Proceso',
                     $b['fecha_inicio'],
                     $b['descripcion_problema'],
-                    $b['costo'] ?? 0
+                    $b['costo'] ?? 0,
+                    $b['orden_compra_id'] ?? null
                 ]);
                 $maintId = $pdo->lastInsertId();
 

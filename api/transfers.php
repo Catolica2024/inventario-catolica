@@ -14,7 +14,7 @@ try {
                 FROM traslados t
                 JOIN items i ON t.item_id = i.id
                 LEFT JOIN ubicaciones u1 ON t.ubicacion_origen_id = u1.id
-                JOIN ubicaciones u2 ON t.ubicacion_destino_id = u2.id
+                LEFT JOIN ubicaciones u2 ON t.ubicacion_destino_id = u2.id
                 LEFT JOIN personal p ON t.responsable_id = p.id
                 ORDER BY t.fecha DESC, t.id DESC
             ");
@@ -23,46 +23,65 @@ try {
 
         case 'POST':
             $b = get_body();
-            if (!isset($b['item_id'], $b['ubicacion_destino_id'], $b['cantidad'], $b['fecha'])) {
+            $isBaja = (isset($b['tipo']) && $b['tipo'] === 'Baja');
+            $isEntrada = (isset($b['tipo']) && $b['tipo'] === 'Entrada');
+
+            if (!isset($b['item_id'], $b['cantidad'], $b['fecha']) || (!$isBaja && !isset($b['ubicacion_destino_id']))) {
                 json_response(['error' => 'Datos incompletos'], 400);
             }
 
             $pdo->beginTransaction();
             try {
-                // 1. Registrar traslado
-                $sql = "INSERT INTO traslados (item_id, ubicacion_origen_id, ubicacion_destino_id, cantidad, fecha, responsable_id, motivo, observaciones) VALUES (?,?,?,?,?,?,?,?)";
+                // 1. Registrar traslado con tipo
+                $sql = "INSERT INTO traslados (item_id, ubicacion_origen_id, ubicacion_destino_id, cantidad, fecha, responsable_id, motivo, observaciones, tipo) VALUES (?,?,?,?,?,?,?,?,?)";
                 $stmt = $pdo->prepare($sql);
                 $stmt->execute([
                     $b['item_id'],
                     (!empty($b['ubicacion_origen_id'])) ? $b['ubicacion_origen_id'] : null,
-                    $b['ubicacion_destino_id'],
+                    ($isBaja) ? null : $b['ubicacion_destino_id'],
                     $b['cantidad'],
                     $b['fecha'],
                     (!empty($b['responsable_id'])) ? $b['responsable_id'] : null,
-                    (!empty($b['motivo'])) ? $b['motivo'] : null,
-                    (!empty($b['observaciones'])) ? $b['observaciones'] : null
+                    $b['motivo'] ?? ($isBaja ? 'BAJA DEFINITIVA' : null),
+                    $b['observaciones'] ?? null,
+                    $b['tipo'] ?? 'Salida'
                 ]);
 
-                // 2. REGISTRAR MOVIMIENTOS DE STOCK SI CORRESPONDE (Almacén ID: 13)
-                $ALMACEN_ID = 13;
+                // 2. REGISTRAR MOVIMIENTOS DE STOCK (DINÁMICO SEGÚN TIPO DE UBICACIÓN)
+                // Obtenemos todos los IDs que son tipo 'Depósito'
+                $stmtDep = $pdo->query("SELECT id FROM ubicaciones WHERE tipo = 'Depósito'");
+                $depositoIds = $stmtDep->fetchAll(PDO::FETCH_COLUMN);
+                
+                $ALMACEN_DEFECTO_ID = 13; // Almacén 1 por defecto
                 $item_id = $b['item_id'];
                 $cantidad = $b['cantidad'];
                 
-                // Si sale del almacén -> Salida
-                if ($b['ubicacion_origen_id'] == $ALMACEN_ID && $b['ubicacion_destino_id'] != $ALMACEN_ID) {
+                $origen_id = !empty($b['ubicacion_origen_id']) ? (int)$b['ubicacion_origen_id'] : $ALMACEN_DEFECTO_ID;
+                $destino_id = !empty($b['ubicacion_destino_id']) ? (int)$b['ubicacion_destino_id'] : ($isBaja ? null : $ALMACEN_DEFECTO_ID);
+                
+                $origenEsDeposito = in_array($origen_id, $depositoIds);
+                $destinoEsDeposito = $destino_id !== null && in_array($destino_id, $depositoIds);
+                
+                $isReturnBaja = !empty($b['is_return_baja']);
+
+                if ($isReturnBaja) {
+                    // Caso: Se devuelve algo desde un espacio pero como BAJA.
+                } elseif ($isBaja) {
+                    // Caso: Baja directa. Si el origen es un depósito, descontamos stock.
+                    if ($origenEsDeposito) {
+                        $stmtMov = $pdo->prepare("INSERT INTO movimientos (item_id, tipo, cantidad, ubicacion_id, observacion) VALUES (?, 'Baja', ?, ?, ?)");
+                        $stmtMov->execute([$item_id, $cantidad, $origen_id, $b['motivo'] ?? "BAJA POR DAÑO/OBSOLESCENCIA"]);
+                    }
+                } elseif ($origenEsDeposito && !$destinoEsDeposito) {
+                    // Caso: Sale de un Depósito a un Espacio -> SALIDA (Descuenta stock)
                     $stmtMov = $pdo->prepare("INSERT INTO movimientos (item_id, tipo, cantidad, ubicacion_id, observacion) VALUES (?, 'Salida', ?, ?, ?)");
-                    $stmtMov->execute([$item_id, $cantidad, $ALMACEN_ID, "Traslado desde Almacén"]);
-                } 
-                // Si entra al almacén desde otro lado -> Entrada
-                else if ($b['ubicacion_origen_id'] != $ALMACEN_ID && $b['ubicacion_destino_id'] == $ALMACEN_ID) {
+                    $stmtMov->execute([$item_id, $cantidad, $origen_id, $b['motivo'] ?? "Traslado a ubicación"]);
+                } elseif (!$origenEsDeposito && $destinoEsDeposito) {
+                    // Caso: Retorna de un Espacio a un Depósito -> ENTRADA (Suma stock)
                     $stmtMov = $pdo->prepare("INSERT INTO movimientos (item_id, tipo, cantidad, ubicacion_id, observacion) VALUES (?, 'Entrada', ?, ?, ?)");
-                    $stmtMov->execute([$item_id, $cantidad, $ALMACEN_ID, "Retorno al Almacén"]);
+                    $stmtMov->execute([$item_id, $cantidad, $destino_id, $b['motivo'] ?? "Retorno al almacén"]);
                 }
-                // Si el origen era Almacén Principal (vacio en el modal) y el destino no
-                else if (empty($b['ubicacion_origen_id']) && $b['ubicacion_destino_id'] != $ALMACEN_ID) {
-                     $stmtMov = $pdo->prepare("INSERT INTO movimientos (item_id, tipo, cantidad, ubicacion_id, observacion) VALUES (?, 'Salida', ?, ?, ?)");
-                     $stmtMov->execute([$item_id, $cantidad, $ALMACEN_ID, "Traslado desde Almacén (Principal)"]);
-                }
+                // Si es entre depósitos o entre espacios, no afecta al stock global "disponible" (Entrada - Salida).
 
                 $pdo->commit();
                 json_response(['ok' => true, 'id' => $pdo->lastInsertId()]);

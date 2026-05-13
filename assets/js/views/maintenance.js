@@ -85,16 +85,19 @@
 
     async function loadMaintResources() {
         try {
-            const [items, assets, providers] = await Promise.all([
+            const [items, assets, providers, purchases] = await Promise.all([
                 fetch('api/items.php').then(r => r.json()),
                 fetch('api/assets.php').then(r => r.json()),
-                fetch('api/suppliers.php').then(r => r.json())
+                fetch('api/suppliers.php').then(r => r.json()),
+                fetch('api/purchases.php?approved_only=1').then(r => r.json())
             ]);
             _maintResources = {
                 items: items.items || [],
                 assets: assets.assets || [],
-                providers: providers.suppliers || []
+                providers: providers.suppliers || [],
+                purchases: (purchases.purchases || []).filter(p => p.tipo === 'servicio')
             };
+            window._maintResources = _maintResources;
         } catch (e) { console.error(e); }
     }
 
@@ -180,10 +183,28 @@
                     </div>
 
                     <div id="m-field-equipo">
-                        <label class="text-xs font-bold mb-1 block uppercase text-primary">Buscar Equipo (Código o Serie) <span class="text-destructive">*</span></label>
-                        <div class="relative">
-                            <input type="text" id="m-search-asset" class="input w-full pr-10" placeholder="Ingrese serie o código...">
-                            <i data-lucide="search" class="absolute right-3 top-2.5 w-4 h-4 text-muted-foreground"></i>
+                        <label class="text-xs font-bold mb-1 block uppercase text-primary">Buscar o Escanear Equipo <span class="text-destructive">*</span></label>
+                        <div class="relative group">
+                            <input type="text" id="m-search-asset" class="input w-full pr-20" placeholder="Ingrese Código, Serie o Nombre...">
+                            <div class="absolute right-1 top-1 flex gap-1">
+                                <button class="p-1.5 rounded-lg bg-primary/10 text-primary hover:bg-primary hover:text-white transition-all shadow-sm" 
+                                        onclick="UI.openScanner((val, showError) => { 
+                                            const asset = window._maintResources.assets.find(a => (a.codigo_patrimonial && a.codigo_patrimonial.toLowerCase() === val.toLowerCase()) || (a.numero_serie && a.numero_serie.toLowerCase() === val.toLowerCase()) || (a.codigo_interno && a.codigo_interno.toLowerCase() === val.toLowerCase()));
+                                            if (!asset) {
+                                                const item = window._maintResources.items.find(i => i.codigo && i.codigo.toLowerCase() === val.toLowerCase());
+                                                if (item) showError('⚠️ Error: El código ' + val + ' es un ' + item.categoria_tipo.toUpperCase() + ' y no un EQUIPO específico.');
+                                                else showError('⚠️ Código ' + val + ' no reconocido como Equipo.');
+                                                return false;
+                                            }
+                                            selectMaintAsset(asset.id, asset.numero_serie || asset.codigo_patrimonial || asset.codigo_interno, asset.item_id);
+                                            return true;
+                                        })" title="Escanear QR">
+                                    <i data-lucide="camera" class="w-4 h-4"></i>
+                                </button>
+                                <div class="p-1.5 text-muted-foreground">
+                                    <i data-lucide="search" class="w-4 h-4"></i>
+                                </div>
+                            </div>
                         </div>
                         <div id="m-search-results" class="mt-1 max-h-40 overflow-y-auto bg-white border border-border rounded-lg hidden z-50 relative"></div>
                         <input type="hidden" id="m-activo-id">
@@ -191,13 +212,34 @@
                     </div>
 
                     <div id="m-field-mobiliario" class="hidden">
-                        <div class="grid grid-cols-3 gap-3">
-                            <div class="col-span-2">
-                                <label class="text-xs font-bold mb-1 block uppercase">Mobiliario <span class="text-destructive">*</span></label>
-                                <select id="m-select-item" class="select w-full">
-                                    <option value="">Seleccione artículo...</option>
-                                    ${_maintResources.items.filter(i => i.categoria_tipo === 'mobiliario').map(i => `<option value="${i.id}">${i.nombre} (Disponibles: ${i.stock_actual})</option>`).join('')}
-                                </select>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                            <div class="md:col-span-2">
+                                <label class="text-xs font-bold mb-1 block uppercase text-primary">Buscar o Escanear Mobiliario <span class="text-destructive">*</span></label>
+                                <div class="relative group">
+                                    <input type="text" id="m-search-item" class="input w-full pr-20" placeholder="Ingrese Código o Nombre...">
+                                    <div class="absolute right-1 top-1 flex gap-1">
+                                        <button class="p-1.5 rounded-lg bg-primary/10 text-primary hover:bg-primary hover:text-white transition-all shadow-sm" 
+                                                onclick="UI.openScanner((val, showError) => { 
+                                                    const found = window._maintResources.items.find(i => i.categoria_tipo === 'mobiliario' && i.codigo && i.codigo.toLowerCase() === val.toLowerCase());
+                                                    if (!found) {
+                                                        const asset = window._maintResources.assets.find(a => (a.codigo_patrimonial && a.codigo_patrimonial.toLowerCase() === val.toLowerCase()) || (a.numero_serie && a.numero_serie.toLowerCase() === val.toLowerCase()));
+                                                        if (asset) showError('⚠️ Error: El código ' + val + ' es un EQUIPO individual, no MOBILIARIO por lote.');
+                                                        else showError('⚠️ Código ' + val + ' no reconocido como Mobiliario.');
+                                                        return false;
+                                                    }
+                                                    selectMaintItem(found.id, found.nombre, found.stock_actual);
+                                                    return true;
+                                                })" title="Escanear QR">
+                                            <i data-lucide="camera" class="w-4 h-4"></i>
+                                        </button>
+                                        <div class="p-1.5 text-muted-foreground">
+                                            <i data-lucide="search" class="w-4 h-4"></i>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div id="m-item-results" class="mt-1 max-h-40 overflow-y-auto bg-white border border-border rounded-lg hidden z-50 relative shadow-lg"></div>
+                                <input type="hidden" id="m-select-item">
+                                <div id="m-item-info" class="mt-1 text-[10px] italic text-muted-foreground"></div>
                             </div>
                             <div>
                                 <label class="text-xs font-bold mb-1 block uppercase">Cantidad <span class="text-destructive">*</span></label>
@@ -229,6 +271,15 @@
                         <label class="text-xs font-bold mb-1 block uppercase text-muted-foreground italic">Presupuesto Estimado (Opcional)</label>
                         <input type="number" id="m-cost" class="input w-full" value="0" step="0.01">
                     </div>
+
+                    <div class="p-3 bg-blue-50 border border-blue-100 rounded-xl">
+                        <label class="text-xs font-bold mb-1 block uppercase text-blue-700">Vincular a Orden de Servicio (OS)</label>
+                        <select id="m-os-id" class="select w-full bg-white">
+                            <option value="">-- No vincular a OS --</option>
+                            ${_maintResources.purchases.map(p => `<option value="${p.id}">${p.numero_oc} - ${p.proveedor_nombre}</option>`).join('')}
+                        </select>
+                        <p class="text-[9px] text-blue-600 mt-1 italic font-medium">Si vinculas a una OS, el equipo se pondrá disponible automáticamente al firmar la conformidad.</p>
+                    </div>
                 </div>
             `,
             confirmText: 'Registrar Inicio',
@@ -243,11 +294,12 @@
                     fecha_inicio: document.getElementById('m-date').value,
                     descripcion_problema: document.getElementById('m-issue').value,
                     costo: document.getElementById('m-cost').value || 0,
+                    orden_compra_id: document.getElementById('m-os-id').value || null,
                     estado: 'En Proceso'
                 };
 
                 if (!data.item_id || !data.fecha_inicio || !data.descripcion_problema) {
-                    UI.toast('Complete los campos obligatorios', 'error'); return;
+                    UI.toast('Complete los campos obligatorios', 'error'); return false;
                 }
 
                 UI.loading('Registrando mantenimiento...');
@@ -269,30 +321,59 @@
     };
 
     function initMaintAssetSearch() {
-        const input = document.getElementById('m-search-asset');
-        const results = document.getElementById('m-search-results');
-        if (!input) return;
+        const inputAsset = document.getElementById('m-search-asset');
+        const resultsAsset = document.getElementById('m-search-results');
+        
+        if (inputAsset) {
+            inputAsset.oninput = () => {
+                const val = inputAsset.value.trim().toLowerCase();
+                if (val.length < 2) { resultsAsset.classList.add('hidden'); return; }
 
-        input.oninput = () => {
-            const val = input.value.trim().toLowerCase();
-            if (val.length < 2) { results.classList.add('hidden'); return; }
+                const filtered = _maintResources.assets.filter(a => 
+                    (a.numero_serie && a.numero_serie.toLowerCase().includes(val)) || 
+                    (a.codigo_patrimonial && a.codigo_patrimonial.toLowerCase().includes(val)) ||
+                    (a.item_nombre && a.item_nombre.toLowerCase().includes(val))
+                ).slice(0, 5);
 
-            const filtered = _maintResources.assets.filter(a => 
-                (a.numero_serie && a.numero_serie.toLowerCase().includes(val)) || 
-                (a.codigo_interno && a.codigo_interno.toLowerCase().includes(val))
-            ).slice(0, 5);
+                if (filtered.length === 0) { resultsAsset.classList.add('hidden'); return; }
 
-            if (filtered.length === 0) { results.classList.add('hidden'); return; }
+                resultsAsset.innerHTML = filtered.map(a => `
+                    <div class="p-2 hover:bg-primary/5 cursor-pointer border-b border-border last:border-0" 
+                         onclick="selectMaintAsset(${a.id}, '${a.numero_serie || a.codigo_patrimonial || a.codigo_interno}', ${a.item_id})">
+                        <div class="text-xs font-bold">${a.item_nombre}</div>
+                        <div class="text-[10px] text-muted-foreground font-mono">S/N: ${a.numero_serie || '—'} | Cód: ${a.codigo_patrimonial || '—'}</div>
+                    </div>
+                `).join('');
+                resultsAsset.classList.remove('hidden');
+            };
+        }
 
-            results.innerHTML = filtered.map(a => `
-                <div class="p-2 hover:bg-primary/5 cursor-pointer border-b border-border last:border-0" 
-                     onclick="selectMaintAsset(${a.id}, '${a.numero_serie || a.codigo_interno}', ${a.item_id})">
-                    <div class="text-xs font-bold">${a.item_nombre}</div>
-                    <div class="text-[10px] text-muted-foreground font-mono">S/N: ${a.numero_serie || '—'} | Cód: ${a.codigo_interno || '—'}</div>
-                </div>
-            `).join('');
-            results.classList.remove('hidden');
-        };
+        const inputItem = document.getElementById('m-search-item');
+        const resultsItem = document.getElementById('m-item-results');
+        if (inputItem) {
+            inputItem.oninput = () => {
+                const val = inputItem.value.trim().toLowerCase();
+                if (val.length < 2) { resultsItem.classList.add('hidden'); return; }
+
+                const filtered = _maintResources.items.filter(i => 
+                    i.categoria_tipo === 'mobiliario' && (
+                        (i.codigo && i.codigo.toLowerCase().includes(val)) || 
+                        (i.nombre && i.nombre.toLowerCase().includes(val))
+                    )
+                ).slice(0, 5);
+
+                if (filtered.length === 0) { resultsItem.classList.add('hidden'); return; }
+
+                resultsItem.innerHTML = filtered.map(i => `
+                    <div class="p-2 hover:bg-primary/5 cursor-pointer border-b border-border last:border-0" 
+                         onclick="window.selectMaintItem(${i.id}, '${i.nombre.replace(/'/g, "\\'")}', ${i.stock_actual})">
+                        <div class="text-xs font-bold">${i.nombre}</div>
+                        <div class="text-[10px] text-muted-foreground uppercase">Stock: ${i.stock_actual}</div>
+                    </div>
+                `).join('');
+                resultsItem.classList.remove('hidden');
+            };
+        }
     }
 
     window.selectMaintAsset = function(id, label, itemId) {
@@ -301,6 +382,14 @@
         document.getElementById('m-search-asset').value = label;
         document.getElementById('m-search-results').classList.add('hidden');
         UI.toast('Equipo seleccionado', 'info');
+    };
+
+    window.selectMaintItem = function(id, nombre, stock) {
+        document.getElementById('m-select-item').value = id;
+        document.getElementById('m-search-item').value = nombre;
+        document.getElementById('m-item-results').classList.add('hidden');
+        document.getElementById('m-item-info').innerHTML = `✓ Mobiliario seleccionado (Stock: ${stock})`;
+        UI.toast('Mobiliario seleccionado', 'info');
     };
 
     window.openCompleteMaintModal = function(id) {

@@ -70,7 +70,7 @@ try {
             
             // Verificar si hay personal vinculado
             $stmt = $pdo->prepare("SELECT COUNT(*) FROM personal WHERE area_id = ?");
-            $stmt->execute([id]);
+            $stmt->execute([$id]);
             if ($stmt->fetchColumn() > 0) {
                 json_response(['error' => 'No se puede eliminar: hay personal vinculado a esta área'], 400);
             }

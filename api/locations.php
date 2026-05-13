@@ -18,8 +18,7 @@ try {
                 $sede = $stmtSede->fetch();
                 $sedeCode = ($sede && $sede['codigo']) ? $sede['codigo'] : 'S';
 
-                $typeCode = strtoupper(substr($tipo, 0, 3)); // Usar 3 letras
-                $prefix = $sedeCode . '-' . $typeCode;
+                $prefix = $sedeCode . '-ESP';
 
                 $rows = $pdo->prepare("SELECT codigo FROM ubicaciones WHERE codigo LIKE ? ORDER BY id DESC LIMIT 50");
                 $rows->execute([$prefix . '-%']);
@@ -33,6 +32,20 @@ try {
                 }
                 $next = $prefix . '-' . str_pad($max + 1, 4, '0', STR_PAD_LEFT);
                 json_response(['next_code' => $next]);
+                break;
+            }
+            if (isset($_GET['action']) && $_GET['action'] === 'history') {
+                $id = $_GET['id'] ?? null;
+                if (!$id) json_response(['error' => 'id requerido'], 400);
+                $stmt = $pdo->prepare("
+                    SELECT h.*, p.nombre as responsable_nombre
+                    FROM ubicaciones_historial h
+                    LEFT JOIN personal p ON h.responsable_id = p.id
+                    WHERE h.ubicacion_id = ?
+                    ORDER BY h.fecha_desde DESC
+                ");
+                $stmt->execute([$id]);
+                json_response(['history' => $stmt->fetchAll()]);
                 break;
             }
             $rows = $pdo->query("
@@ -53,16 +66,23 @@ try {
                 $check->execute([$codigo]);
                 if ($check->fetch()) json_response(['error' => 'El código "' . $codigo . '" ya está en uso por otra ubicación.'], 400);
             }
-            $sql = "INSERT INTO ubicaciones (codigo, nombre, tipo, responsable_id, sede_id) VALUES (?,?,?,?,?)";
+            $sql = "INSERT INTO ubicaciones (codigo, nombre, tipo, responsable_id, sede_id, estado) VALUES (?,?,?,?,?,?)";
             $stmt = $pdo->prepare($sql);
             $stmt->execute([
                 $codigo,
                 $b['nombre'],
                 $b['tipo'] ?? null,
                 $b['responsable_id'] ?: null,
-                $b['sede_id'] ?: null
+                $b['sede_id'] ?: null,
+                $b['estado'] ?? 'activo'
             ]);
-            json_response(['ok' => true, 'id' => $pdo->lastInsertId()]);
+            $id = $pdo->lastInsertId();
+            
+            // Iniciar historial
+            $pdo->prepare("INSERT INTO ubicaciones_historial (ubicacion_id, tipo, responsable_id) VALUES (?,?,?)")
+                ->execute([$id, $b['tipo'] ?? null, $b['responsable_id'] ?: null]);
+
+            json_response(['ok' => true, 'id' => $id]);
             break;
 
         case 'PUT':
@@ -74,7 +94,13 @@ try {
                 $check->execute([$codigo, $id]);
                 if ($check->fetch()) json_response(['error' => 'El código "' . $codigo . '" ya está en uso por otra ubicación.'], 400);
             }
-            $sql = "UPDATE ubicaciones SET codigo=?, nombre=?, tipo=?, responsable_id=?, sede_id=? WHERE id=?";
+            
+            // Obtener estado actual para comparar
+            $stmtCurr = $pdo->prepare("SELECT tipo, responsable_id FROM ubicaciones WHERE id = ?");
+            $stmtCurr->execute([$id]);
+            $curr = $stmtCurr->fetch();
+
+            $sql = "UPDATE ubicaciones SET codigo=?, nombre=?, tipo=?, responsable_id=?, sede_id=?, estado=? WHERE id=?";
             $stmt = $pdo->prepare($sql);
             $stmt->execute([
                 $codigo,
@@ -82,8 +108,24 @@ try {
                 $b['tipo'] ?? null,
                 $b['responsable_id'] ?: null,
                 $b['sede_id'] ?: null,
+                $b['estado'] ?? 'activo',
                 $id
             ]);
+
+            // Si el tipo o el responsable cambiaron, registrar en historial
+            $newTipo = $b['tipo'] ?? null;
+            $newResp = $b['responsable_id'] ?: null;
+
+            if ($curr && ($curr['tipo'] !== $newTipo || $curr['responsable_id'] != $newResp)) {
+                // Cerrar el historial anterior (el más reciente que no tenga fecha_hasta)
+                $pdo->prepare("UPDATE ubicaciones_historial SET fecha_hasta = CURRENT_TIMESTAMP WHERE ubicacion_id = ? AND fecha_hasta IS NULL")
+                    ->execute([$id]);
+                
+                // Insertar nuevo registro
+                $pdo->prepare("INSERT INTO ubicaciones_historial (ubicacion_id, tipo, responsable_id) VALUES (?,?,?)")
+                    ->execute([$id, $newTipo, $newResp]);
+            }
+
             json_response(['ok' => true]);
             break;
 

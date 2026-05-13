@@ -105,15 +105,8 @@ function renderEquiposForm() {
                 <div>
                     <label class="text-sm font-bold mb-1 block text-muted-foreground">Ubicación Destino <span class="text-destructive">*</span></label>
                     <select id="reg-loc" class="select w-full h-11">
-                        <option value="">Seleccione aula/espacio...</option>
-                        ${_regResources.locs.map(l => `<option value="${l.id}">${l.nombre} (${l.sede_nombre})</option>`).join('')}
-                    </select>
-                </div>
-                <div>
-                    <label class="text-sm font-bold mb-1 block text-muted-foreground">Responsable</label>
-                    <select id="reg-resp" class="select w-full h-11">
-                        <option value="">Sin asignar</option>
-                        ${_regResources.staff.map(s => `<option value="${s.id}">${s.nombre}</option>`).join('')}
+                        <option value="">Seleccione Depósito...</option>
+                        ${_regResources.locs.filter(l => l.tipo === 'Depósito' && l.estado === 'activo').map(l => `<option value="${l.id}">${l.nombre} (${l.sede_nombre})</option>`).join('')}
                     </select>
                 </div>
                 <div class="md:col-span-2">
@@ -156,8 +149,8 @@ function renderMobiliarioForm() {
                 <div>
                     <label class="text-sm font-bold mb-1 block text-muted-foreground">Ubicación / Sede <span class="text-destructive">*</span></label>
                     <select id="reg-loc" class="select w-full h-11">
-                        <option value="">Seleccione...</option>
-                        ${_regResources.locs.map(l => `<option value="${l.id}">${l.nombre} (${l.sede_nombre})</option>`).join('')}
+                        <option value="">Seleccione Depósito...</option>
+                        ${_regResources.locs.filter(l => l.tipo === 'Depósito' && l.estado === 'activo').map(l => `<option value="${l.id}">${l.nombre} (${l.sede_nombre})</option>`).join('')}
                     </select>
                 </div>
                 <div>
@@ -208,8 +201,8 @@ function renderInsumosForm() {
                 <div>
                     <label class="text-sm font-bold mb-1 block text-muted-foreground">Ubicación de Almacenaje <span class="text-destructive">*</span></label>
                     <select id="reg-loc" class="select w-full h-11">
-                        <option value="">Seleccione Almacén...</option>
-                        ${_regResources.locs.map(l => `<option value="${l.id}">${l.nombre} (${l.sede_nombre})</option>`).join('')}
+                        <option value="">Seleccione Depósito...</option>
+                        ${_regResources.locs.filter(l => l.tipo === 'Depósito' && l.estado === 'activo').map(l => `<option value="${l.id}">${l.nombre} (${l.sede_nombre})</option>`).join('')}
                     </select>
                 </div>
                 <div class="md:col-span-2">
@@ -280,7 +273,7 @@ window.saveEquipment = async function() {
                 numero_serie: document.getElementById('reg-serie')?.value.trim() || null,
                 codigo_interno: document.getElementById('reg-code')?.value || null,
                 ubicacion_id: loc_id,
-                personal_id: document.getElementById('reg-resp')?.value || null,
+                personal_id: null,
                 estado: 'Operativo'
             })
         });
@@ -288,6 +281,8 @@ window.saveEquipment = async function() {
 
         if (asset.ok) {
             UI.toast('¡Activo registrado con éxito!', 'success');
+            const code = document.getElementById('reg-code')?.value || 'N/A';
+            UI.showQR(code, catObj.nombre);
             switchRegTab('equipo');
         } else {
             // ROLLBACK: eliminar el ítem recién creado para no dejar huérfanos
@@ -338,6 +333,7 @@ window.saveStockItem = async function(type) {
                 body: JSON.stringify({ item_id: itm.id, ubicacion_id: loc_id, cantidad: qty, tipo: 'Entrada', observacion: 'Carga inicial' })
             });
             UI.toast('Registro completado con éxito', 'success');
+            UI.showQR(document.getElementById('reg-code').value, catName);
             switchRegTab(type);
         } else UI.toast('Error: ' + itm.error, 'error');
     } catch(e) { UI.toast('Error de conexión', 'error'); }

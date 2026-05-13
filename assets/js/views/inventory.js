@@ -19,7 +19,14 @@ async function loadInventory() {
 
         _inventoryData = [
             ...(assetsResp.assets || []).map(a => ({ ...a, _type: 'unit' })),
-            ...(itemsResp.items || []).filter(i => i.categoria_tipo !== 'equipo').map(i => ({ ...i, _type: 'stock' }))
+            ...(itemsResp.items || []).filter(i => {
+                // Si es equipo, solo mostrar si no tiene unidades registradas (para permitir gestión/borrado)
+                if (i.categoria_tipo === 'equipo') {
+                    const hasUnits = (assetsResp.assets || []).some(a => a.item_id == i.id);
+                    return !hasUnits;
+                }
+                return true;
+            }).map(i => ({ ...i, _type: 'stock' }))
         ];
 
         _filterSedes = sedesResp.sedes || [];
@@ -36,6 +43,15 @@ function renderFilterControls() {
     if (!container) return;
     container.innerHTML = `
         <div class="grid grid-cols-1 md:grid-cols-5 gap-3">
+            <div class="md:col-span-1">
+                <label class="text-[10px] font-bold text-primary uppercase mb-1 block">Buscar / Escanear</label>
+                <div class="relative group">
+                    <input id="f-search" type="text" placeholder="Código o Serie..." class="input input-sm w-full pr-10 border-primary/20 focus:border-primary transition-all" oninput="applyAdvancedFilters()">
+                    <button class="absolute right-1 top-1 p-1.5 rounded-lg bg-primary/10 text-primary hover:bg-primary hover:text-white transition-all shadow-sm" onclick="openInventoryScanner()" title="Escanear Código QR">
+                        <i data-lucide="camera" class="w-4 h-4"></i>
+                    </button>
+                </div>
+            </div>
             <div>
                 <label class="text-[10px] font-bold text-muted-foreground uppercase mb-1 block">Sede</label>
                 <select id="f-sede" class="select select-sm w-full" onchange="applyAdvancedFilters()">
@@ -74,12 +90,9 @@ function renderFilterControls() {
                     </optgroup>
                 </select>
             </div>
-            <div>
-                <label class="text-[10px] font-bold text-muted-foreground uppercase mb-1 block">Buscar</label>
-                <input id="f-search" type="text" placeholder="Nombre, serie, código..." class="input input-sm w-full" oninput="applyAdvancedFilters()">
-            </div>
         </div>
     `;
+    lucide.createIcons();
 }
 
 function renderInventoryRows(data) {
@@ -111,11 +124,18 @@ function renderInventoryRows(data) {
                 <td class="text-center">
                     ${isUnit ? 
                         `<span class="badge ${getStatusBadge(d.estado)}">${d.estado}${d.responsable_nombre ? ' <span class="text-[9px] opacity-80">(Asignado)</span>' : ''}</span>` : 
-                        `<span class="font-bold text-sm ${d.stock_actual <= d.stock_minimo ? 'text-destructive' : 'text-green-600'}">${d.stock_actual}</span> <span class="text-[10px] text-muted-foreground">unid.</span>`
+                        `<div class="flex flex-col items-center gap-0.5">
+                            <div class="flex items-center gap-1">
+                                <span class="font-bold text-sm ${d.stock_actual <= 0 ? 'text-destructive' : d.stock_actual <= (d.categoria_stock_minimo || d.stock_minimo) ? 'text-orange-500' : 'text-green-600'}">${d.stock_actual}</span>
+                                <span class="text-[10px] text-muted-foreground">disp.</span>
+                            </div>
+                            <div class="text-[10px] text-muted-foreground">de ${d.stock_total || d.stock_actual} total</div>
+                        </div>`
                     }
                 </td>
                 <td class="text-xs text-muted-foreground font-medium italic">${d.responsable_nombre || '—'}</td>
                 <td class="text-right whitespace-nowrap">
+                    <button class="btn btn-ghost p-1.5" onclick="UI.showQR('${isUnit ? (d.codigo_patrimonial || '—') : (d.codigo || '—')}', '${isUnit ? 'EQUIPO' : (d.categoria_nombre || '—')}')" title="Ver QR"><i data-lucide="qr-code" class="w-4 h-4"></i></button>
                     <button class="btn btn-ghost p-1.5" onclick="${isUnit ? `viewAssetDetails(${d.id})` : `viewCatalogItem(${d.id})`}" title="Ver detalle"><i data-lucide="eye" class="w-4 h-4"></i></button>
                     ${isUnit ? 
                         `<button class="btn btn-ghost p-1.5 text-blue-600" onclick="loadTraceResources().then(() => openAssignmentModal(${d.id}))" title="Asignar a personal"><i data-lucide="user-plus" class="w-4 h-4"></i></button>` : 
@@ -256,5 +276,17 @@ window.deleteInventoryItem = function(type, id, nombre) {
                 UI.toast('Error al eliminar: ' + (errorMsg || 'Error del servidor'), 'error');
             }
         }
+    });
+};
+
+window.openInventoryScanner = function() {
+    UI.openScanner((decodedText) => {
+        const searchInput = document.getElementById('f-search');
+        if (searchInput) {
+            searchInput.value = decodedText;
+            searchInput.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+        applyAdvancedFilters();
+        return true; // Cerrar el modal tras detección exitosa
     });
 };

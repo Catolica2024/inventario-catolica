@@ -566,7 +566,19 @@ try {
 
         case 'DELETE':
             $id = $_GET['id'] ?? null;
+            if (!$id) json_response(['error' => 'ID requerido'], 400);
+            
+            $pdo->beginTransaction();
+            // Eliminar registros relacionados primero
+            $pdo->prepare("DELETE FROM ordenes_compra_items WHERE orden_id = ?")->execute([$id]);
+            $pdo->prepare("DELETE FROM ordenes_cuotas WHERE orden_id = ?")->execute([$id]);
+            $pdo->prepare("DELETE FROM ordenes_movilidad WHERE orden_id = ?")->execute([$id]);
+            $pdo->prepare("DELETE FROM ordenes_compra_tokens WHERE orden_id = ?")->execute([$id]);
+            
+            // Eliminar la orden principal
             $pdo->prepare("DELETE FROM ordenes_compra WHERE id = ?")->execute([$id]);
+            $pdo->commit();
+            
             json_response(['ok' => true]);
             break;
 

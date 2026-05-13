@@ -2,9 +2,9 @@ window.Views = window.Views || {};
 
 // DRIVE_CLIENT_ID y DRIVE_FOLDER_ID definidas en purchases.js (alcance global)
 
-window.Views.treasury = function() {
-  return `
-    ${UI.pageHeader('Tesorería','Gestión de pagos, créditos y cuotas de OC/OS', `
+window.Views.treasury = function () {
+    return `
+    ${UI.pageHeader('Tesorería', 'Gestión de pagos, créditos y cuotas de OC/OS', `
       <button class="btn btn-outline" onclick="loadTreasuryData()"><i data-lucide="refresh-cw"></i>Actualizar</button>
     `)}
 
@@ -41,9 +41,9 @@ window.Views.treasury = function() {
 let _treasuryData = [];
 let _treasuryCurrentTab = 'pending';
 
-window.switchTreasuryTab = function(tab) {
+window.switchTreasuryTab = function (tab) {
     _treasuryCurrentTab = tab;
-    ['pending','partial','history'].forEach(t => {
+    ['pending', 'partial', 'history'].forEach(t => {
         const btn = document.getElementById('tab-' + t);
         if (!btn) return;
         btn.classList.toggle('bg-white', t === tab);
@@ -77,7 +77,7 @@ function renderTreasuryTable() {
         const tieneMovilidad = parseFloat(p.monto_movilidad || 0) > 0;
         const movilidadPagada = tieneMovilidad ? (p.mobility_pagado == 1) : true;
         const ocPagada = p.pagado == 1;
-        
+
         // 1. Historial: AMBOS deben estar pagados (OC/OS + Movilidad)
         const esHistorial = ocPagada && movilidadPagada;
         if (_treasuryCurrentTab === 'history') return esHistorial;
@@ -85,9 +85,9 @@ function renderTreasuryTable() {
         // 2. Cuotas en Curso: SOLO para Crédito en Cuotas que no han terminado
         const esCreditoCuotas = p.condicion_pago === 'Credito' && p.total_cuotas_reg > 0;
         const esParcialCuotas = esCreditoCuotas && !esHistorial;
-        
+
         if (_treasuryCurrentTab === 'partial') return esParcialCuotas;
-        
+
         // 3. Pendientes: Todo lo demás que no esté pagado totalmente
         // Esto incluye: Al contado, Crédito en Días, Adelanto + Saldo, y OCs pagadas con movilidad pendiente
         return !esHistorial && !esParcialCuotas;
@@ -136,13 +136,13 @@ function renderTreasuryTable() {
             estadoBadge = `<div class="flex flex-col gap-1">
                 <span class="badge badge-blue text-[10px]">${cuotasPag}/${cuotasTot} cuotas</span>
                 <div class="w-full bg-muted rounded-full h-1.5">
-                  <div class="bg-primary h-1.5 rounded-full" style="width:${(cuotasPag/cuotasTot*100).toFixed(0)}%"></div>
+                  <div class="bg-primary h-1.5 rounded-full" style="width:${(cuotasPag / cuotasTot * 100).toFixed(0)}%"></div>
                 </div>
             </div>`;
         } else if (esCuotas) {
             estadoBadge = `<span class="badge badge-yellow text-[10px]">0/${cuotasTot} cuotas</span>`;
         } else if (p.fecha_vencimiento) {
-            const diff = Math.ceil((new Date(p.fecha_vencimiento) - new Date()) / (1000*60*60*24));
+            const diff = Math.ceil((new Date(p.fecha_vencimiento) - new Date()) / (1000 * 60 * 60 * 24));
             const cls = diff < 5 ? 'badge-red' : diff < 15 ? 'badge-yellow' : 'badge-yellow';
             estadoBadge = `<div class="flex flex-col gap-0.5">
                 <span class="badge ${cls} text-[10px]">Vence: ${new Date(p.fecha_vencimiento).toLocaleDateString('es-PE')}</span>
@@ -157,7 +157,7 @@ function renderTreasuryTable() {
         } else {
             estadoBadge = '<span class="badge badge-yellow"><i data-lucide="clock" class="w-3 h-3"></i> Pendiente</span>';
         }
- 
+
         // --- Badge de Documentación ---
         let docStatusBadge = '';
         const hasConf = p.conformidad_url || p.sin_conformidad == 1;
@@ -182,7 +182,7 @@ function renderTreasuryTable() {
             <td class="font-medium text-sm">${p.proveedor_nombre}</td>
             <td>${condBadge}</td>
             <td class="font-bold text-primary">
-                ${monSym(p)} ${parseFloat(p.total || 0).toLocaleString('es-PE', {minimumFractionDigits:2})}
+                ${monSym(p)} ${parseFloat(p.total || 0).toLocaleString('es-PE', { minimumFractionDigits: 2 })}
                 ${p.monto_movilidad > 0 ? `<div class="text-[9px] text-orange-600 font-medium flex items-center gap-1 mt-0.5"><i data-lucide="truck" class="w-2.5 h-2.5"></i> + ${monSym(p)} ${parseFloat(p.monto_movilidad).toFixed(2)} Mov.</div>` : ''}
             </td>
             <td>${estadoBadge}</td>
@@ -198,7 +198,7 @@ function renderTreasuryTable() {
     lucide.createIcons();
 }
 
-window.openPaymentDetails = async function(id) {
+window.openPaymentDetails = async function (id) {
     const p = _treasuryData.find(x => x.id == id);
     if (!p) return;
 
@@ -256,9 +256,9 @@ window.openPaymentDetails = async function(id) {
                         </h4>
                         <div class="flex items-center gap-2 text-xs text-muted-foreground">
                             <div class="w-24 bg-muted rounded-full h-2">
-                                <div class="bg-primary h-2 rounded-full transition-all" style="width:${(cuotasPag/cuotas.length*100).toFixed(0)}%"></div>
+                                <div class="bg-primary h-2 rounded-full transition-all" style="width:${(cuotasPag / cuotas.length * 100).toFixed(0)}%"></div>
                             </div>
-                            ${(cuotasPag/cuotas.length*100).toFixed(0)}%
+                            ${(cuotasPag / cuotas.length * 100).toFixed(0)}%
                         </div>
                     </div>
                     <div class="space-y-1.5 max-h-60 overflow-y-auto pr-1">${cuotasHTML}</div>
@@ -266,7 +266,7 @@ window.openPaymentDetails = async function(id) {
         } else {
             // Crédito simple con fecha vencimiento
             const fVenc = fullOC.fecha_vencimiento ? new Date(fullOC.fecha_vencimiento) : null;
-            const diff = fVenc ? Math.ceil((fVenc - new Date()) / (1000*60*60*24)) : null;
+            const diff = fVenc ? Math.ceil((fVenc - new Date()) / (1000 * 60 * 60 * 24)) : null;
             condPagoSection = `
                 <div class="p-4 rounded-lg border ${diff !== null && diff < 5 ? 'bg-red-50 border-red-200' : 'bg-yellow-50 border-yellow-200'}">
                     <h4 class="font-bold text-sm flex items-center gap-2 mb-2">
@@ -274,7 +274,7 @@ window.openPaymentDetails = async function(id) {
                         Crédito — ${p.condicion_detalle || ''}
                     </h4>
                     ${fVenc ? `
-                        <p class="text-sm font-medium">Fecha máxima de pago: <strong>${fVenc.toLocaleDateString('es-PE', {day:'2-digit',month:'long',year:'numeric'})}</strong></p>
+                        <p class="text-sm font-medium">Fecha máxima de pago: <strong>${fVenc.toLocaleDateString('es-PE', { day: '2-digit', month: 'long', year: 'numeric' })}</strong></p>
                         <p class="text-xs mt-1 ${diff < 1 ? 'text-red-600 font-bold' : diff < 5 ? 'text-orange-600' : 'text-muted-foreground'}">
                             ${diff > 0 ? `Faltan ${diff} días para vencer` : `⚠ PLAZO VENCIDO hace ${Math.abs(diff)} días`}
                         </p>
@@ -370,7 +370,7 @@ window.openPaymentDetails = async function(id) {
                 </div>
                 <div class="p-3 bg-muted/30 rounded-lg">
                     <div class="text-[10px] uppercase font-bold text-muted-foreground mb-0.5">Total OC</div>
-                    <div class="font-bold">${monSym} ${parseFloat(p.total || 0).toLocaleString('es-PE', {minimumFractionDigits:2})}</div>
+                    <div class="font-bold">${monSym} ${parseFloat(p.total || 0).toLocaleString('es-PE', { minimumFractionDigits: 2 })}</div>
                 </div>
                 ${p.monto_movilidad > 0 ? `
                 <div class="p-3 bg-orange-50 rounded-lg border border-orange-100">
@@ -436,9 +436,9 @@ window.openPaymentDetails = async function(id) {
             <div class="card p-4 border-orange-200 bg-orange-50/50">
                 <div class="flex items-center justify-between mb-3">
                     <h4 class="font-bold flex items-center gap-2 text-orange-700 text-sm"><i data-lucide="truck" class="w-4 h-4"></i>Pago de Movilidad</h4>
-                    ${fullOC.mobility.pagado == 1 
-                        ? '<span class="badge badge-green text-[10px]">PAGADO</span>' 
-                        : '<span class="badge badge-orange text-[10px]">PENDIENTE</span>'}
+                    ${fullOC.mobility.pagado == 1
+                ? '<span class="badge badge-green text-[10px]">PAGADO</span>'
+                : '<span class="badge badge-orange text-[10px]">PENDIENTE</span>'}
                 </div>
                 
                 <div class="grid grid-cols-2 gap-3 text-xs mb-4">
@@ -525,7 +525,7 @@ window.openPaymentDetails = async function(id) {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ id: p.id, action: 'pay', voucher_url: driveUrl })
             }).then(r => r.json());
-            
+
             UI.stopLoading();
             if (resp.ok) {
                 UI.toast('Pago registrado con éxito', 'success');
@@ -539,7 +539,7 @@ window.openPaymentDetails = async function(id) {
 };
 
 // Pagar Adelanto
-window.pagarAdelanto = function(ordenId, nombre) {
+window.pagarAdelanto = function (ordenId, nombre) {
     const body = `
         <div class="space-y-3">
             <p class="text-sm text-muted-foreground">Adjunte el voucher de pago para el <strong>Adelanto</strong>.</p>
@@ -581,9 +581,9 @@ window.pagarAdelanto = function(ordenId, nombre) {
     lucide.createIcons();
 };
 
-window.openFinalPayment = function(ordenId, nombre, comprobanteUrl, sinConformidad) {
+window.openFinalPayment = function (ordenId, nombre, comprobanteUrl, sinConformidad) {
     const hasDoc = (comprobanteUrl && comprobanteUrl !== '' && comprobanteUrl !== 'null') || sinConformidad == 1;
-    
+
     let body = '';
     if (!hasDoc) {
         body = `
@@ -643,7 +643,7 @@ window.openFinalPayment = function(ordenId, nombre, comprobanteUrl, sinConformid
 };
 
 // Pagar una cuota individual
-window.pagarCuota = function(ordenId, cuotaId, nombre) {
+window.pagarCuota = function (ordenId, cuotaId, nombre) {
     const body = `
         <div class="space-y-3">
             <p class="text-sm text-muted-foreground">Adjunte el voucher de pago para registrar esta cuota en el sistema.</p>
@@ -686,10 +686,10 @@ window.pagarCuota = function(ordenId, cuotaId, nombre) {
 };
 
 // Pagar movilidad de forma independiente
-window.pagarMovilidad = async function(ordenId) {
+window.pagarMovilidad = async function (ordenId) {
     const fi = document.getElementById('pay-voucher-mob-indep');
     if (!fi?.files[0]) { UI.toast('Adjunte el voucher de movilidad', 'error'); return; }
-    
+
     UI.loading('Subiendo voucher a Drive...');
     const driveUrl = await uploadVoucherToDrive(fi.files[0], 'MOB-' + ordenId);
     if (!driveUrl) { UI.stopLoading(); return; }
@@ -700,7 +700,7 @@ window.pagarMovilidad = async function(ordenId) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: ordenId, action: 'pay_mobility', voucher_url: driveUrl })
     }).then(r => r.json());
-    
+
     UI.stopLoading();
     if (resp.ok) {
         UI.toast('Pago de movilidad registrado con éxito', 'success');
@@ -710,7 +710,7 @@ window.pagarMovilidad = async function(ordenId) {
     } else { UI.toast('Error: ' + resp.error, 'error'); }
 };
 
-window.copyToClipboard = function(text) {
+window.copyToClipboard = function (text) {
     navigator.clipboard.writeText(text).then(() => UI.toast('Copiado al portapapeles', 'success'));
 };
 

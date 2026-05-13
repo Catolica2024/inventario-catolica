@@ -42,12 +42,14 @@ try {
                 break;
             }
             $stmt = $pdo->query("
-                SELECT i.*, c.nombre as categoria_nombre, c.tipo as categoria_tipo,
+                SELECT i.*, c.nombre as categoria_nombre, c.tipo as categoria_tipo, c.stock_minimo as categoria_stock_minimo,
                        (SELECT COALESCE(SUM(CASE 
                             WHEN m.tipo = 'Entrada' THEN m.cantidad 
-                            WHEN m.tipo = 'Salida' THEN -m.cantidad 
+                            WHEN m.tipo IN ('Salida', 'Baja') THEN -m.cantidad 
                             ELSE 0 END), 0) 
                         FROM movimientos m WHERE m.item_id = i.id) as stock_actual,
+                       (SELECT COALESCE(SUM(m.cantidad), 0) FROM movimientos m WHERE m.item_id = i.id AND m.tipo = 'Entrada') as stock_total,
+                       (SELECT COALESCE(SUM(m.cantidad), 0) FROM movimientos m WHERE m.item_id = i.id AND m.tipo IN ('Salida','Baja')) as stock_salido,
                        (SELECT COUNT(DISTINCT m.ubicacion_id) FROM movimientos m WHERE m.item_id = i.id AND m.ubicacion_id IS NOT NULL) as num_ubicaciones,
                        (SELECT u.nombre FROM movimientos m 
                         JOIN ubicaciones u ON u.id = m.ubicacion_id 

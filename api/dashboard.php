@@ -22,21 +22,23 @@ try {
     
     // 4. Stock bajo (Comparando stock_minimo con la suma de movimientos)
     // Nota: Esta consulta es más compleja, calculamos el stock actual por ítem
+    // 4. Stock bajo (Comparando el stock_minimo de la CATEGORÍA con el stock actual de cada ítem)
     $stock_bajo = $pdo->query("
         SELECT COUNT(*) FROM (
-            SELECT i.id, i.stock_minimo, (COALESCE(SUM(CASE WHEN m.tipo = 'Entrada' THEN m.cantidad ELSE -m.cantidad END), 0)) as stock_actual
+            SELECT i.id, c.stock_minimo as min_cat, (COALESCE(SUM(CASE WHEN m.tipo = 'Entrada' THEN m.cantidad ELSE -m.cantidad END), 0)) as stock_actual
             FROM items i
+            JOIN categorias_inventario c ON i.categoria_inventario_id = c.id
             LEFT JOIN movimientos m ON i.id = m.item_id
             GROUP BY i.id
-            HAVING stock_actual < i.stock_minimo
+            HAVING stock_actual < min_cat
         ) as t
     ")->fetchColumn();
 
     // 5. Distribución por categorías (para el gráfico de barras)
     $distribucion = $pdo->query("
         SELECT c.nombre, COUNT(i.id) as cantidad
-        FROM categorias c
-        LEFT JOIN items i ON c.id = i.categoria_id
+        FROM categorias_inventario c
+        LEFT JOIN items i ON c.id = i.categoria_inventario_id
         GROUP BY c.id
         ORDER BY cantidad DESC
     ")->fetchAll();
@@ -51,6 +53,13 @@ try {
         LIMIT 5
     ")->fetchAll();
 
+    // 7. Estados de activos (para gráfico circular)
+    $estados_activos = $pdo->query("
+        SELECT estado, COUNT(*) as cantidad
+        FROM activos
+        GROUP BY estado
+    ")->fetchAll();
+
     json_response([
         'kpis' => [
             'activos' => number_format($activos_totales),
@@ -59,6 +68,7 @@ try {
             'stock_bajo' => $stock_bajo
         ],
         'distribucion' => $distribucion,
+        'estados_activos' => $estados_activos,
         'recientes' => $recientes
     ]);
 

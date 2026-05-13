@@ -12,9 +12,8 @@ window.Views.login = function() {
         <div class="text-center mb-8">
           <div class="flex justify-center mb-4">
             <div class="relative">
-              <div class="absolute inset-0 bg-brand-gradient rounded-2xl blur-md opacity-60"></div>
-              <div class="relative bg-brand-gradient rounded-2xl p-4 shadow-lg">
-                <i data-lucide="school" class="w-10 h-10 text-white"></i>
+              <div class="relative bg-white rounded-2xl p-2 shadow-lg border border-primary/10 w-20 h-20 flex items-center justify-center overflow-hidden">
+                <img src="assets/images/icono.png" alt="Logo" class="w-full h-full object-contain">
               </div>
             </div>
           </div>

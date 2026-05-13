@@ -59,7 +59,7 @@ function openSedeModal(sData) {
     onConfirm: async () => {
       const codigo = document.getElementById('sede-codigo').value.trim().toUpperCase();
       const nombre = document.getElementById('sede-nombre').value.trim();
-      if (!codigo || !nombre) { UI.toast('Código y Nombre son obligatorios', 'error'); return; }
+      if (!codigo || !nombre) { UI.toast('Código y Nombre son obligatorios', 'error'); return false; }
       
       const body = { 
         codigo, nombre, 

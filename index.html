@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Católica School · Sistema de Gestión de Inventario</title>
   <meta name="description" content="Sistema de gestión de inventario escolar Católica School." />
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%231b5cff'%3E%3Cpath d='M12 3 1 9l11 6 9-4.91V17h2V9'/%3E%3Cpath d='M5 13.18v4L12 21l7-3.82v-4L12 17z'/%3E%3C/svg%3E" />
+  <link rel="icon" href="assets/images/icono.png" type="image/png" />
 
   <!-- Tailwind via CDN (con configuración personalizada) -->
   <script src="https://cdn.tailwindcss.com"></script>
@@ -40,6 +40,9 @@
   <!-- PDF Generation -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <script src="https://unpkg.com/html5-qrcode"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 <body class="font-sans bg-background text-foreground antialiased">
@@ -62,6 +65,7 @@
   <script src="assets/js/views/registration.js"></script>
   <script src="assets/js/views/traceability.js"></script>
   <script src="assets/js/views/categories.js"></script>
+  <script src="assets/js/views/areas.js"></script>
   <script src="assets/js/views/assets.js"></script>
   <script src="assets/js/views/rubros.js"></script>
   <script src="assets/js/views/locations.js"></script>
