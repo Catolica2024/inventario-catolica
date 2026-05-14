@@ -125,14 +125,22 @@ try {
             $pdo->prepare("UPDATE mantenimientos SET estado = 'Completado', fecha_fin = CURRENT_DATE, descripcion_solucion = 'Servicio conforme según OS' WHERE id = ?")
                 ->execute([$m['id']]);
 
+            $finalUbicacionId = $ALMACEN_ID; // Fallback
+
             if (!empty($m['activo_id'])) {
+                // QA FIX: Obtener ubicación original del activo para evitar 'teletransportación' al almacén general
+                $stmtLoc = $pdo->prepare("SELECT ubicacion_id FROM activos WHERE id = ?");
+                $stmtLoc->execute([$m['activo_id']]);
+                $locRow = $stmtLoc->fetch();
+                if ($locRow) $finalUbicacionId = $locRow['ubicacion_id'];
+
                 $pdo->prepare("UPDATE activos SET estado = 'Operativo' WHERE id = ?")
                     ->execute([$m['activo_id']]);
             }
 
             $stmtMov = $pdo->prepare("INSERT INTO movimientos (item_id, tipo, cantidad, ubicacion_id, observacion) VALUES (?, 'Entrada', ?, ?, ?)");
             $obs = "Retorno por Conformidad de Servicio OS #" . $oc['numero_oc'];
-            $stmtMov->execute([$m['item_id'], $m['cantidad'], $ALMACEN_ID, $obs]);
+            $stmtMov->execute([$m['item_id'], $m['cantidad'], $finalUbicacionId, $obs]);
         }
     }
 

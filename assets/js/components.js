@@ -60,14 +60,33 @@ window.UI = {
     });
   },
   pageHeader(title, subtitle, actionsHTML = '') {
+    const user = window.Auth ? window.Auth.getUser() : null;
     return `
       <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-8">
         <div>
           <h1 class="text-3xl font-black tracking-tight text-foreground">${title}</h1>
           ${subtitle ? `<p class="text-sm font-medium text-muted-foreground mt-1">${subtitle}</p>` : ''}
         </div>
-        <div class="flex flex-wrap gap-2">${actionsHTML}</div>
+        <div class="flex flex-wrap gap-2 items-center">
+            ${actionsHTML}
+        </div>
       </div>`;
+  },
+  exportToExcel(data, filename = 'reporte.xlsx') {
+    if (!data || data.length === 0) {
+      this.toast('No hay datos para exportar', 'warning');
+      return;
+    }
+    try {
+        const worksheet = XLSX.utils.json_to_sheet(data);
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, "Datos");
+        XLSX.writeFile(workbook, filename);
+        this.toast('Excel generado correctamente', 'success');
+    } catch (e) {
+        console.error('Export error:', e);
+        this.toast('Error al generar Excel', 'error');
+    }
   },
   emptyState(text = 'Sin datos disponibles') {
     return `<div class="card p-20 text-center text-muted-foreground border-dashed flex flex-col items-center justify-center">

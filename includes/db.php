@@ -1,6 +1,5 @@
 <?php
 // includes/db.php — Configuración de conexión a base de datos (MySQL/MariaDB)
-ob_start(); // Iniciar buffer global para prevenir corrupción de JSON
 // Edita estos valores según tu entorno.
 
 define('DB_HOST', '127.0.0.1');
@@ -24,8 +23,8 @@ function db() {
 }
 
 function json_response($data, int $status = 200) {
-    // ARQUITECTURA EXPERTA: Limpiar cualquier warning o ruido previo
-    if (ob_get_length()) ob_clean();
+    // ARQUITECTURA EXPERTA: Limpiar todos los buffers anidados para evitar ruido en el JSON
+    while (ob_get_level()) ob_end_clean();
     
     http_response_code($status);
     header('Content-Type: application/json; charset=utf-8');

@@ -27,7 +27,10 @@ async function loadSuppliers() {
               <i data-lucide="${s.estado === 'activo' ? 'user-x' : 'user-check'}" class="w-4 h-4"></i>
             </button>
             <button class="btn btn-ghost p-1.5 ${s.estado === 'inactivo' ? 'opacity-50 grayscale' : ''}" title="Editar" onclick="editSupplier(${s.id})"><i data-lucide="pencil" class="w-4 h-4"></i></button>
-            <button class="btn btn-ghost p-1.5 text-destructive ${s.estado === 'inactivo' ? 'opacity-50 grayscale' : ''}" title="Eliminar" onclick="deleteSupplier(${s.id}, '${s.razon_social.replace(/'/g, "\\'")}')"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+            ${window.canDelete(window.Auth.getUser()) ? 
+              `<button class="btn btn-ghost p-1.5 text-destructive ${s.estado === 'inactivo' ? 'opacity-50 grayscale' : ''}" title="Eliminar" onclick="deleteSupplier(${s.id}, '${s.razon_social.replace(/'/g, "\\'")}')"><i data-lucide="trash-2" class="w-4 h-4"></i></button>` : 
+              ''
+            }
           </div>
         </td>
       </tr>`).join('');
@@ -215,6 +218,10 @@ window.editSupplier = async function(id) {
 };
 
 window.deleteSupplier = function(id, nombre) {
+    if (!window.canDelete(window.Auth.getUser())) {
+        UI.toast('Solo el Administrador puede eliminar proveedores', 'error');
+        return;
+    }
     UI.modal({
         title: 'Eliminar Proveedor',
         body: `<p>¿Está seguro de eliminar a <strong>${nombre}</strong>? Esta acción fallará si el proveedor tiene órdenes de compra vinculadas.</p>`,

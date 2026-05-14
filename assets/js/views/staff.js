@@ -53,7 +53,10 @@ async function loadStaff() {
             <button class="btn btn-ghost p-1.5 ${p.estado === 'inactivo' ? 'opacity-50 grayscale' : ''}" title="Ver Inventario Actual" onclick="viewStaffAssignments(${p.id}, '${p.nombre.replace(/'/g, "\\'")}')"><i data-lucide="eye" class="w-4 h-4"></i></button>
             <button class="btn btn-ghost p-1.5 ${p.estado === 'inactivo' ? 'opacity-50 grayscale' : ''}" title="Ver Historial Completo" onclick="viewStaffHistory(${p.id}, '${p.nombre.replace(/'/g, "\\'")}')"><i data-lucide="history" class="w-4 h-4"></i></button>
             <button class="btn btn-ghost p-1.5 ${p.estado === 'inactivo' ? 'opacity-50 grayscale' : ''}" title="Editar" onclick="editStaff(${p.id})"><i data-lucide="pencil" class="w-4 h-4"></i></button>
-            <button class="btn btn-ghost p-1.5 text-destructive ${p.estado === 'inactivo' ? 'opacity-50 grayscale' : ''}" title="Eliminar" onclick="deleteStaff(${p.id}, '${p.nombre.replace(/'/g, "\\'")}')"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+            ${window.canDelete(window.Auth.getUser()) ? 
+              `<button class="btn btn-ghost p-1.5 text-destructive ${p.estado === 'inactivo' ? 'opacity-50 grayscale' : ''}" title="Eliminar" onclick="deleteStaff(${p.id}, '${p.nombre.replace(/'/g, "\\'")}')"><i data-lucide="trash-2" class="w-4 h-4"></i></button>` : 
+              ''
+            }
           </div>
         </td>
       </tr>`).join('');
@@ -126,6 +129,10 @@ window.editStaff = async function(id) {
 };
 
 window.deleteStaff = function(id, nombre) {
+  if (!window.canDelete(window.Auth.getUser())) {
+    UI.toast('Solo el Administrador puede eliminar personal', 'error');
+    return;
+  }
   UI.modal({
     title: 'Eliminar Personal',
     body: `<p>¿Estás seguro de eliminar a <strong>${nombre}</strong>? Se perderán sus vínculos de asignación.</p>`,

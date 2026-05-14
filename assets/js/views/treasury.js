@@ -5,7 +5,10 @@ window.Views = window.Views || {};
 window.Views.treasury = function () {
     return `
     ${UI.pageHeader('Tesorería', 'Gestión de pagos, créditos y cuotas de OC/OS', `
-      <button class="btn btn-outline" onclick="loadTreasuryData()"><i data-lucide="refresh-cw"></i>Actualizar</button>
+      <div class="flex gap-2">
+        <button class="btn btn-outline text-emerald-600" onclick="exportTreasuryExcel()"><i data-lucide="file-spreadsheet" class="w-4 h-4 mr-2"></i>Exportar Excel</button>
+        <button class="btn btn-outline" onclick="loadTreasuryData()"><i data-lucide="refresh-cw" class="w-4 h-4 mr-2"></i>Actualizar</button>
+      </div>
     `)}
 
     <div class="space-y-6">
@@ -60,7 +63,11 @@ async function loadTreasuryData() {
     UI.loading('Cargando datos de tesorería...');
     try {
         const resp = await fetch('api/purchases.php').then(r => r.json());
-        _treasuryData = (resp.purchases || []).filter(p => p.estado === 'Aprobada' || p.estado === 'Recibida');
+        _treasuryData = (resp.purchases || []).filter(p => p.estado === 'Aprobada' || p.estado === 'Recibida' || p.estado === 'Completada');
+        
+        // --- ARCHITECTURE EXPERT: Pro-active payment check (Simulated Cron) ---
+        fetch('api/cron_notifications.php').catch(e => console.error('Cron error:', e));
+
         renderTreasuryTable();
     } catch {
         tbody.innerHTML = '<tr><td colspan="6" class="text-center py-10 text-destructive">Error al cargar datos.</td></tr>';
@@ -737,3 +744,22 @@ async function uploadVoucherToDrive(file, docNumber) {
         }).requestAccessToken();
     });
 }
+window.exportTreasuryExcel = async function() {
+    UI.loading('Preparando datos...');
+    try {
+        const resp = await fetch('api/purchases.php').then(r => r.json());
+        const data = (resp.purchases || []).filter(p => p.estado === 'Aprobada' || p.estado === 'Recibida' || p.estado === 'Completada').map(p => ({
+            'OC/OS': p.numero_oc,
+            'Proveedor': p.proveedor_nombre,
+            'Condición': p.condicion_pago,
+            'Monto OC': parseFloat(p.total).toFixed(2),
+            'Monto Movilidad': parseFloat(p.monto_movilidad).toFixed(2),
+            'Total General': (parseFloat(p.total) + parseFloat(p.monto_movilidad)).toFixed(2),
+            'Pagado OC': p.pagado == 1 ? 'SÍ' : (p.adelanto_pagado == 1 ? 'PARCIAL' : 'NO'),
+            'Pagado Movilidad': p.monto_movilidad > 0 ? (p.mobility_pagado == 1 ? 'SÍ' : 'NO') : 'N/A',
+            'Fecha Vencimiento': p.fecha_vencimiento || '—'
+        }));
+        UI.exportToExcel(data, 'Reporte_Pagos_Tesorería.xlsx');
+    } catch(e) { UI.toast('Error al exportar', 'error'); }
+    finally { UI.stopLoading(); }
+};

@@ -55,8 +55,8 @@ function renderPending() {
           </div>
           <div class="text-sm text-muted-foreground mt-2">${p.proveedor_nombre} · ${p.fecha || '—'}</div>
           <div class="text-2xl font-bold mt-2">
-            S/ ${parseFloat(p.total || 0).toLocaleString('es-PE', {minimumFractionDigits:2})}
-            ${p.monto_movilidad > 0 ? `<span class="text-xs text-orange-600 block mt-1">+ S/ ${parseFloat(p.monto_movilidad).toFixed(2)} Movilidad (Total: S/ ${ (parseFloat(p.total) + parseFloat(p.monto_movilidad)).toFixed(2) })</span>` : ''}
+            S/ ${(parseFloat(p.total || 0) + parseFloat(p.monto_movilidad || 0)).toLocaleString('es-PE', {minimumFractionDigits:2})}
+            ${p.monto_movilidad > 0 ? `<span class="text-[10px] text-orange-600 block mt-0.5 font-normal">Incluye S/ ${parseFloat(p.monto_movilidad).toFixed(2)} de movilidad</span>` : ''}
           </div>
           ${p.observaciones ? `<div class="mt-2 p-2 rounded bg-muted text-[11px] italic text-muted-foreground line-clamp-2">"${p.observaciones}"</div>` : ''}
         </div>
@@ -104,20 +104,52 @@ window.viewOrderDetails = async function(id) {
             <div><span class="text-blue-700 font-bold">Saldo:</span> S/ ${parseFloat(oc.saldo_monto).toFixed(2)}</div>
         </div>` : ''}
 
-        <div class="flex gap-4 p-4 rounded-xl bg-muted/30 border border-dashed">
-            <div class="flex-1 text-center">
-                <div class="text-[10px] text-muted-foreground uppercase font-bold mb-1">Gerente General</div>
-                <div class="flex items-center justify-center gap-1.5">
-                    <i data-lucide="${oc.aprobado_gerente ? 'check-circle' : 'circle'}" class="w-4 h-4 ${oc.aprobado_gerente ? 'text-green-500' : 'text-gray-300'}"></i>
-                    <span class="text-sm font-semibold ${oc.aprobado_gerente ? 'text-green-700' : 'text-gray-500'}">${oc.aprobado_gerente ? 'Aprobado' : 'Pendiente'}</span>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div class="p-4 rounded-xl bg-muted/20 border border-dashed">
+                <p class="text-[10px] text-muted-foreground uppercase font-bold mb-3 flex items-center gap-1.5">
+                    <i data-lucide="shield-check" class="w-3 h-3 text-primary"></i> Aprobaciones
+                </p>
+                <div class="flex gap-4">
+                    <div class="flex-1">
+                        <div class="text-[9px] text-muted-foreground uppercase font-bold mb-1">Gerencia</div>
+                        <div class="flex items-center gap-1.5">
+                            <i data-lucide="${oc.aprobado_gerente ? 'check-circle' : 'circle'}" class="w-3.5 h-3.5 ${oc.aprobado_gerente ? 'text-green-500' : 'text-gray-300'}"></i>
+                            <span class="text-xs font-bold ${oc.aprobado_gerente ? 'text-green-700' : 'text-gray-500'}">${oc.aprobado_gerente ? 'Aprobado' : 'Pendiente'}</span>
+                        </div>
+                    </div>
+                    <div class="flex-1 border-l pl-4">
+                        <div class="text-[9px] text-muted-foreground uppercase font-bold mb-1">Finanzas</div>
+                        <div class="flex items-center gap-1.5">
+                            <i data-lucide="${oc.aprobado_finanzas ? 'check-circle' : 'circle'}" class="w-3.5 h-3.5 ${oc.aprobado_finanzas ? 'text-green-500' : 'text-gray-300'}"></i>
+                            <span class="text-xs font-bold ${oc.aprobado_finanzas ? 'text-green-700' : 'text-gray-500'}">${oc.aprobado_finanzas ? 'Aprobado' : 'Pendiente'}</span>
+                        </div>
+                    </div>
                 </div>
             </div>
-            <div class="w-px bg-border my-1"></div>
-            <div class="flex-1 text-center">
-                <div class="text-[10px] text-muted-foreground uppercase font-bold mb-1">Jefe Finanzas</div>
-                <div class="flex items-center justify-center gap-1.5">
-                    <i data-lucide="${oc.aprobado_finanzas ? 'check-circle' : 'circle'}" class="w-4 h-4 ${oc.aprobado_finanzas ? 'text-green-500' : 'text-gray-300'}"></i>
-                    <span class="text-sm font-semibold ${oc.aprobado_finanzas ? 'text-green-700' : 'text-gray-500'}">${oc.aprobado_finanzas ? 'Aprobado' : 'Pendiente'}</span>
+
+            <div class="p-4 rounded-xl bg-muted/20 border border-dashed">
+                <p class="text-[10px] text-muted-foreground uppercase font-bold mb-3 flex items-center gap-1.5">
+                    <i data-lucide="wallet" class="w-3 h-3 text-primary"></i> Flujo de Pagos
+                </p>
+                <div class="flex gap-4">
+                    <div class="flex-1">
+                        <div class="text-[9px] text-muted-foreground uppercase font-bold mb-1">Items OC</div>
+                        <div class="flex items-center gap-1.5">
+                            <i data-lucide="${oc.pagado == 1 ? 'check-circle' : 'clock'}" class="w-3.5 h-3.5 ${oc.pagado == 1 ? 'text-green-500' : 'text-yellow-500'}"></i>
+                            <span class="text-xs font-bold ${oc.pagado == 1 ? 'text-green-700' : 'text-yellow-700'}">
+                                ${oc.pagado == 1 ? 'Pagado' : oc.adelanto_pagado == 1 ? 'Adelanto' : 'Pendiente'}
+                            </span>
+                        </div>
+                    </div>
+                    ${oc.monto_movilidad > 0 ? `
+                    <div class="flex-1 border-l pl-4">
+                        <div class="text-[9px] text-muted-foreground uppercase font-bold mb-1">Movilidad</div>
+                        <div class="flex items-center gap-1.5">
+                            <i data-lucide="truck" class="w-3.5 h-3.5 ${oc.mobility && oc.mobility.pagado == 1 ? 'text-orange-500' : 'text-gray-300'}"></i>
+                            <span class="text-xs font-bold ${oc.mobility && oc.mobility.pagado == 1 ? 'text-orange-700' : 'text-gray-500'}">${oc.mobility && oc.mobility.pagado == 1 ? 'Pagado' : 'Pendiente'}</span>
+                        </div>
+                    </div>
+                    ` : ''}
                 </div>
             </div>
         </div>
@@ -168,7 +200,7 @@ window.viewOrderDetails = async function(id) {
           <div class="text-muted-foreground text-xs font-mono">ID OC: ${oc.numero_oc}</div>
           <div class="text-right">
             <p class="text-xs text-muted-foreground">Total a aprobar</p>
-            <p class="text-xl font-bold text-primary">S/ ${parseFloat(oc.total).toLocaleString('es-PE', {minimumFractionDigits:2})}</p>
+            <p class="text-xl font-bold text-primary">S/ ${(parseFloat(oc.total) + parseFloat(oc.monto_movilidad || 0)).toLocaleString('es-PE', {minimumFractionDigits:2})}</p>
           </div>
         </div>
       </div>`;
@@ -198,7 +230,7 @@ function renderHistory() {
       <td class="font-mono text-xs font-bold">${p.numero_oc}</td>
       <td>${p.proveedor_nombre}</td>
       <td class="text-xs">${p.fecha || '—'}</td>
-      <td class="font-semibold">S/ ${parseFloat(p.monto || 0).toLocaleString('es-PE', {minimumFractionDigits:2})}</td>
+      <td class="font-semibold">S/ ${(parseFloat(p.monto || 0) + parseFloat(p.monto_movilidad || 0)).toLocaleString('es-PE', {minimumFractionDigits:2})}</td>
       <td><span class="badge ${BADGE[p.estado] || 'badge-gray'}">${p.estado}</span></td>
       <td class="text-right">
         <button class="btn btn-ghost p-1.5" onclick="viewOrderDetails(${p.id})"><i data-lucide="eye" class="w-4 h-4"></i></button>
@@ -210,7 +242,7 @@ window.approveOrder = function(id) {
   const oc = _pendingOrders.find(p => p.id == id);
   UI.modal({
     title: 'Aprobar orden',
-    body: `<p>¿Confirmas la aprobación de la orden <strong>${oc ? oc.numero_oc : ''}</strong> por <strong>S/ ${oc ? parseFloat(oc.monto).toLocaleString('es-PE', {minimumFractionDigits:2}) : ''}</strong>?</p>`,
+    body: `<p>¿Confirmas la aprobación de la orden <strong>${oc ? oc.numero_oc : ''}</strong> por <strong>S/ ${oc ? (parseFloat(oc.monto || 0) + parseFloat(oc.monto_movilidad || 0)).toLocaleString('es-PE', {minimumFractionDigits:2}) : ''}</strong>?</p>`,
     confirmText: 'Sí, aprobar',
     onConfirm: async () => {
       UI.loading('Registrando aprobación...');
@@ -236,7 +268,7 @@ window.rejectOrder = function(id) {
       <div class="space-y-4">
         <div class="p-3 rounded-lg bg-muted text-sm">
           <div class="font-semibold">${oc ? oc.numero_oc : ''}</div>
-          <div class="text-muted-foreground">${oc ? oc.proveedor_nombre : ''} · S/ ${oc ? parseFloat(oc.monto).toLocaleString('es-PE', {minimumFractionDigits:2}) : ''}</div>
+          <div class="text-muted-foreground">${oc ? oc.proveedor_nombre : ''} · S/ ${oc ? (parseFloat(oc.monto || 0) + parseFloat(oc.monto_movilidad || 0)).toLocaleString('es-PE', {minimumFractionDigits:2}) : ''}</div>
         </div>
         <div>
           <label class="text-sm font-medium">Motivo del rechazo <span class="text-destructive">*</span></label>

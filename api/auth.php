@@ -13,7 +13,7 @@ if (!$email || !$password) {
 try {
     $pdo = db();
     $stmt = $pdo->prepare("
-        SELECT u.id, u.nombre, u.email, u.password_hash, u.permisos, u.personal_id, r.nombre as role 
+        SELECT u.id, u.nombre, u.email, u.password_hash, u.permisos, u.personal_id, r.nombre as role, r.can_delete 
         FROM usuarios u 
         JOIN roles r ON u.rol_id = r.id 
         WHERE u.email = ? AND u.estado = 'activo'
@@ -34,6 +34,7 @@ try {
             'name'        => $user['nombre'],
             'email'       => $user['email'],
             'role'        => $user['role'],
+            'can_delete'  => (int)$user['can_delete'],
             'permissions' => $user['permisos'],
             'personal_id' => $user['personal_id']
         ]

@@ -19,7 +19,10 @@ async function loadInventoryCategories() {
         <td class="text-right">
           <div class="flex justify-end gap-1">
             <button class="btn btn-ghost p-1.5" onclick="editInvCategory(${c.id})"><i data-lucide="pencil" class="w-4 h-4"></i></button>
-            <button class="btn btn-ghost p-1.5 text-destructive" onclick="deleteInvCategory(${c.id}, '${c.nombre.replace(/'/g, "\\'")}')"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+            ${window.canDelete(window.Auth.getUser()) ? 
+              `<button class="btn btn-ghost p-1.5 text-destructive" onclick="deleteInvCategory(${c.id}, '${c.nombre.replace(/'/g, "\\'")}')"><i data-lucide="trash-2" class="w-4 h-4"></i></button>` : 
+              ''
+            }
           </div>
         </td>
       </tr>`).join('');
@@ -159,6 +162,10 @@ window.editInvCategory = async function(id) {
 };
 
 window.deleteInvCategory = function(id, nombre) {
+    if (!window.canDelete(window.Auth.getUser())) {
+        UI.toast('Solo el Administrador puede eliminar categorías', 'error');
+        return;
+    }
     UI.modal({
         title: 'Eliminar Categoría',
         body: `<p>¿Estás seguro de eliminar la categoría <strong>${nombre}</strong>? Esta acción no se puede deshacer.</p>`,

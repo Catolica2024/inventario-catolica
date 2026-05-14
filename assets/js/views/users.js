@@ -139,7 +139,10 @@ window.deleteUser = function(id, nombre) {
 window.Views.users = function() {
   return `
     ${UI.pageHeader('Usuarios y Roles','Gestión de accesos al sistema', `
-      <button class="btn btn-primary" onclick="newUser()"><i data-lucide="user-plus"></i>Nuevo usuario</button>
+      <div class="flex gap-2">
+        <button class="btn btn-outline" onclick="openRolesModal()"><i data-lucide="shield"></i>Perfiles / Roles</button>
+        <button class="btn btn-primary" onclick="newUser()"><i data-lucide="user-plus"></i>Nuevo usuario</button>
+      </div>
     `)}
     <div class="card overflow-hidden">
       <table class="data">
@@ -187,3 +190,88 @@ window.toggleUserStatus = async function(id, currentStatus, name) {
 };
 
 window.Views.users.afterMount = loadUsers;
+
+window.openRolesModal = async function() {
+    UI.loading('Cargando perfiles...');
+    try {
+        const resp = await fetch('api/roles.php').then(r => r.json());
+        const roles = resp.roles || [];
+        UI.stopLoading();
+
+        UI.modal({
+            title: 'Gestión de Perfiles y Permisos',
+            size: 'lg',
+            body: `
+                <div class="space-y-4">
+                    <div class="p-4 bg-primary/5 border border-primary/10 rounded-xl mb-4">
+                        <p class="text-xs font-bold text-primary flex items-center gap-2">
+                            <i data-lucide="info" class="w-4 h-4"></i>
+                            CONTROL DE ELIMINACIÓN
+                        </p>
+                        <p class="text-[10px] text-muted-foreground mt-1">Habilite o deshabilite la capacidad de borrar registros históricos para cada perfil. El perfil <b>admin</b> siempre mantiene esta capacidad por integridad del sistema.</p>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left">
+                            <thead class="text-[10px] uppercase font-bold text-muted-foreground border-b bg-muted/30">
+                                <tr>
+                                    <th class="px-4 py-2">Perfil</th>
+                                    <th class="px-4 py-2">Descripción</th>
+                                    <th class="px-4 py-2 text-center">Botón Eliminar</th>
+                                    <th class="px-4 py-2 text-right">Acción</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-border">
+                                ${roles.map(r => `
+                                    <tr class="hover:bg-muted/20 transition-colors">
+                                        <td class="px-4 py-3 font-bold text-sm text-primary uppercase">${r.nombre.replace('_',' ')}</td>
+                                        <td class="px-4 py-3 text-xs text-muted-foreground">${r.descripcion || '—'}</td>
+                                        <td class="px-4 py-3 text-center">
+                                            <div class="flex justify-center">
+                                                <label class="relative inline-flex items-center cursor-pointer group">
+                                                    <input type="checkbox" id="role-del-${r.id}" class="sr-only peer" ${r.can_delete == 1 ? 'checked' : ''} ${r.nombre === 'admin' ? 'disabled' : ''}>
+                                                    <div class="w-10 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div>
+                                                </label>
+                                            </div>
+                                        </td>
+                                        <td class="px-4 py-3 text-right">
+                                            <button class="btn btn-ghost p-2 text-primary hover:bg-primary/10 rounded-lg" onclick="saveRoleChanges(${r.id}, '${r.nombre}', '${r.descripcion}')" title="Guardar cambios">
+                                                <i data-lucide="save" class="w-4 h-4"></i>
+                                            </button>
+                                        </td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            `,
+            hideConfirm: true,
+            confirmText: 'Cerrar'
+        });
+        lucide.createIcons();
+    } catch(e) { UI.stopLoading(); UI.toast('Error al cargar roles', 'error'); }
+};
+
+window.saveRoleChanges = async function(id, nombre, descripcion) {
+    const canDelete = document.getElementById(`role-del-${id}`).checked ? 1 : 0;
+    UI.loading('Actualizando perfil...');
+    try {
+        const res = await fetch('api/roles.php', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id, nombre, descripcion, can_delete: canDelete })
+        }).then(r => r.json());
+        
+        UI.stopLoading();
+        if (res.ok) {
+            UI.toast('Permisos del perfil actualizados', 'success');
+            // Si el perfil editado es el del usuario actual, sugerimos recargar
+            const user = window.Auth.getUser();
+            if (user && user.role === nombre) {
+                UI.confirm('Los cambios afectan a su perfil actual. ¿Desea recargar la sesión para aplicar los cambios?', () => {
+                    location.reload();
+                }, 'Cambios detectados');
+            }
+        } else UI.toast(res.error, 'error');
+    } catch(e) { UI.stopLoading(); UI.toast('Error al guardar', 'error'); }
+};

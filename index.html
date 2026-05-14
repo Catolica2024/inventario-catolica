@@ -7,32 +7,6 @@
   <meta name="description" content="Sistema de gestión de inventario escolar Católica School." />
   <link rel="icon" href="assets/images/icono.png" type="image/png" />
 
-  <!-- Tailwind via CDN (con configuración personalizada) -->
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script>
-    tailwind.config = {
-      theme: {
-        extend: {
-          colors: {
-            primary: { DEFAULT: '#1b5cff', hover: '#1648cc', foreground: '#ffffff' },
-            secondary: { DEFAULT: '#36a2bc', foreground: '#ffffff' },
-            accent: { DEFAULT: '#f4da40', foreground: '#1f2937' },
-            muted: { DEFAULT: '#f1f5f9', foreground: '#64748b' },
-            border: '#e2e8f0',
-            background: '#ffffff',
-            foreground: '#0f172a',
-            card: '#ffffff',
-            destructive: { DEFAULT: '#ef4444', foreground: '#ffffff' },
-          },
-          fontFamily: { sans: ['Inter','system-ui','sans-serif'] },
-        }
-      }
-    }
-  </script>
-
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="assets/css/styles.css" />
 
   <!-- Iconos -->
@@ -43,6 +17,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
   <script src="https://unpkg.com/html5-qrcode"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 <body class="font-sans bg-background text-foreground antialiased">
@@ -66,10 +41,8 @@
   <script src="assets/js/views/traceability.js"></script>
   <script src="assets/js/views/categories.js"></script>
   <script src="assets/js/views/areas.js"></script>
-  <script src="assets/js/views/assets.js"></script>
   <script src="assets/js/views/rubros.js"></script>
   <script src="assets/js/views/locations.js"></script>
-  <script src="assets/js/views/movements.js"></script>
   <script src="assets/js/views/maintenance.js"></script>
   <script src="assets/js/views/suppliers.js"></script>
   <script src="assets/js/views/sedes.js"></script>

@@ -1,5 +1,6 @@
 <?php
 // api/purchases.php — CRUD completo de órdenes de compra con ítems
+ob_start();
 require_once __DIR__ . '/../includes/db.php';
 
 $method = $_SERVER['REQUEST_METHOD'];
@@ -343,12 +344,13 @@ try {
                 $ocData = $ocFull->fetch();
 
                 if ($ocData && $ocData['proveedor_email'] && $b['voucher_url']) {
-                    require_once '../includes/mailer.php';
+                    require_once __DIR__ . '/../includes/mailer.php';
                     Mailer::sendPaymentVoucherToSupplier([
                         'to' => $ocData['proveedor_email'],
                         'subject' => "Confirmación de Pago: {$ocData['numero_oc']}",
                         'provider' => $ocData['proveedor_nombre'],
                         'oc_number' => $ocData['numero_oc'],
+                        'concept' => 'Pago de ítems de la Orden de Compra/Servicio',
                         'monto' => $ocData['total'],
                         'moneda' => $ocData['moneda'],
                         'voucher_url' => $b['voucher_url']
@@ -369,12 +371,13 @@ try {
                     $mobData = $mobFull->fetch();
 
                     if ($mobData && $mobData['proveedor_email']) {
-                        require_once '../includes/mailer.php';
+                        require_once __DIR__ . '/../includes/mailer.php';
                         Mailer::sendPaymentVoucherToSupplier([
                             'to' => $mobData['proveedor_email'],
                             'subject' => "Confirmación de Pago de Movilidad: {$ocData['numero_oc']}",
                             'provider' => $mobData['proveedor_nombre'],
                             'oc_number' => $ocData['numero_oc'] . " (MOVILIDAD)",
+                            'concept' => 'Pago por servicio de movilidad / transporte',
                             'monto' => $mobData['monto'],
                             'moneda' => $ocData['moneda'],
                             'voucher_url' => $b['voucher_movilidad_url']
@@ -396,12 +399,13 @@ try {
                 $mobData = $mobFull->fetch();
 
                 if ($mobData && $mobData['proveedor_email']) {
-                    require_once '../includes/mailer.php';
+                    require_once __DIR__ . '/../includes/mailer.php';
                     Mailer::sendPaymentVoucherToSupplier([
                         'to' => $mobData['proveedor_email'],
                         'subject' => "Confirmación de Pago de Movilidad: {$mobData['numero_oc']}",
                         'provider' => $mobData['proveedor_nombre'],
                         'oc_number' => $mobData['numero_oc'] . " (MOVILIDAD)",
+                        'concept' => 'Pago por servicio de movilidad / transporte',
                         'monto' => $mobData['monto'],
                         'moneda' => $mobData['moneda'],
                         'voucher_url' => $b['voucher_url']

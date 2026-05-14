@@ -15,8 +15,9 @@
                         <p class="text-muted-foreground">Control de reparaciones, mantenimiento preventivo y costos asociados.</p>
                     </div>
                     <div class="flex gap-2">
+                        <button class="btn btn-outline text-emerald-600" onclick="exportMaintenanceExcel()"><i data-lucide="file-spreadsheet" class="w-4 h-4 mr-2"></i> Exportar Excel</button>
                         <button class="btn btn-primary" onclick="openNewMaintenanceModal()">
-                            <i data-lucide="wrench" class="w-4 h-4"></i> Registrar Reparación
+                            <i data-lucide="wrench" class="w-4 h-4 mr-2"></i> Registrar Reparación
                         </button>
                     </div>
                 </div>
@@ -143,7 +144,10 @@
                             ${m.estado !== 'Completado' && m.estado !== 'Cancelado' ? 
                                 `<button class="btn btn-ghost p-1.5 text-green-600" onclick="openCompleteMaintModal(${m.id})" title="Finalizar"><i data-lucide="check-check" class="w-4 h-4"></i></button>` : ''
                             }
-                            <button class="btn btn-ghost p-1.5 text-destructive" onclick="deleteMaintenanceRecord(${m.id})" title="Eliminar"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                            ${window.canDelete(window.Auth.getUser()) ? 
+                                `<button class="btn btn-ghost p-1.5 text-destructive" onclick="deleteMaintenanceRecord(${m.id})" title="Eliminar"><i data-lucide="trash-2" class="w-4 h-4"></i></button>` : 
+                                ''
+                            }
                         </td>
                     </tr>
                 `;
@@ -491,6 +495,10 @@
     };
 
     window.deleteMaintenanceRecord = function(id) {
+        if (!window.canDelete(window.Auth.getUser())) {
+            UI.toast('Solo el Administrador puede eliminar registros de mantenimiento', 'error');
+            return;
+        }
         UI.confirm('¿Está seguro de eliminar este registro de mantenimiento? Esta acción no se puede deshacer.', async () => {
             UI.loading('Eliminando...');
             try {
@@ -500,6 +508,27 @@
             } catch(e) { UI.toast('Error al eliminar', 'error'); }
             finally { UI.stopLoading(); }
         });
+    };
+
+    window.exportMaintenanceExcel = async function() {
+        UI.loading('Preparando datos...');
+        try {
+            const resp = await fetch('api/maintenance.php').then(r => r.json());
+            const data = (resp.maintenance || []).map(m => ({
+                'Artículo': m.item_nombre,
+                'Activo': m.activo_codigo || 'Lote',
+                'Tipo': m.tipo,
+                'Proveedor': m.proveedor_nombre || 'Interno',
+                'Fecha Inicio': m.fecha_inicio,
+                'Fecha Fin': m.fecha_fin || '—',
+                'Estado': m.estado,
+                'Costo': parseFloat(m.costo).toFixed(2),
+                'Problema': m.descripcion_problema,
+                'Solución': m.descripcion_solucion || ''
+            }));
+            UI.exportToExcel(data, 'Historial_Mantenimiento.xlsx');
+        } catch(e) { UI.toast('Error al exportar', 'error'); }
+        finally { UI.stopLoading(); }
     };
 
 })();

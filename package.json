@@ -1,0 +1,24 @@
+{
+  "name": "inventario-catolica",
+  "version": "1.0.0",
+  "description": "Proyecto migrado a **HTML + Tailwind (CDN) + JavaScript vainilla**, con stubs de **PHP** preparados para conectar a una base de datos MySQL/MariaDB.",
+  "main": "index.js",
+  "scripts": {
+    "build": "npx tailwindcss -i ./assets/css/input.css -o ./assets/css/styles.css --minify",
+    "watch": "npx tailwindcss -i ./assets/css/input.css -o ./assets/css/styles.css --watch"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Catolica2024/inventario-catolica.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/Catolica2024/inventario-catolica/issues"
+  },
+  "homepage": "https://github.com/Catolica2024/inventario-catolica#readme",
+  "devDependencies": {
+    "tailwindcss": "^3.4.1"
+  }
+}

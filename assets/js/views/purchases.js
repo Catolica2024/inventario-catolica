@@ -831,6 +831,10 @@ window.updateOCTypeLabels = function () {
 };
 
 window.generateOCPDF = function (numero_oc, sup, area, body, items) {
+  if (typeof window.jspdf === 'undefined') {
+    UI.toast('La librería PDF aún se está cargando. Espere unos segundos e intente de nuevo.', 'warning');
+    return null;
+  }
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
   const W = 210, H = 297;
@@ -1315,7 +1319,9 @@ async function loadPurchases() {
       // LÓGICA DE ESTADO MAESTRO (PREMIUM)
       const isApproved = p.aprobado_gerente && p.aprobado_finanzas;
       const isRejected = p.rechazado_gerente || p.rechazado_finanzas;
-      const isPaid = p.pagado || p.adelanto_pagado;
+      const isMobilityPaid = p.monto_movilidad > 0 ? (p.mobility_pagado == 1) : true;
+      const isMainPaid = p.pagado == 1;
+      const isAdelantoPaid = p.adelanto_pagado == 1;
       const isReceived = p.estado === 'Completada' || p.conformidad_url;
       const isOS = p.tipo === 'servicio';
 
@@ -1329,8 +1335,10 @@ async function loadPurchases() {
               class: 'badge-blue', 
               icon: isOS ? 'check-circle' : 'package' 
           };
-      } else if (isPaid) {
-          masterStatus = { label: 'Pagado', class: 'badge-green', icon: 'banknote' };
+      } else if (isMainPaid && isMobilityPaid) {
+          masterStatus = { label: 'Pagado Total', class: 'badge-green', icon: 'banknote' };
+      } else if (isMainPaid || isAdelantoPaid || (p.monto_movilidad > 0 && isMobilityPaid)) {
+          masterStatus = { label: 'Pago Parcial', class: 'badge-emerald', icon: 'wallet' };
       } else if (isApproved) {
           masterStatus = { label: 'Pendiente de Pago', class: 'badge-indigo', icon: 'credit-card' };
       }
@@ -1343,15 +1351,21 @@ async function loadPurchases() {
             </span>
             <div class="flex items-center gap-3 ml-1">
                 <!-- Micro-indicadores de flujo -->
-                <div class="flex gap-1" title="Aprobaciones">
+                <div class="flex gap-1" title="Aprobaciones (Gerencia / Finanzas)">
                     <i data-lucide="user-check" class="w-3 h-3 ${p.aprobado_gerente ? 'text-green-500' : 'text-slate-300'}"></i>
                     <i data-lucide="shield-check" class="w-3 h-3 ${p.aprobado_finanzas ? 'text-green-500' : 'text-slate-300'}"></i>
                 </div>
                 <div class="w-px h-3 bg-slate-200"></div>
-                <div class="flex gap-1" title="Pagos">
+                <div class="flex gap-1" title="Pagos OC (Adelanto / Total)">
                     <i data-lucide="wallet" class="w-3 h-3 ${p.adelanto_pagado ? 'text-blue-500' : 'text-slate-300'}"></i>
                     <i data-lucide="circle-dollar-sign" class="w-3 h-3 ${p.pagado ? 'text-green-500' : 'text-slate-300'}"></i>
                 </div>
+                ${p.monto_movilidad > 0 ? `
+                <div class="w-px h-3 bg-slate-200"></div>
+                <div class="flex gap-1" title="Pago de Movilidad">
+                    <i data-lucide="truck" class="w-3 h-3 ${p.mobility_pagado == 1 ? 'text-orange-500' : 'text-slate-300'}"></i>
+                </div>
+                ` : ''}
                 ${isReceived ? `
                     <div class="w-px h-3 bg-slate-200"></div>
                     <a href="${p.conformidad_url || '#'}" target="_blank" title="Ver Conformidad">
@@ -1369,13 +1383,19 @@ async function loadPurchases() {
           <div class="text-[10px] text-muted-foreground uppercase">${p.area_nombre || 'Sin área'}</div>
         </td>
         <td class="text-xs">${p.fecha || '—'}</td>
-        <td class="font-bold text-sm">S/ ${parseFloat(p.total || 0).toLocaleString('es-PE', { minimumFractionDigits: 2 })}</td>
+        <td class="font-bold text-sm">
+            S/ ${(parseFloat(p.total || 0) + parseFloat(p.monto_movilidad || 0)).toLocaleString('es-PE', { minimumFractionDigits: 2 })}
+            ${p.monto_movilidad > 0 ? `<div class="text-[9px] text-orange-600 font-medium">+ S/ ${parseFloat(p.monto_movilidad).toFixed(2)} Mov.</div>` : ''}
+        </td>
         <td>${statusHtml}</td>
         <td class="text-right">
           <div class="flex justify-end gap-1">
             <button class="btn btn-ghost p-1.5" title="Ver detalles" onclick="viewOrderDetails(${p.id})"><i data-lucide="eye" class="w-4 h-4"></i></button>
             <button class="btn btn-ghost p-1.5 text-primary" title="Exportar a Drive" onclick="exportOCById(${p.id})"><i data-lucide="download" class="w-4 h-4"></i></button>
-            <button class="btn btn-ghost p-1.5 text-destructive" title="Eliminar orden" onclick="confirmDeleteOC(${p.id}, '${p.numero_oc}')"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+            ${window.canDelete(window.Auth.getUser()) ? 
+                `<button class="btn btn-ghost p-1.5 text-destructive" title="Eliminar orden" onclick="confirmDeleteOC(${p.id}, '${p.numero_oc}')"><i data-lucide="trash-2" class="w-4 h-4"></i></button>` : 
+                ''
+            }
           </div>
         </td>
       </tr>`;
@@ -1387,7 +1407,10 @@ async function loadPurchases() {
 window.Views.purchases = function () {
   return `
     ${UI.pageHeader('Órdenes de Compra y Servicio', 'Gestión de adquisiciones institucionales', `
-      <button class="btn btn-primary" onclick="Router.go('new-purchase')"><i data-lucide="plus"></i>Nueva Orden</button>
+      <div class="flex gap-2">
+        <button class="btn btn-outline text-emerald-600" onclick="exportPurchasesExcel()"><i data-lucide="file-spreadsheet" class="w-4 h-4 mr-2"></i>Exportar Excel</button>
+        <button class="btn btn-primary" onclick="Router.go('new-purchase')"><i data-lucide="plus" class="w-4 h-4 mr-2"></i>Nueva Orden</button>
+      </div>
     `)}
     <div class="card overflow-hidden">
       <table class="data">
@@ -1404,6 +1427,10 @@ window.Views.purchases = function () {
 window.Views.purchases.afterMount = loadPurchases;
 
 window.confirmDeleteOC = function(id, numero) {
+  if (!window.canDelete(window.Auth.getUser())) {
+    UI.toast('Solo el Administrador puede eliminar órdenes de compra', 'error');
+    return;
+  }
   UI.modal({
     title: 'Eliminar Orden',
     body: `<p>¿Está seguro de que desea eliminar la orden <strong>${numero}</strong>? Esta acción no se puede deshacer y eliminará todos los registros asociados (ítems, cuotas, etc.).</p>`,
@@ -1483,4 +1510,26 @@ window.startAssetQRScanner = function() {
             console.error(err);
         });
     }, 500); // Pequeño delay para asegurar que el DOM del modal esté listo
+};
+window.exportPurchasesExcel = async function() {
+    UI.loading('Preparando datos...');
+    try {
+        const data = await fetch('api/purchases.php').then(r => r.json());
+        const exportData = (data.purchases || []).map(p => ({
+            'N° OC/OS': p.numero_oc,
+            'Tipo': p.tipo === 'servicio' ? 'Servicio' : 'Compra',
+            'Proveedor': p.proveedor_nombre,
+            'Área': p.area_nombre || 'Sin área',
+            'Fecha': p.fecha,
+            'Monto Base': parseFloat(p.total).toFixed(2),
+            'Movilidad': parseFloat(p.monto_movilidad).toFixed(2),
+            'Total General': (parseFloat(p.total) + parseFloat(p.monto_movilidad)).toFixed(2),
+            'Estado': p.estado,
+            'Aprob. Gerente': p.aprobado_gerente ? 'SÍ' : 'NO',
+            'Aprob. Finanzas': p.aprobado_finanzas ? 'SÍ' : 'NO',
+            'Pagado': p.pagado == 1 ? 'SÍ' : 'NO'
+        }));
+        UI.exportToExcel(exportData, 'Historial_Compras_Servicios.xlsx');
+    } catch(e) { UI.toast('Error al exportar', 'error'); }
+    finally { UI.stopLoading(); }
 };

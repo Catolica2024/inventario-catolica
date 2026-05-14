@@ -145,7 +145,10 @@ function renderInventoryRows(data) {
                                 `<button class="btn btn-ghost p-2 rounded-xl text-emerald-600" onclick="loadTraceResources().then(() => openDispatchModal(${d.id}))" title="Despachar"><i data-lucide="send" class="w-4 h-4"></i></button>`
                             )
                         }
-                        <button class="btn btn-ghost p-2 rounded-xl text-destructive" onclick="deleteInventoryItem('${d._type}', ${d.id}, '${(isUnit ? d.item_nombre : d.nombre || '').replace(/'/g, '\\&apos;')}')" title="Eliminar"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                        ${window.canDelete(window.Auth.getUser()) ? 
+                            `<button class="btn btn-ghost p-2 rounded-xl text-destructive" onclick="deleteInventoryItem('${d._type}', ${d.id}, '${(isUnit ? d.item_nombre : d.nombre || '').replace(/'/g, '\\&apos;')}')" title="Eliminar"><i data-lucide="trash-2" class="w-4 h-4"></i></button>` : 
+                            ''
+                        }
                     </div>
                 </td>
             </tr>
@@ -202,6 +205,7 @@ window.Views.inventory = function() {
     return `
         ${UI.pageHeader('Inventario General','Control centralizado de activos e insumos institucionales', `
             <button class="btn btn-outline shadow-sm btn-sm-auto" onclick="loadInventory()"><i data-lucide="refresh-cw" class="w-4 h-4 mr-2"></i>Sincronizar</button>
+            <button class="btn btn-outline shadow-sm btn-sm-auto text-emerald-600" onclick="exportInventory()"><i data-lucide="file-spreadsheet" class="w-4 h-4 mr-2"></i>Exportar Excel</button>
             <button class="btn btn-primary shadow-lg btn-sm-auto" onclick="Router.go('registration')"><i data-lucide="plus" class="w-4 h-4 mr-2"></i>Nuevo Bien</button>
         `)}
 
@@ -241,6 +245,10 @@ window.Views.inventory.afterMount = function() {
 };
 
 window.deleteInventoryItem = function(type, id, nombre) {
+    if (!window.canDelete(window.Auth.getUser())) {
+        UI.toast('Solo el Administrador puede eliminar registros', 'error');
+        return;
+    }
     const isUnit = type === 'unit';
     const msg = isUnit
         ? `¿Seguro que desea eliminar el equipo <strong>${nombre}</strong>?`
@@ -293,4 +301,22 @@ window.openInventoryScanner = function() {
         applyAdvancedFilters();
         return true;
     });
+};
+
+window.exportInventory = function() {
+    const dataToExport = _inventoryData.map(d => {
+        const isUnit = d._type === 'unit';
+        return {
+            'Código': isUnit ? d.codigo_patrimonial : d.codigo,
+            'Descripción': isUnit ? d.item_nombre : d.nombre,
+            'Tipo': isUnit ? 'EQUIPO' : d.categoria_tipo,
+            'Categoría': d.categoria_nombre,
+            'Ubicación': d.ubicacion_nombre,
+            'Sede': d.sede_nombre,
+            'Estado': d.estado || 'N/A',
+            'Stock Actual': isUnit ? 1 : d.stock_actual,
+            'Responsable': d.responsable_nombre || 'Sin asignar'
+        };
+    });
+    UI.exportToExcel(dataToExport, 'Inventario_General_' + new Date().toISOString().split('T')[0] + '.xlsx');
 };

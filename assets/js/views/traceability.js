@@ -25,8 +25,9 @@ window.Views.assignments = function () {
     return `
         ${UI.pageHeader('Asignaciones de Equipos', 'Gestión de entrega y devolución de activos al personal', `
             <div class="flex gap-2">
-                <button class="btn btn-outline" onclick="exportAssignmentsToPDF()"><i data-lucide="file-text"></i> Exportar PDF</button>
-                <button class="btn btn-primary" onclick="openAssignmentModal()"><i data-lucide="plus"></i> Nueva Asignación</button>
+                <button class="btn btn-outline text-emerald-600" onclick="exportAssignmentsExcel()"><i data-lucide="file-spreadsheet" class="w-4 h-4 mr-2"></i> Excel</button>
+                <button class="btn btn-outline" onclick="exportAssignmentsToPDF()"><i data-lucide="file-text" class="w-4 h-4 mr-2"></i> PDF</button>
+                <button class="btn btn-primary" onclick="openAssignmentModal()"><i data-lucide="plus" class="w-4 h-4 mr-2"></i> Nueva Asignación</button>
             </div>
         `)}
 
@@ -82,7 +83,10 @@ async function loadAssignments() {
             `<button class="btn btn-outline btn-sm mr-2" onclick="returnAsset(${a.id}, '${a.activo_nombre}')">Devolver</button>` :
             `<button class="btn btn-ghost p-1.5" onclick="viewAssignmentNote(${a.id})" title="Ver detalles"><i data-lucide="info" class="w-4 h-4"></i></button>`
         }
-                <button class="btn btn-ghost p-1.5 text-destructive" onclick="deleteTraceRecord('assignments', ${a.id}, 'esta asignación')" title="Eliminar"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                ${window.canDelete(window.Auth.getUser()) ? 
+                    `<button class="btn btn-ghost p-1.5 text-destructive" onclick="deleteTraceRecord('assignments', ${a.id}, 'esta asignación')" title="Eliminar"><i data-lucide="trash-2" class="w-4 h-4"></i></button>` : 
+                    ''
+                }
             </td>
         </tr>
     `).join('');
@@ -339,9 +343,10 @@ window.Views.transfers = function () {
     return `
         ${UI.pageHeader('Traslados de Mobiliario', 'Historial de movimientos de bienes entre aulas y espacios', `
             <div class="flex gap-2">
-                <button class="btn btn-outline" onclick="exportTransfersToPDF()"><i data-lucide="file-text"></i> Exportar PDF</button>
-                <button class="btn btn-outline" onclick="openLocationHistory()"><i data-lucide="history"></i> Historial por Espacio</button>
-                <button class="btn btn-primary" onclick="openTransferModal()"><i data-lucide="move"></i> Nuevo Traslado</button>
+                <button class="btn btn-outline text-emerald-600" onclick="exportTransfersExcel()"><i data-lucide="file-spreadsheet" class="w-4 h-4 mr-2"></i> Excel</button>
+                <button class="btn btn-outline" onclick="exportTransfersToPDF()"><i data-lucide="file-text" class="w-4 h-4 mr-2"></i> PDF</button>
+                <button class="btn btn-outline" onclick="openLocationHistory()"><i data-lucide="history" class="w-4 h-4 mr-2"></i> Historial por Espacio</button>
+                <button class="btn btn-primary" onclick="openTransferModal()"><i data-lucide="move" class="w-4 h-4 mr-2"></i> Nuevo Traslado</button>
             </div>
         `)}
 
@@ -424,7 +429,10 @@ async function loadTransfers() {
             <td class="text-right whitespace-nowrap">
                 ${(!t.tipo || t.tipo === 'Salida') ? `<button class="btn btn-outline text-xs px-2 py-1 mr-1" onclick="returnFurnitureTransfer(${t.id})" title="Retornar o Dar de Baja">Retornar</button>` : ''}
                 <button class="btn btn-ghost p-1.5" onclick="viewTransferNote(${t.id})" title="Ver detalles"><i data-lucide="info" class="w-4 h-4"></i></button>
-                <button class="btn btn-ghost p-1.5 text-destructive" onclick="deleteTraceRecord('transfers', ${t.id}, 'este traslado')" title="Eliminar"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                ${window.canDelete(window.Auth.getUser()) ? 
+                    `<button class="btn btn-ghost p-1.5 text-destructive" onclick="deleteTraceRecord('transfers', ${t.id}, 'este traslado')" title="Eliminar"><i data-lucide="trash-2" class="w-4 h-4"></i></button>` : 
+                    ''
+                }
             </td>
         </tr>
     `).join('');
@@ -873,7 +881,10 @@ window.openTransferModal = function (preselectedId = null) {
 window.Views.dispatch = function () {
     return `
         ${UI.pageHeader('Despacho de Insumos', 'Registro de entrega de materiales consumibles al personal', `
-            <button class="btn btn-primary" onclick="openDispatchModal()"><i data-lucide="send"></i> Nuevo Despacho</button>
+            <div class="flex gap-2">
+                <button class="btn btn-outline text-emerald-600" onclick="exportDispatchesExcel()"><i data-lucide="file-spreadsheet" class="w-4 h-4 mr-2"></i> Exportar Excel</button>
+                <button class="btn btn-primary" onclick="openDispatchModal()"><i data-lucide="send" class="w-4 h-4 mr-2"></i> Nuevo Despacho</button>
+            </div>
         `)}
 
         <div class="card overflow-hidden">
@@ -922,7 +933,10 @@ async function loadDispatches() {
             <td class="text-center font-bold">${m.cantidad}</td>
             <td class="text-xs italic">${m.despachado_por_nombre || 'Admin'}</td>
             <td class="text-right whitespace-nowrap">
-                <button class="btn btn-ghost p-1.5 text-destructive" onclick="deleteTraceRecord('dispatch', ${m.id}, 'este despacho')" title="Eliminar"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                ${window.canDelete(window.Auth.getUser()) ? 
+                    `<button class="btn btn-ghost p-1.5 text-destructive" onclick="deleteTraceRecord('dispatch', ${m.id}, 'este despacho')" title="Eliminar"><i data-lucide="trash-2" class="w-4 h-4"></i></button>` : 
+                    ''
+                }
             </td>
         </tr>
     `).join('');
@@ -1184,6 +1198,10 @@ window.viewAssetDetails = async function (id) {
     finally { UI.stopLoading(); }
 };
 window.deleteTraceRecord = function (type, id, label) {
+    if (!window.canDelete(window.Auth.getUser())) {
+        UI.toast('Solo el Administrador puede eliminar registros', 'error');
+        return;
+    }
     let endpoint = '';
     let reloadFn = null;
     if (type === 'assignments') { endpoint = 'api/assignments.php'; reloadFn = loadAssignments; }
@@ -1421,4 +1439,54 @@ window.exportTransfersToPDF = async function() {
     } finally {
         UI.stopLoading();
     }
+};
+window.exportAssignmentsExcel = async function() {
+    UI.loading('Preparando datos...');
+    try {
+        const resp = await fetch('api/assignments.php').then(r => r.json());
+        const data = (resp.assignments || []).map(a => ({
+            'Equipo': a.activo_nombre,
+            'Código': a.activo_codigo,
+            'Asignado a': a.personal_nombre,
+            'Fecha Entrega': a.fecha_asignacion,
+            'Estado': a.estado,
+            'Fecha Devolución': a.fecha_devolucion || 'Aún asignado'
+        }));
+        UI.exportToExcel(data, 'Asignaciones_Equipos.xlsx');
+    } catch(e) { UI.toast('Error al exportar', 'error'); }
+    finally { UI.stopLoading(); }
+};
+
+window.exportTransfersExcel = async function() {
+    UI.loading('Preparando datos...');
+    try {
+        const resp = await fetch('api/transfers.php').then(r => r.json());
+        const data = (resp.transfers || []).map(t => ({
+            'Fecha': t.fecha,
+            'Mobiliario': t.item_nombre,
+            'Origen': t.origen_nombre || 'Almacén',
+            'Destino': t.destino_nombre || 'De Baja',
+            'Cantidad': t.cantidad,
+            'Responsable': t.responsable_nombre || '—'
+        }));
+        UI.exportToExcel(data, 'Traslados_Mobiliario.xlsx');
+    } catch(e) { UI.toast('Error al exportar', 'error'); }
+    finally { UI.stopLoading(); }
+};
+
+window.exportDispatchesExcel = async function() {
+    UI.loading('Preparando datos...');
+    try {
+        const resp = await fetch('api/movements.php').then(r => r.json());
+        const data = (resp.movements || []).filter(m => m.tipo === 'Salida' && m.categoria_tipo === 'insumo').map(m => ({
+            'Fecha': m.fecha,
+            'Insumo': m.item_nombre,
+            'Entregado a': m.destinatario_nombre || '—',
+            'Cantidad': m.cantidad,
+            'Entregado por': m.despachado_por_nombre || 'Admin',
+            'Observaciones': m.observacion || ''
+        }));
+        UI.exportToExcel(data, 'Despacho_Insumos.xlsx');
+    } catch(e) { UI.toast('Error al exportar', 'error'); }
+    finally { UI.stopLoading(); }
 };
