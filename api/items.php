@@ -1,5 +1,6 @@
 <?php
 // api/items.php — CRUD de ítems
+ob_start(); // Capturar warnings antes del JSON
 require_once __DIR__ . '/../includes/db.php';
 
 $method = $_SERVER['REQUEST_METHOD'];
@@ -85,9 +86,10 @@ try {
                 $itemId = $pdo->lastInsertId();
 
                 $pdo->commit();
+                ob_clean();
                 json_response(['ok' => true, 'id' => $itemId]);
             } catch (Exception $e) {
-                $pdo->rollBack();
+                if ($pdo->inTransaction()) $pdo->rollBack();
                 throw $e;
             }
             break;
@@ -153,6 +155,7 @@ try {
             json_response(['error' => 'Método no soportado'], 405);
     }
 } catch (Throwable $e) {
+    ob_clean();
     if ($e instanceof PDOException && $e->getCode() == '23000') {
         json_response(['error' => 'No se puede eliminar el artículo porque tiene registros asociados (movimientos, activos o compras). Elimine esos registros primero.'], 400);
     }

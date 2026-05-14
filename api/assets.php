@@ -1,5 +1,6 @@
 <?php
 // api/assets.php — CRUD de activos individualizados
+ob_start(); // Buffer para capturar cualquier warning antes del JSON
 require_once __DIR__ . '/../includes/db.php';
 
 $method = $_SERVER['REQUEST_METHOD'];
@@ -9,37 +10,38 @@ try {
         case 'GET':
             if (isset($_GET['action']) && $_GET['action'] === 'next_code') {
                 $item_id = $_GET['item_id'] ?? null;
-                $ubicacion_id = $_GET['ubicacion_id'] ?? null;
-                if (!$item_id || !$ubicacion_id) json_response(['error' => 'item_id y ubicacion_id requeridos'], 400);
+                if (!$item_id) json_response(['error' => 'item_id requerido'], 400);
 
-                // Obtener Prefijo de Categoría
-                $item = $pdo->prepare("SELECT i.id, ci.prefijo FROM items i JOIN categorias_inventario ci ON i.categoria_inventario_id = ci.id WHERE i.id = ?");
-                $item->execute([$item_id]);
-                $itemData = $item->fetch();
-                $prefix = ($itemData && $itemData['prefijo']) ? $itemData['prefijo'] : 'ACT';
+                // LÓGICA EXPERTA: Código = {PREFIJO}-{NNNN}
+                // El prefijo viene directamente de la categoría del ítem.
+                $stmt = $pdo->prepare("
+                    SELECT ci.prefijo 
+                    FROM items i 
+                    JOIN categorias_inventario ci ON i.categoria_inventario_id = ci.id 
+                    WHERE i.id = ?
+                ");
+                $stmt->execute([$item_id]);
+                $row = $stmt->fetch();
+                $prefix = ($row && !empty($row['prefijo'])) ? strtoupper(trim($row['prefijo'])) : 'ACT';
 
-                // Obtener Código de Sede
-                $loc = $pdo->prepare("SELECT u.id, s.codigo as sede_codigo FROM ubicaciones u JOIN sedes s ON u.sede_id = s.id WHERE u.id = ?");
-                $loc->execute([$ubicacion_id]);
-                $locData = $loc->fetch();
-                $sede = ($locData && $locData['sede_codigo']) ? $locData['sede_codigo'] : 'C';
+                // Buscar el correlativo más alto en TODA la tabla activos con ese prefijo
+                // Se usa REGEXP para evitar colisiones entre prefijos similares (MON vs MON-2)
+                $likePattern = $prefix . '-%';
+                $stmt2 = $pdo->prepare("SELECT codigo_interno FROM activos WHERE codigo_interno LIKE ?");
+                $stmt2->execute([$likePattern]);
+                $rows = $stmt2->fetchAll();
 
-                $baseCode = $sede . '-' . $prefix . '-';
-                
-                // Buscar el correlativo más alto con esa base
-                $stmt = $pdo->prepare("SELECT codigo_interno FROM activos WHERE codigo_interno LIKE ? ORDER BY id DESC LIMIT 50");
-                $stmt->execute([$baseCode . '%']);
-                $rows = $stmt->fetchAll();
-                
                 $max = 0;
-                foreach($rows as $r) {
-                    $parts = explode('-', $r['codigo_interno']);
-                    $num = intval(end($parts));
-                    if ($num > $max) $max = $num;
+                foreach ($rows as $r) {
+                    // Extraer el número al final: CPU-0003 → 3
+                    if (preg_match('/-([0-9]+)$/', $r['codigo_interno'], $m)) {
+                        $num = intval($m[1]);
+                        if ($num > $max) $max = $num;
+                    }
                 }
-                
-                $next = $baseCode . str_pad($max + 1, 4, '0', STR_PAD_LEFT);
-                json_response(['next_code' => $next]);
+
+                $nextCode = $prefix . '-' . str_pad($max + 1, 4, '0', STR_PAD_LEFT);
+                json_response(['next_code' => $nextCode, 'prefix' => $prefix]);
                 break;
             }
 
@@ -68,11 +70,36 @@ try {
                 // Si no hay número de serie, generamos uno único automáticamente
                 $serie = !empty($b['numero_serie']) ? $b['numero_serie'] : ('SN-' . time() . '-' . rand(100, 999));
 
+                // LÓGICA EXPERTA: Si no viene codigo_interno, generarlo automáticamente
+                $codigoInterno = $b['codigo_interno'] ?? null;
+                if (empty($codigoInterno)) {
+                    // Obtener prefijo de categoría
+                    $stmtPfx = $pdo->prepare("
+                        SELECT ci.prefijo FROM items i 
+                        JOIN categorias_inventario ci ON i.categoria_inventario_id = ci.id 
+                        WHERE i.id = ?
+                    ");
+                    $stmtPfx->execute([$b['item_id']]);
+                    $pfxRow = $stmtPfx->fetch();
+                    $prefix = ($pfxRow && !empty($pfxRow['prefijo'])) ? strtoupper(trim($pfxRow['prefijo'])) : 'ACT';
+
+                    // Buscar el correlativo más alto para ese prefijo
+                    $stmtMax = $pdo->prepare("SELECT codigo_interno FROM activos WHERE codigo_interno LIKE ?");
+                    $stmtMax->execute([$prefix . '-%']);
+                    $maxNum = 0;
+                    foreach ($stmtMax->fetchAll() as $r) {
+                        if (preg_match('/-([0-9]+)$/', $r['codigo_interno'], $mm)) {
+                            if (intval($mm[1]) > $maxNum) $maxNum = intval($mm[1]);
+                        }
+                    }
+                    $codigoInterno = $prefix . '-' . str_pad($maxNum + 1, 4, '0', STR_PAD_LEFT);
+                }
+
                 $sql = "INSERT INTO activos (numero_serie, codigo_interno, item_id, ubicacion_id, personal_id, estado, observaciones_tecnicas) VALUES (?,?,?,?,?,?,?)";
                 $stmt = $pdo->prepare($sql);
                 $stmt->execute([
                     $serie,
-                    $b['codigo_interno'] ?? null,
+                    $codigoInterno,
                     $b['item_id'],
                     $b['ubicacion_id'] ?: null,
                     $b['personal_id'] ?: null,
@@ -85,10 +112,30 @@ try {
                 $stmtMov = $pdo->prepare("INSERT INTO movimientos (item_id, tipo, cantidad, observacion) VALUES (?, 'Entrada', 1, ?)");
                 $stmtMov->execute([$b['item_id'], "Registro de activo: Serie " . $serie]);
 
+                // LÓGICA EXPERTA: Actualizar metadatos del Ítem Maestro (Marca/Modelo)
+                if (!empty($b['marca']) || !empty($b['modelo'])) {
+                    $stmtUpdItem = $pdo->prepare("UPDATE items SET marca = ?, modelo = ? WHERE id = ?");
+                    $stmtUpdItem->execute([
+                        $b['marca'] ?? null,
+                        $b['modelo'] ?? null,
+                        $b['item_id']
+                    ]);
+                }
+
+                // LIMPIEZA DE CÓDIGOS TEMPORALES
+                $stmtCheckCode = $pdo->prepare("SELECT codigo FROM items WHERE id = ?");
+                $stmtCheckCode->execute([$b['item_id']]);
+                $itemCode = $stmtCheckCode->fetchColumn();
+                // Protección PHP 8: verificar que $itemCode sea string antes de strpos
+                if (is_string($itemCode) && strpos($itemCode, 'TEMP-') === 0 && !empty($codigoInterno)) {
+                    $pdo->prepare("UPDATE items SET codigo = ? WHERE id = ?")->execute([$codigoInterno, $b['item_id']]);
+                }
+
                 $pdo->commit();
-                json_response(['ok' => true, 'id' => $assetId]);
+                ob_clean(); // Limpiar cualquier warning antes de enviar el JSON
+                json_response(['ok' => true, 'id' => $assetId, 'codigo' => $codigoInterno]);
             } catch (Exception $e) {
-                $pdo->rollBack();
+                if ($pdo->inTransaction()) $pdo->rollBack();
                 throw $e;
             }
             break;
@@ -121,5 +168,6 @@ try {
             json_response(['error' => 'Método no soportado'], 405);
     }
 } catch (Throwable $e) {
+    ob_clean();
     json_response(['error' => 'Error: ' . $e->getMessage()], 500);
 }

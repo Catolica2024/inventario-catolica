@@ -231,9 +231,28 @@ window.Views.registration.render = function() {
 
 window.updateRegCode = async function() {
     const cat_id = document.getElementById('reg-cat').value;
-    if (!cat_id) return;
-    const resp = await fetch(`api/items.php?action=next_code&categoria_id=${cat_id}`).then(r => r.json());
-    if (resp.next_code) document.getElementById('reg-code').value = resp.next_code;
+    const codeInput = document.getElementById('reg-code');
+    if (!cat_id || !codeInput) return;
+
+    codeInput.value = 'Generando...';
+    try {
+        // Buscar un ítem maestro para esta categoría (si ya existe)
+        const itemsResp = await fetch(`api/items.php`).then(r => r.json());
+        const existingItem = (itemsResp.items || []).find(i => i.categoria_inventario_id == cat_id);
+
+        if (existingItem) {
+            // Si ya existe un ítem maestro, generar el siguiente código de ACTIVO
+            const resp = await fetch(`api/assets.php?action=next_code&item_id=${existingItem.id}`).then(r => r.json());
+            codeInput.value = resp.next_code || '';
+        } else {
+            // Si no hay ítem maestro aún, usar el endpoint de items (primer código del catálogo)
+            const resp = await fetch(`api/items.php?action=next_code&categoria_id=${cat_id}`).then(r => r.json());
+            codeInput.value = resp.next_code || '';
+        }
+    } catch(e) {
+        codeInput.value = '';
+        console.error('updateRegCode error:', e);
+    }
 };
 
 window.saveEquipment = async function() {
@@ -257,8 +276,8 @@ window.saveEquipment = async function() {
                 nombre: finalName,
                 categoria_inventario_id: cat_id,
                 codigo: document.getElementById('reg-code')?.value || null,
-                marca: document.getElementById('reg-brand')?.value || null,
-                modelo: document.getElementById('reg-brand')?.value || null
+                marca: document.getElementById('reg-brand')?.value.split('/')[0]?.trim() || null,
+                modelo: document.getElementById('reg-brand')?.value.split('/')[1]?.trim() || null
             })
         });
         const itm = await itmResp.json();

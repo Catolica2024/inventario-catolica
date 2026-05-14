@@ -24,7 +24,10 @@ async function loadTraceResources() {
 window.Views.assignments = function () {
     return `
         ${UI.pageHeader('Asignaciones de Equipos', 'Gestión de entrega y devolución de activos al personal', `
-            <button class="btn btn-primary" onclick="openAssignmentModal()"><i data-lucide="plus"></i> Nueva Asignación</button>
+            <div class="flex gap-2">
+                <button class="btn btn-outline" onclick="exportAssignmentsToPDF()"><i data-lucide="file-text"></i> Exportar PDF</button>
+                <button class="btn btn-primary" onclick="openAssignmentModal()"><i data-lucide="plus"></i> Nueva Asignación</button>
+            </div>
         `)}
 
         <div class="card overflow-hidden">
@@ -336,6 +339,7 @@ window.Views.transfers = function () {
     return `
         ${UI.pageHeader('Traslados de Mobiliario', 'Historial de movimientos de bienes entre aulas y espacios', `
             <div class="flex gap-2">
+                <button class="btn btn-outline" onclick="exportTransfersToPDF()"><i data-lucide="file-text"></i> Exportar PDF</button>
                 <button class="btn btn-outline" onclick="openLocationHistory()"><i data-lucide="history"></i> Historial por Espacio</button>
                 <button class="btn btn-primary" onclick="openTransferModal()"><i data-lucide="move"></i> Nuevo Traslado</button>
             </div>
@@ -1311,4 +1315,110 @@ window.viewCatalogItem = async function (id) {
         lucide.createIcons();
     } catch (e) { console.error(e); UI.toast('Error al cargar historial', 'error'); }
     finally { UI.stopLoading(); }
+};
+
+// ==========================================
+// UTILIDADES DE EXPORTACIÓN (EXPERT REPORTING)
+// ==========================================
+
+window.exportAssignmentsToPDF = async function() {
+    UI.loading('Generando reporte de asignaciones...');
+    try {
+        const resp = await fetch('api/assignments.php').then(r => r.json());
+        const data = resp.assignments || [];
+        
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+        
+        // Estilo institucional
+        doc.setFillColor(27, 92, 255);
+        doc.rect(0, 0, 297, 40, 'F');
+        
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(22);
+        doc.setFont('helvetica', 'bold');
+        doc.text('CATÓLICA SCHOOL', 20, 20);
+        doc.setFontSize(12);
+        doc.text('REPORTE DE ASIGNACIONES DE ACTIVOS', 20, 28);
+        
+        doc.setFontSize(10);
+        doc.text(`Fecha de Emisión: ${new Date().toLocaleString()}`, 230, 20);
+        
+        const body = data.map(a => [
+            a.activo_nombre,
+            a.activo_codigo,
+            a.personal_nombre,
+            a.fecha_asignacion,
+            a.estado,
+            a.fecha_devolucion || '—'
+        ]);
+
+        doc.autoTable({
+            startY: 50,
+            head: [['Equipo', 'Código', 'Asignado a', 'Fecha Entrega', 'Estado', 'Devolución']],
+            body: body,
+            headStyles: { fillColor: [27, 92, 255], textColor: [255, 255, 255], fontStyle: 'bold' },
+            alternateRowStyles: { fillColor: [248, 250, 252] },
+            margin: { left: 20, right: 20 },
+            theme: 'striped'
+        });
+
+        doc.save(`Reporte-Asignaciones-${new Date().getTime()}.pdf`);
+        UI.toast('Reporte generado con éxito', 'success');
+    } catch (e) {
+        console.error(e);
+        UI.toast('Error al generar PDF', 'error');
+    } finally {
+        UI.stopLoading();
+    }
+};
+
+window.exportTransfersToPDF = async function() {
+    UI.loading('Generando reporte de traslados...');
+    try {
+        const resp = await fetch('api/transfers.php').then(r => r.json());
+        const data = resp.transfers || [];
+        
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+        
+        doc.setFillColor(27, 92, 255);
+        doc.rect(0, 0, 297, 40, 'F');
+        
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(22);
+        doc.setFont('helvetica', 'bold');
+        doc.text('CATÓLICA SCHOOL', 20, 20);
+        doc.setFontSize(12);
+        doc.text('REPORTE DE TRASLADOS DE MOBILIARIO', 20, 28);
+        
+        doc.setFontSize(10);
+        doc.text(`Fecha: ${new Date().toLocaleString()}`, 230, 20);
+        
+        const body = data.map(t => [
+            t.fecha,
+            t.item_nombre,
+            t.origen_nombre || 'ALMACÉN',
+            t.destino_nombre || 'DE BAJA',
+            t.cantidad,
+            t.responsable_nombre || '—'
+        ]);
+
+        doc.autoTable({
+            startY: 50,
+            head: [['Fecha', 'Mobiliario', 'Origen', 'Destino', 'Cant.', 'Responsable']],
+            body: body,
+            headStyles: { fillColor: [27, 92, 255], textColor: [255, 255, 255], fontStyle: 'bold' },
+            alternateRowStyles: { fillColor: [248, 250, 252] },
+            margin: { left: 20, right: 20 },
+            theme: 'grid'
+        });
+
+        doc.save(`Reporte-Traslados-${new Date().getTime()}.pdf`);
+        UI.toast('Reporte generado con éxito', 'success');
+    } catch (e) {
+        UI.toast('Error al generar PDF', 'error');
+    } finally {
+        UI.stopLoading();
+    }
 };

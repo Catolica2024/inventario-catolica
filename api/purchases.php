@@ -43,6 +43,21 @@ try {
                 break;
             }
             // Listar todas — incluir info de cuotas
+            $where = "1=1";
+            if (isset($_GET['approved_only'])) {
+                $where = "
+                    (oc.estado = 'Completada')
+                    OR
+                    (oc.estado = 'Aprobada' AND (
+                        (oc.condicion_pago IN ('Al contado', 'Transferencia') AND oc.pagado = 1)
+                        OR
+                        (oc.condicion_pago = 'Adelanto + Saldo' AND oc.adelanto_pagado = 1)
+                        OR
+                        (oc.condicion_pago = 'Credito')
+                    ))
+                ";
+            }
+
             $rows = $pdo->query("
                 SELECT oc.*, p.razon_social as proveedor_nombre, a.nombre as area_nombre,
                        (SELECT COUNT(*) FROM ordenes_cuotas WHERE orden_id = oc.id) as total_cuotas_reg,
@@ -53,6 +68,7 @@ try {
                 FROM ordenes_compra oc
                 JOIN proveedores p ON oc.proveedor_id = p.id
                 LEFT JOIN areas a ON oc.area_id = a.id
+                WHERE $where
                 ORDER BY oc.id DESC
             ")->fetchAll();
             json_response(['purchases' => $rows]);
@@ -93,14 +109,15 @@ try {
             $pdo->beginTransaction();
             $stmt = $pdo->prepare("
                 INSERT INTO ordenes_compra
-                  (creado_por, numero_oc, tipo, proveedor_id, fecha, area_id, moneda, condicion_pago, condicion_detalle, adelanto_porcentaje, adelanto_monto, saldo_monto, fecha_requerida, subtotal, igv, igv_porcentaje, precios_con_igv, total, monto, estado, observaciones, incluye_movilidad, monto_movilidad)
-                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                  (creado_por, numero_oc, tipo, proveedor_id, activo_id, fecha, area_id, moneda, condicion_pago, condicion_detalle, adelanto_porcentaje, adelanto_monto, saldo_monto, fecha_requerida, subtotal, igv, igv_porcentaje, precios_con_igv, total, monto, estado, observaciones, incluye_movilidad, monto_movilidad)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             ");
             $stmt->execute([
                 $b['usuario_id'] ?? null,
                 $numero_oc,
                 $tipo,
                 $b['proveedor_id'],
+                $b['activo_id'] ?? null,
                 $b['fecha'] ?? date('Y-m-d'),
                 $b['area_id'] ?? null,
                 $b['moneda'] ?? 'PEN',
@@ -122,6 +139,35 @@ try {
                 $b['monto_movilidad'] ?? 0
             ]);
             $orden_id = $pdo->lastInsertId();
+
+            // LÓGICA EXPERTA: Si es un Servicio (OS), registrar en Mantenimiento y cambiar estado del activo
+            if ($tipo === 'servicio' && !empty($b['activo_id'])) {
+                $activo_id = $b['activo_id'];
+                
+                // 1. Obtener datos del activo para el registro de mantenimiento
+                $stmtAct = $pdo->prepare("SELECT item_id FROM activos WHERE id = ?");
+                $stmtAct->execute([$activo_id]);
+                $act = $stmtAct->fetch();
+                
+                if ($act) {
+                    // 2. Crear registro de mantenimiento
+                    $sm = $pdo->prepare("INSERT INTO mantenimientos (activo_id, item_id, proveedor_id, tipo, estado, fecha_inicio, costo, descripcion_problema, orden_compra_id) VALUES (?,?,?,?,?,?,?,?,?)");
+                    $sm->execute([
+                        $activo_id,
+                        $act['item_id'],
+                        $b['proveedor_id'],
+                        'Correctivo',
+                        'Iniciado',
+                        date('Y-m-d'),
+                        $total,
+                        'Servicio solicitado vía OS #' . $numero_oc . '. ' . ($b['observaciones'] ?? ''),
+                        $orden_id
+                    ]);
+
+                    // 3. Cambiar estado del activo a 'Mantenimiento'
+                    $pdo->prepare("UPDATE activos SET estado = 'Mantenimiento' WHERE id = ?")->execute([$activo_id]);
+                }
+            }
 
             // Insertar ítems
             if (!empty($items)) {

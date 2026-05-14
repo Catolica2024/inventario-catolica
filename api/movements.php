@@ -1,5 +1,6 @@
 <?php
 // api/movements.php — Registro de movimientos de stock
+ob_start();
 require_once __DIR__ . '/../includes/db.php';
 
 $method = $_SERVER['REQUEST_METHOD'];
@@ -24,12 +25,14 @@ try {
                 ORDER BY m.fecha DESC
             ";
             $rows = $pdo->query($sql)->fetchAll();
+            ob_clean();
             json_response(['movements' => $rows]);
             break;
             
         case 'POST':
             $b = get_body();
             if (!isset($b['item_id'], $b['tipo'], $b['cantidad'])) {
+                ob_clean();
                 json_response(['error' => 'Datos incompletos'], 400);
             }
             
@@ -46,19 +49,26 @@ try {
                 (!empty($b['observacion'])) ? $b['observacion'] : null
             ]);
             
+            ob_clean();
             json_response(['ok' => true, 'id' => $pdo->lastInsertId()]);
             break;
 
         case 'DELETE':
             $id = $_GET['id'] ?? null;
-            if (!$id) json_response(['error' => 'ID requerido'], 400);
+            if (!$id) {
+                ob_clean();
+                json_response(['error' => 'ID requerido'], 400);
+            }
             $pdo->prepare("DELETE FROM movimientos WHERE id = ?")->execute([$id]);
+            ob_clean();
             json_response(['ok' => true]);
             break;
 
         default:
+            ob_clean();
             json_response(['error' => 'Método no soportado'], 405);
     }
 } catch (Throwable $e) {
+    ob_clean();
     json_response(['error' => 'Error: ' . $e->getMessage()], 500);
 }

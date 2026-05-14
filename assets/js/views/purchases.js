@@ -7,6 +7,7 @@ let _ocInventoryItems = [];
 let _ocCategories = [];
 let _ocItemRows = 0;
 let _ocMobilityData = null;
+let _ocAssets = [];
 
 window.Views['new-purchase'] = function () {
   return `
@@ -53,10 +54,22 @@ window.Views['new-purchase'] = function () {
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label class="text-sm font-medium">Tipo de Documento <span class="text-destructive">*</span></label>
-              <select id="oc-tipo" class="select mt-1 w-full" onchange="updateOCTypeLabels()">
+              <select id="oc-tipo" class="select mt-1 w-full" onchange="toggleOSTargetField()">
                 <option value="compra">Orden de Compra (OC)</option>
                 <option value="servicio">Orden de Servicio (OS)</option>
               </select>
+            </div>
+            <div id="os-target-container" class="hidden animate-in slide-in-from-left-2 duration-300">
+                <label class="text-sm font-medium text-primary flex items-center gap-1.5">
+                    <i data-lucide="wrench" class="w-3.5 h-3.5"></i> Activo / Mobiliario a Intervenir <span class="text-xs text-muted-foreground font-normal">(Opcional)</span>
+                </label>
+                <div class="relative group mt-1">
+                    <input id="os-target-code" class="input w-full pr-10 border-primary/30 focus:border-primary" placeholder="Escanee QR o escriba código..." list="all-assets-list" oninput="onOSTargetChange()">
+                    <div class="absolute right-3 top-1/2 -translate-y-1/2 text-primary/50 group-hover:text-primary transition-colors cursor-pointer" onclick="startAssetQRScanner()">
+                        <i data-lucide="qr-code" class="w-5 h-5"></i>
+                    </div>
+                </div>
+                <p class="text-[10px] text-muted-foreground mt-1 italic">Vincule un activo para registrar su historial técnico automáticamente.</p>
             </div>
             <div>
               <label class="text-sm font-medium">Centro de costo / Área <span class="text-destructive">*</span></label>
@@ -198,6 +211,9 @@ window.Views['new-purchase'] = function () {
     </datalist>
     <datalist id="oc-categories-list">
       <!-- Opciones pobladas dinámicamente -->
+    </datalist>
+    <datalist id="all-assets-list">
+      <!-- Opciones pobladas dinámicamente -->
     </datalist>`;
 };
 
@@ -257,7 +273,67 @@ window.Views['new-purchase'].afterMount = async function () {
 
   _ocItemRows = 0;
   addOCItem(); // Agregar primera fila vacía
+
+  // CARGAR ACTIVOS PARA OS (EQUIPOS Y MOBILIARIO)
+  try {
+    const assetsResp = await fetch('api/assets.php').then(r => r.json());
+    _ocAssets = assetsResp.assets || [];
+    const assetsList = document.getElementById('all-assets-list');
+    if (assetsList) {
+        _ocAssets.forEach(as => {
+            const o = document.createElement('option');
+            o.value = as.codigo_interno;
+            o.textContent = `${as.item_nombre} - ${as.sede_nombre} (${as.estado})`;
+            o.dataset.id = as.id;
+            assetsList.appendChild(o);
+        });
+    }
+  } catch(e) { console.error('Error loading assets for OS:', e); }
+
   lucide.createIcons();
+};
+
+window.toggleOSTargetField = function() {
+    const type = document.getElementById('oc-tipo').value;
+    const container = document.getElementById('os-target-container');
+    if (type === 'servicio') {
+        container.classList.remove('hidden');
+    } else {
+        container.classList.add('hidden');
+        document.getElementById('os-target-code').value = '';
+    }
+    updateOCTypeLabels();
+};
+
+window.onOSTargetChange = function() {
+    const code = document.getElementById('os-target-code').value.trim();
+    if (!code) return;
+
+    const asset = _ocAssets.find(a => a.codigo_interno === code || a.numero_serie === code);
+    if (asset) {
+        UI.toast(`Activo detectado: ${asset.item_nombre}`, 'success');
+        
+        // Si no hay filas, agregamos una
+        if (_ocItemRows === 0) {
+            addOCItem();
+        }
+
+        // Poblar la primera fila con la categoría del activo
+        const catInput = document.getElementById('oc-cat-1');
+        const descInput = document.getElementById('oc-desc-1');
+        
+        if (catInput && asset.categoria_nombre) {
+            catInput.value = asset.categoria_nombre;
+            catInput.dataset.assetId = asset.id; // Guardar ID para el guardado final
+            onCategorySelect(1);
+            
+            if (descInput) {
+                descInput.value = `Mantenimiento / Servicio de ${asset.item_nombre} (S/N: ${asset.numero_serie || 'N/A'})`;
+            }
+        }
+    } else {
+        document.getElementById('os-target-code').dataset.assetId = '';
+    }
 };
 
 window.toggleCreditDetails = function () {
@@ -378,11 +454,24 @@ window.onCategorySelect = function (n) {
   const cat = _ocCategories.find(c => c.nombre === val);
   if (cat) {
     prefijoEl.value = cat.prefijo || '---';
-    input.dataset.categoryId = cat.id;
-    UI.toast(`Categoría vinculada: ${cat.prefijo}`, 'info');
+    
+    // ARQUITECTURA EXPERTA: Buscar el Item Maestro vinculado a esta categoría
+    // para que la recepción afecte al stock correcto.
+    const masterItem = _ocInventoryItems.find(i => i.categoria_inventario_id == cat.id);
+    if (masterItem) {
+        input.dataset.itemId = masterItem.id;
+        input.dataset.categoryId = cat.id;
+        UI.toast(`Vínculo de inventario detectado: ${masterItem.nombre}`, 'info');
+    } else {
+        // Si no existe, usamos el ID de categoría como fallback (el backend debería manejarlo)
+        // pero lo ideal es que exista un ítem.
+        input.dataset.categoryId = cat.id;
+        UI.toast(`Categoría vinculada. Nota: No se encontró ítem maestro para stock.`, 'warning');
+    }
   } else {
     prefijoEl.value = '---';
     delete input.dataset.categoryId;
+    delete input.dataset.itemId;
     if (val) UI.toast('Esa categoría no existe. Debe crearla primero.', 'warning');
   }
 };
@@ -513,7 +602,7 @@ function getOCItems() {
     catEl?.classList.remove('border-red-500', 'ring-2', 'ring-red-400');
 
     items.push({
-      item_id: catValida.id || null,
+      item_id: catEl.dataset.itemId || catValida.id || null,
       categoria_nombre: catNombre,
       prefijo: catValida.prefijo || prefijo,
       descripcion: desc,
@@ -551,6 +640,20 @@ window.generateOC = async function () {
     const cond = document.getElementById('oc-condicion').value;
     const cTipo = document.getElementById('oc-credito-tipo').value;
     const cVal = document.getElementById('oc-condicion-val').value;
+    
+    // Obtener activo_id si es OS
+    let activoId = null;
+    if (tipo === 'servicio') {
+        const targetCode = document.getElementById('os-target-code').value.trim();
+        if (targetCode) {
+            const asset = _ocAssets.find(a => a.codigo_interno === targetCode || a.numero_serie === targetCode);
+            if (asset) {
+                activoId = asset.id;
+            } else {
+                UI.toast('El código de activo no es válido, se procesará como servicio general', 'warning');
+            }
+        }
+    }
 
     const porcIgv = parseFloat(document.getElementById('oc-igv-porcentaje').value || 18) / 100;
     const incluido = document.getElementById('oc-precios-con-igv').checked;
@@ -576,6 +679,7 @@ window.generateOC = async function () {
       tipo,
       usuario_id: user?.id,
       proveedor_id,
+      activo_id: activoId, // Link al equipo/mueble a intervenir
       fecha: new Date().toISOString().split('T')[0],
       area_id: area,
       moneda: document.getElementById('oc-moneda').value,
@@ -679,29 +783,33 @@ window.generateOC = async function () {
         }).requestAccessToken();
       });
 
-      try {
-        const driveLinks = {};
-        if (ocDoc) driveLinks.pdf_oc_url = await uploadToDrive(ocDoc, res.numero_oc);
-        if (mobDoc) driveLinks.pdf_mov_url = await uploadToDrive(mobDoc, res.numero_oc + '-MOV');
-
-        // Guardar SOLO los links (VARCHAR) en la BD — cero datos binarios
-        if (driveLinks.pdf_oc_url || driveLinks.pdf_mov_url) {
-          await fetch('api/purchases.php', {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: 'save_drive_links', id: res.id, ...driveLinks })
-          });
-        }
-      } catch (driveErr) {
-        console.error('Drive upload error:', driveErr);
-        UI.toast('PDF descargado, pero hubo un problema con Drive', 'warning');
-      }
-
-      // ─── PASO 4: Notificar y redirigir ────────────────────────────────
+      // ─── PASO 4: Notificar y redirigir (SIN ESPERAR A DRIVE) ──────────
       UI.stopLoading();
-      UI.toast(`${tipo === 'servicio' ? 'OS' : 'OC'} ${res.numero_oc} generada. Correos enviados a Gerencia y Finanzas.`, 'success');
-      await new Promise(r => setTimeout(r, 1500));
+      UI.toast(`${tipo === 'servicio' ? 'OS' : 'OC'} ${res.numero_oc} generada con éxito.`, 'success');
+      
+      // Redirigir inmediatamente para no bloquear al usuario
       Router.go('purchases');
+
+      // ─── PASO 5: Subir a Google Drive (PROCESO EN SEGUNDO PLANO) ──────
+      // No usamos 'await' aquí para que no bloquee la interfaz
+      (async () => {
+          try {
+            const driveLinks = {};
+            if (ocDoc) driveLinks.pdf_oc_url = await uploadToDrive(ocDoc, res.numero_oc);
+            if (mobDoc) driveLinks.pdf_mov_url = await uploadToDrive(mobDoc, res.numero_oc + '-MOV');
+
+            if (driveLinks.pdf_oc_url || driveLinks.pdf_mov_url) {
+              await fetch('api/purchases.php', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'save_drive_links', id: res.id, ...driveLinks })
+              });
+              console.log('Copia de seguridad en Drive completada.');
+            }
+          } catch (driveErr) {
+            console.error('Drive background upload error:', driveErr);
+          }
+      })();
 
     } else {
       UI.toast('Error: ' + (res.error || 'Ocurrió un problema en el servidor'), 'error');
@@ -1203,8 +1311,57 @@ async function loadPurchases() {
       tbody.innerHTML = '<tr><td colspan="7" class="text-center py-10 text-muted-foreground">No hay órdenes de compra registradas.</td></tr>';
       return;
     }
-    const STATUS_BADGE = { 'Pendiente': 'badge-yellow', 'Aprobada': 'badge-green', 'Rechazada': 'badge-red', 'Completada': 'badge-blue' };
-    tbody.innerHTML = data.purchases.map(p => `
+    tbody.innerHTML = data.purchases.map(p => {
+      // LÓGICA DE ESTADO MAESTRO (PREMIUM)
+      const isApproved = p.aprobado_gerente && p.aprobado_finanzas;
+      const isRejected = p.rechazado_gerente || p.rechazado_finanzas;
+      const isPaid = p.pagado || p.adelanto_pagado;
+      const isReceived = p.estado === 'Completada' || p.conformidad_url;
+      const isOS = p.tipo === 'servicio';
+
+      let masterStatus = { label: 'Pendiente', class: 'badge-yellow', icon: 'clock' };
+
+      if (isRejected) {
+          masterStatus = { label: 'Rechazada', class: 'badge-red', icon: 'x-circle' };
+      } else if (isReceived) {
+          masterStatus = { 
+              label: isOS ? 'Realizado ✓' : 'En Almacén ✓', 
+              class: 'badge-blue', 
+              icon: isOS ? 'check-circle' : 'package' 
+          };
+      } else if (isPaid) {
+          masterStatus = { label: 'Pagado', class: 'badge-green', icon: 'banknote' };
+      } else if (isApproved) {
+          masterStatus = { label: 'Pendiente de Pago', class: 'badge-indigo', icon: 'credit-card' };
+      }
+
+      const statusHtml = `
+        <div class="flex flex-col gap-2">
+            <span class="badge ${masterStatus.class} w-fit flex items-center gap-1.5 py-1 px-2.5">
+                <i data-lucide="${masterStatus.icon}" class="w-3 h-3"></i>
+                ${masterStatus.label}
+            </span>
+            <div class="flex items-center gap-3 ml-1">
+                <!-- Micro-indicadores de flujo -->
+                <div class="flex gap-1" title="Aprobaciones">
+                    <i data-lucide="user-check" class="w-3 h-3 ${p.aprobado_gerente ? 'text-green-500' : 'text-slate-300'}"></i>
+                    <i data-lucide="shield-check" class="w-3 h-3 ${p.aprobado_finanzas ? 'text-green-500' : 'text-slate-300'}"></i>
+                </div>
+                <div class="w-px h-3 bg-slate-200"></div>
+                <div class="flex gap-1" title="Pagos">
+                    <i data-lucide="wallet" class="w-3 h-3 ${p.adelanto_pagado ? 'text-blue-500' : 'text-slate-300'}"></i>
+                    <i data-lucide="circle-dollar-sign" class="w-3 h-3 ${p.pagado ? 'text-green-500' : 'text-slate-300'}"></i>
+                </div>
+                ${isReceived ? `
+                    <div class="w-px h-3 bg-slate-200"></div>
+                    <a href="${p.conformidad_url || '#'}" target="_blank" title="Ver Conformidad">
+                        <i data-lucide="file-text" class="w-3 h-3 text-primary animate-pulse"></i>
+                    </a>
+                ` : ''}
+            </div>
+        </div>`;
+
+      return `
       <tr>
         <td class="font-mono text-xs font-bold text-primary">${p.numero_oc}</td>
         <td>
@@ -1212,8 +1369,8 @@ async function loadPurchases() {
           <div class="text-[10px] text-muted-foreground uppercase">${p.area_nombre || 'Sin área'}</div>
         </td>
         <td class="text-xs">${p.fecha || '—'}</td>
-        <td class="font-bold">S/ ${parseFloat(p.total || 0).toLocaleString('es-PE', { minimumFractionDigits: 2 })}</td>
-        <td><span class="badge ${STATUS_BADGE[p.estado] || 'badge-gray'}">${p.estado}</span></td>
+        <td class="font-bold text-sm">S/ ${parseFloat(p.total || 0).toLocaleString('es-PE', { minimumFractionDigits: 2 })}</td>
+        <td>${statusHtml}</td>
         <td class="text-right">
           <div class="flex justify-end gap-1">
             <button class="btn btn-ghost p-1.5" title="Ver detalles" onclick="viewOrderDetails(${p.id})"><i data-lucide="eye" class="w-4 h-4"></i></button>
@@ -1221,7 +1378,8 @@ async function loadPurchases() {
             <button class="btn btn-ghost p-1.5 text-destructive" title="Eliminar orden" onclick="confirmDeleteOC(${p.id}, '${p.numero_oc}')"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
           </div>
         </td>
-      </tr>`).join('');
+      </tr>`;
+    }).join('');
     lucide.createIcons();
   } catch { tbody.innerHTML = '<tr><td colspan="7" class="text-center py-10 text-destructive">Error al cargar órdenes.</td></tr>'; }
 }
@@ -1268,4 +1426,61 @@ window.confirmDeleteOC = function(id, numero) {
       }
     }
   });
+};
+
+// --- ESCÁNER DE ACTIVOS PARA OS ---
+window.startAssetQRScanner = function() {
+    UI.modal({
+        title: 'Escanear Activo / Mobiliario',
+        body: `
+            <div class="space-y-4">
+                <div id="qr-reader" class="overflow-hidden rounded-xl bg-slate-900 aspect-square flex items-center justify-center text-white text-xs italic">
+                    Iniciando cámara...
+                </div>
+                <div id="qr-reader-results" class="text-center text-sm font-medium text-primary"></div>
+                <p class="text-[10px] text-muted-foreground text-center italic">Encuadre el código QR del activo dentro del marco para detectarlo automáticamente.</p>
+            </div>
+        `,
+        confirmText: 'Detener Cámara',
+        onConfirm: () => {
+            if (window._qrScanner) {
+                window._qrScanner.stop().catch(e => console.error(e));
+            }
+            return true;
+        }
+    });
+
+    setTimeout(() => {
+        const html5QrCode = new Html5Qrcode("qr-reader");
+        window._qrScanner = html5QrCode;
+        
+        const config = { fps: 15, qrbox: { width: 250, height: 250 } };
+
+        html5QrCode.start(
+            { facingMode: "environment" }, 
+            config, 
+            (decodedText) => {
+                // Éxito: Limpiar texto de protocolos si vienen de URLs (ej: https://.../ID-123 -> ID-123)
+                const finalCode = decodedText.split('/').pop();
+                const targetInput = document.getElementById('os-target-code');
+                if (targetInput) {
+                    targetInput.value = finalCode;
+                    window.onOSTargetChange();
+                }
+                UI.toast(`Activo detectado: ${finalCode}`, 'success');
+                
+                // Detener y cerrar automáticamente
+                html5QrCode.stop().then(() => {
+                    // Cerrar el modal buscando el botón de confirmación
+                    const closeBtn = document.querySelector('.modal-container button');
+                    if (closeBtn) closeBtn.click();
+                }).catch(err => console.error(err));
+            },
+            (errorMessage) => { /* buscando... */ }
+        ).catch(err => {
+            const container = document.getElementById('qr-reader');
+            if (container) container.innerHTML = `<div class="p-6 text-center text-destructive font-medium">Error de cámara: ${err}</div>`;
+            console.error(err);
+        });
+    }, 500); // Pequeño delay para asegurar que el DOM del modal esté listo
 };

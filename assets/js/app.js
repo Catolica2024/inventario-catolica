@@ -44,38 +44,61 @@
 
   function renderShell(user) {
     root().innerHTML = `
-      <header class="h-16 border-b border-border bg-white sticky top-0 z-30 flex items-center justify-between px-4 md:px-6">
-        <div class="flex items-center gap-3">
-          <button id="menu-toggle" class="md:hidden btn btn-ghost p-2"><i data-lucide="menu"></i></button>
-          <div class="w-10 h-10 rounded-lg overflow-hidden flex items-center justify-center bg-white shadow-sm border border-border">
-            <img src="assets/images/icono.png" alt="Logo" class="w-full h-full object-cover">
+      <div id="app-shell" class="min-h-screen flex flex-col">
+        <header class="h-16 border-b border-border bg-white sticky top-0 z-50 flex items-center justify-between px-4 md:px-8 glass">
+          <div class="flex items-center gap-4">
+            <button id="menu-toggle" class="lg:hidden btn btn-ghost p-2 -ml-2"><i data-lucide="menu"></i></button>
+            <div class="flex items-center gap-3">
+              <div class="w-10 h-10 rounded-xl overflow-hidden flex items-center justify-center bg-white shadow-sm border border-border">
+                <img src="assets/images/icono.png" alt="Logo" class="w-full h-full object-cover">
+              </div>
+              <div class="hidden sm:block leading-tight">
+                <div class="font-black text-lg tracking-tight">Católica <span class="text-primary">School</span></div>
+                <div class="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Gestión de Inventario</div>
+              </div>
+            </div>
           </div>
-          <div class="leading-tight">
-            <div class="font-bold">Católica <span class="text-primary">School</span></div>
-            <div class="text-xs text-muted-foreground">Sistema de Inventario</div>
+          
+          <div class="flex items-center gap-4">
+            <div class="hidden md:flex flex-col items-end leading-none">
+              <div class="text-sm font-black text-foreground">${user.name}</div>
+              <div class="text-[10px] font-bold text-primary uppercase tracking-tighter mt-0.5">${user.role.replace('_',' ')}</div>
+            </div>
+            <div class="relative group">
+              <div class="w-10 h-10 rounded-xl bg-brand-gradient text-white flex items-center justify-center font-black shadow-lg cursor-pointer">
+                ${(user.name||'?').charAt(0).toUpperCase()}
+              </div>
+            </div>
+            <button id="logout-btn" class="btn btn-outline p-2 md:px-4" title="Cerrar sesión">
+                <i data-lucide="log-out" class="w-4 h-4"></i>
+                <span class="hidden md:inline">Salir</span>
+            </button>
           </div>
+        </header>
+
+        <div class="flex flex-1">
+          <div id="mobile-overlay" class="mobile-overlay"></div>
+          <aside id="sidebar" class="w-72 shrink-0 border-r border-border h-[calc(100vh-4rem)] lg:sticky lg:top-16 overflow-y-auto p-4 bg-white">
+            <nav id="sidebar-nav" class="space-y-6"></nav>
+          </aside>
+          <main id="view" class="flex-1 p-4 md:p-8 min-w-0 bg-[#f8fafc]"></main>
         </div>
-        <div class="flex items-center gap-3">
-          <div class="hidden sm:block text-right">
-            <div class="text-sm font-semibold">${user.name}</div>
-            <div class="text-xs text-muted-foreground capitalize">${user.role.replace('_',' ')}</div>
-          </div>
-          <div class="w-9 h-9 rounded-full bg-brand-gradient text-white flex items-center justify-center font-semibold">
-            ${(user.name||'?').charAt(0).toUpperCase()}
-          </div>
-          <button id="logout-btn" class="btn btn-outline" title="Cerrar sesión"><i data-lucide="log-out"></i><span class="hidden md:inline">Salir</span></button>
-        </div>
-      </header>
-      <div class="flex">
-        <aside id="sidebar" class="w-64 shrink-0 bg-gradient-to-b from-primary/5 via-secondary/5 to-accent/5 border-r border-border h-[calc(100vh-4rem)] overflow-y-auto p-3">
-          <nav id="sidebar-nav" class="space-y-5"></nav>
-        </aside>
-        <main id="view" class="flex-1 p-4 md:p-6 min-w-0"></main>
       </div>
     `;
     lucide.createIcons();
+    
+    const sidebar = document.getElementById('sidebar');
+    const overlay = document.getElementById('mobile-overlay');
+    
+    const toggleSidebar = () => {
+        sidebar.classList.toggle('open');
+        overlay.classList.toggle('active');
+    };
+
+    document.getElementById('menu-toggle').onclick = toggleSidebar;
+    overlay.onclick = toggleSidebar;
     document.getElementById('logout-btn').onclick = ()=> Auth.logout();
-    document.getElementById('menu-toggle').onclick = ()=> document.getElementById('sidebar').classList.toggle('open');
+    
     renderSidebar(user);
   }
 
@@ -88,23 +111,29 @@
     nav.innerHTML = groups.map(g => `
       <div>
         <div class="sidebar-group-title">${g.label}</div>
-        <div class="space-y-1">
+        <div class="space-y-1 mt-2">
           ${g.items.map(i => {
             const hasBadge = i.id === 'notifications' && window._unreadCount > 0;
+            const active = Router.current === i.id;
             return `
-            <a class="sidebar-link ${Router.current===i.id?'active':''}" data-section="${i.id}">
+            <a class="sidebar-link ${active?'active':''}" data-section="${i.id}">
               <div class="relative">
-                <i data-lucide="${i.icon}" class="w-4 h-4"></i>
-                ${hasBadge ? `<span class="absolute -top-1.5 -right-1.5 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-red-500 text-[8px] font-bold text-white badge-pulse">${window._unreadCount}</span>` : ''}
+                <i data-lucide="${i.icon}" class="w-4.5 h-4.5 ${active?'text-white':'text-slate-400'}"></i>
+                ${hasBadge ? `<span class="absolute -top-1.5 -right-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[9px] font-bold text-white badge-pulse">${window._unreadCount}</span>` : ''}
               </div>
-              <span>${i.label}</span>
+              <span class="${active?'font-bold':''}">${i.label}</span>
             </a>`;
           }).join('')}
         </div>
       </div>`).join('');
     lucide.createIcons();
+    
     nav.querySelectorAll('[data-section]').forEach(a => {
-      a.onclick = ()=> { Router.go(a.dataset.section); document.getElementById('sidebar').classList.remove('open'); };
+      a.onclick = ()=> { 
+        Router.go(a.dataset.section); 
+        document.getElementById('sidebar').classList.remove('open'); 
+        document.getElementById('mobile-overlay').classList.remove('active');
+      };
     });
   }
 
@@ -113,6 +142,11 @@
     const user = Auth.getUser();
     if (!user) return;
     try {
+        // Proactivamente pedir al servidor que verifique stock (solo si es admin o encargado)
+        if (['admin', 'jefe_almacen'].includes(user.role)) {
+            await fetch('api/notifications.php?action=check_stock');
+        }
+
         const resp = await fetch(`api/notifications.php?usuario_id=${user.id}`).then(r => r.json());
         const unread = (resp.notifications || []).filter(n => n.leido == 0).length;
         if (unread !== window._unreadCount) {
@@ -129,26 +163,32 @@
     }
     if (!canAccess(user, section)) {
       document.getElementById('view').innerHTML = `
-        <div class="flex flex-col items-center justify-center py-24 text-center">
-          <i data-lucide="shield-alert" class="w-12 h-12 text-destructive mb-3"></i>
-          <h2 class="text-2xl font-bold mb-1">Acceso restringido</h2>
-          <p class="text-muted-foreground">Tu rol no tiene permisos para ver esta sección.</p>
+        <div class="flex flex-col items-center justify-center py-24 text-center animate-slide-up">
+          <div class="w-20 h-20 rounded-3xl bg-destructive/10 flex items-center justify-center mb-6">
+            <i data-lucide="shield-alert" class="w-10 h-10 text-destructive"></i>
+          </div>
+          <h2 class="text-2xl font-black mb-2">Acceso restringido</h2>
+          <p class="text-muted-foreground max-w-sm">Tu rol no cuenta con los permisos necesarios para acceder a esta sección.</p>
+          <button class="btn btn-primary mt-8" onclick="Router.go('dashboard')">Volver al inicio</button>
         </div>`;
       lucide.createIcons();
       return;
     }
-    const fn = window.Views && window.Views[section];
-    document.getElementById('view').innerHTML = fn ? fn(user) : `<div class="card p-10 text-center text-muted-foreground">Sección "${section}" en construcción.</div>`;
-    lucide.createIcons();
-    if (fn && fn.afterMount) fn.afterMount(user);
+    const mainView = document.getElementById('view');
+    mainView.innerHTML = `<div class="animate-slide-up h-full">Cargando...</div>`;
+    
+    setTimeout(() => {
+        const fn = window.Views && window.Views[section];
+        mainView.innerHTML = `<div class="animate-slide-up">` + (fn ? fn(user) : `<div class="card p-20 text-center text-muted-foreground font-medium italic">La sección "${section}" se encuentra bajo mantenimiento.</div>`) + `</div>`;
+        lucide.createIcons();
+        if (fn && fn.afterMount) fn.afterMount(user);
+    }, 50);
   }
 
   function boot() {
     const user = Auth.getUser();
     if (!user) {
-      Views.login(onLogin => {
-        // callback usado por la vista login
-      });
+      if (Views.login) Views.login();
       return;
     }
     renderShell(user);

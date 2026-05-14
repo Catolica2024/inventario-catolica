@@ -43,14 +43,21 @@ window.MODULES_LIST = [
 window.canAccess = function(user, sectionId) {
   if (!user) return false;
   
-  // Si el usuario tiene permisos personalizados (string separado por comas)
+  // EL ADMIN SIEMPRE TIENE ACCESO (Regla de oro del Arquitecto)
+  if (user.role === 'admin') return true;
+  
+  let perms = [];
+  
+  // Cargar permisos del rol
+  const rolePerms = window.ROLE_PERMISSIONS[user.role] || [];
+  perms = [...rolePerms];
+
+  // Mezclar con permisos personalizados si existen
   if (user.permissions) {
-    const perms = user.permissions.split(',').map(p => p.trim());
-    return perms.includes('*') || perms.includes(sectionId);
+    const customPerms = user.permissions.split(',').map(p => p.trim());
+    perms = [...perms, ...customPerms];
   }
 
-  // Fallback a permisos por rol
-  const perms = window.ROLE_PERMISSIONS[user.role] || [];
   return perms.includes('*') || perms.includes(sectionId);
 };
 

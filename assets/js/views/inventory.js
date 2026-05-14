@@ -1,5 +1,4 @@
 // assets/js/views/inventory.js — Consulta Avanzada de Inventario
-
 let _inventoryData = [];
 let _filterSedes = [];
 let _filterCats = [];
@@ -20,7 +19,6 @@ async function loadInventory() {
         _inventoryData = [
             ...(assetsResp.assets || []).map(a => ({ ...a, _type: 'unit' })),
             ...(itemsResp.items || []).filter(i => {
-                // Si es equipo, solo mostrar si no tiene unidades registradas (para permitir gestión/borrado)
                 if (i.categoria_tipo === 'equipo') {
                     const hasUnits = (assetsResp.assets || []).some(a => a.item_id == i.id);
                     return !hasUnits;
@@ -35,57 +33,57 @@ async function loadInventory() {
 
         renderFilterControls();
         renderInventoryRows(_inventoryData);
-    } catch (e) { tbody.innerHTML = '<tr><td colspan="7" class="text-center py-10 text-destructive">Error al cargar datos.</td></tr>'; }
+    } catch (e) { tbody.innerHTML = '<tr><td colspan="7" class="text-center py-20 text-destructive font-bold">Error al sincronizar con el servidor.</td></tr>'; }
 }
 
 function renderFilterControls() {
     const container = document.getElementById('inventory-filters');
     if (!container) return;
     container.innerHTML = `
-        <div class="grid grid-cols-1 md:grid-cols-5 gap-3">
-            <div class="md:col-span-1">
-                <label class="text-[10px] font-bold text-primary uppercase mb-1 block">Buscar / Escanear</label>
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+            <div class="lg:col-span-1">
+                <label class="text-[10px] font-black text-primary uppercase tracking-widest mb-1.5 block">Buscar / Escanear</label>
                 <div class="relative group">
-                    <input id="f-search" type="text" placeholder="Código o Serie..." class="input input-sm w-full pr-10 border-primary/20 focus:border-primary transition-all" oninput="applyAdvancedFilters()">
-                    <button class="absolute right-1 top-1 p-1.5 rounded-lg bg-primary/10 text-primary hover:bg-primary hover:text-white transition-all shadow-sm" onclick="openInventoryScanner()" title="Escanear Código QR">
-                        <i data-lucide="camera" class="w-4 h-4"></i>
+                    <input id="f-search" type="text" placeholder="Código o Serie..." class="input w-full pr-12" oninput="applyAdvancedFilters()">
+                    <button class="absolute right-1 top-1 p-2 rounded-lg bg-primary/10 text-primary hover:bg-primary hover:text-white transition-all shadow-sm" onclick="openInventoryScanner()" title="Escanear Código QR">
+                        <i data-lucide="maximize" class="w-4 h-4"></i>
                     </button>
                 </div>
             </div>
             <div>
-                <label class="text-[10px] font-bold text-muted-foreground uppercase mb-1 block">Sede</label>
-                <select id="f-sede" class="select select-sm w-full" onchange="applyAdvancedFilters()">
+                <label class="text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-1.5 block">Sede Institucional</label>
+                <select id="f-sede" class="select w-full" onchange="applyAdvancedFilters()">
                     <option value="">Todas las sedes</option>
                     ${_filterSedes.map(s => `<option value="${s.id}">${s.nombre}</option>`).join('')}
                 </select>
             </div>
             <div>
-                <label class="text-[10px] font-bold text-muted-foreground uppercase mb-1 block">Categoría</label>
-                <select id="f-cat" class="select select-sm w-full" onchange="applyAdvancedFilters()">
+                <label class="text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-1.5 block">Categoría</label>
+                <select id="f-cat" class="select w-full" onchange="applyAdvancedFilters()">
                     <option value="">Todas las categorías</option>
                     ${_filterCats.map(c => `<option value="${c.id}">${c.nombre}</option>`).join('')}
                 </select>
             </div>
             <div>
-                <label class="text-[10px] font-bold text-muted-foreground uppercase mb-1 block">Ubicación / Aula</label>
-                <select id="f-loc" class="select select-sm w-full" onchange="applyAdvancedFilters()">
+                <label class="text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-1.5 block">Ubicación / Aula</label>
+                <select id="f-loc" class="select w-full" onchange="applyAdvancedFilters()">
                     <option value="">Todas las ubicaciones</option>
                     ${_filterLocs.map(l => `<option value="${l.id}">${l.nombre}</option>`).join('')}
                 </select>
             </div>
             <div>
-                <label class="text-[10px] font-bold text-muted-foreground uppercase mb-1 block">Estado / Tipo</label>
-                <select id="f-status" class="select select-sm w-full" onchange="applyAdvancedFilters()">
-                    <option value="">Todos</option>
+                <label class="text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-1.5 block">Estado / Tipo</label>
+                <select id="f-status" class="select w-full" onchange="applyAdvancedFilters()">
+                    <option value="">Filtrar por estado...</option>
                     <optgroup label="Tipo de Bien">
-                        <option value="T:equipo">Equipos (Unidades)</option>
-                        <option value="T:mobiliario">Mobiliario</option>
-                        <option value="T:insumo">Insumos</option>
+                        <option value="T:equipo">Equipos (Individuales)</option>
+                        <option value="T:mobiliario">Mobiliario (Lotes)</option>
+                        <option value="T:insumo">Insumos (Consumibles)</option>
                     </optgroup>
-                    <optgroup label="Estado (Equipos)">
+                    <optgroup label="Estado Operativo">
                         <option value="E:Operativo">Operativos</option>
                         <option value="E:Mantenimiento">Mantenimiento</option>
-                        <option value="E:Reparación">Reparación</option>
+                        <option value="E:Reparación">En Reparación</option>
                         <option value="E:Baja">De Baja</option>
                     </optgroup>
                 </select>
@@ -99,52 +97,56 @@ function renderInventoryRows(data) {
     const tbody = document.getElementById('inventory-table-body');
     if (!tbody) return;
     if (data.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="7" class="text-center py-20 text-muted-foreground">No se encontraron bienes con los filtros aplicados.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7" class="text-center py-24 text-muted-foreground font-medium italic">No se han encontrado registros que coincidan con los criterios.</td></tr>';
         return;
     }
     tbody.innerHTML = data.map(d => {
         const isUnit = d._type === 'unit';
         return `
-            <tr class="hover:bg-muted/50 transition-colors">
-                <td class="font-mono text-xs font-bold text-primary">${isUnit ? (d.codigo_patrimonial || '—') : (d.codigo || '—')}</td>
+            <tr class="hover:bg-primary/5 transition-all group">
+                <td class="font-mono text-[11px] font-black text-primary tracking-tighter">${isUnit ? (d.codigo_patrimonial || '—') : (d.codigo || '—')}</td>
                 <td>
-                    <div class="font-medium text-sm">${isUnit ? d.item_nombre : d.nombre}</div>
-                    <div class="text-[10px] text-muted-foreground uppercase">${isUnit ? (d.numero_serie ? 'S/N: '+d.numero_serie : '') : (d.marca || '')}</div>
+                    <div class="font-bold text-slate-800">${isUnit ? d.item_nombre : d.nombre}</div>
+                    <div class="text-[9px] font-black text-muted-foreground uppercase tracking-wider mt-0.5">${isUnit ? (d.numero_serie ? 'S/N: '+d.numero_serie : 'SIN SERIE') : (d.marca || 'GENÉRICO')}</div>
                 </td>
                 <td><span class="badge ${getCategoryTypeBadge(isUnit ? 'equipo' : d.categoria_tipo)}">${isUnit ? 'EQUIPO' : (d.categoria_nombre || '—')}</span></td>
-                <td class="text-xs">
-                    <div class="font-semibold uppercase">
-                        ${isUnit 
-                            ? (d.ubicacion_nombre || '—') 
-                            : (d.num_ubicaciones > 1 ? 'Varios' : (d.ubicacion_nombre || '—'))
-                        }
+                <td>
+                    <div class="text-xs font-black text-slate-700 uppercase tracking-tighter">
+                        ${isUnit ? (d.ubicacion_nombre || '—') : (d.num_ubicaciones > 1 ? 'Múltiples' : (d.ubicacion_nombre || '—'))}
                     </div>
-                    <div class="text-[10px] text-muted-foreground">${d.sede_nombre || '—'}</div>
+                    <div class="text-[9px] font-bold text-muted-foreground uppercase">${d.sede_nombre || 'Sede Central'}</div>
                 </td>
                 <td class="text-center">
                     ${isUnit ? 
-                        `<span class="badge ${getStatusBadge(d.estado)}">${d.estado}${d.responsable_nombre ? ' <span class="text-[9px] opacity-80">(Asignado)</span>' : ''}</span>` : 
-                        `<div class="flex flex-col items-center gap-0.5">
-                            <div class="flex items-center gap-1">
-                                <span class="font-bold text-sm ${d.stock_actual <= 0 ? 'text-destructive' : d.stock_actual <= (d.categoria_stock_minimo || d.stock_minimo) ? 'text-orange-500' : 'text-green-600'}">${d.stock_actual}</span>
-                                <span class="text-[10px] text-muted-foreground">disp.</span>
+                        `<span class="badge ${getStatusBadge(d.estado)}">${d.estado}</span>` : 
+                        `<div class="flex flex-col items-center">
+                            <div class="flex items-center gap-1.5">
+                                <span class="font-black text-lg ${d.stock_actual <= 0 ? 'text-destructive' : d.stock_actual <= (d.categoria_stock_minimo || d.stock_minimo) ? 'text-amber-500' : 'text-emerald-600'}">${d.stock_actual}</span>
+                                <span class="text-[9px] font-black text-muted-foreground uppercase tracking-widest">disp.</span>
                             </div>
-                            <div class="text-[10px] text-muted-foreground">de ${d.stock_total || d.stock_actual} total</div>
+                            <div class="text-[8px] font-bold text-slate-400 uppercase tracking-tighter">de ${d.stock_total || d.stock_actual} total</div>
                         </div>`
                     }
                 </td>
-                <td class="text-xs text-muted-foreground font-medium italic">${d.responsable_nombre || '—'}</td>
+                <td>
+                    <div class="flex items-center gap-2">
+                        <div class="w-6 h-6 rounded-lg bg-slate-100 flex items-center justify-center text-[10px] font-black text-slate-400">${(d.responsable_nombre||'—').charAt(0)}</div>
+                        <div class="text-[11px] font-bold text-slate-600 italic">${d.responsable_nombre || 'Sin asignar'}</div>
+                    </div>
+                </td>
                 <td class="text-right whitespace-nowrap">
-                    <button class="btn btn-ghost p-1.5" onclick="UI.showQR('${isUnit ? (d.codigo_patrimonial || '—') : (d.codigo || '—')}', '${isUnit ? 'EQUIPO' : (d.categoria_nombre || '—')}')" title="Ver QR"><i data-lucide="qr-code" class="w-4 h-4"></i></button>
-                    <button class="btn btn-ghost p-1.5" onclick="${isUnit ? `viewAssetDetails(${d.id})` : `viewCatalogItem(${d.id})`}" title="Ver detalle"><i data-lucide="eye" class="w-4 h-4"></i></button>
-                    ${isUnit ? 
-                        `<button class="btn btn-ghost p-1.5 text-blue-600" onclick="loadTraceResources().then(() => openAssignmentModal(${d.id}))" title="Asignar a personal"><i data-lucide="user-plus" class="w-4 h-4"></i></button>` : 
-                        (d.categoria_tipo === 'mobiliario' ? 
-                            `<button class="btn btn-ghost p-1.5 text-orange-600" onclick="loadTraceResources().then(() => openTransferModal(${d.id}))" title="Trasladar"><i data-lucide="move" class="w-4 h-4"></i></button>` :
-                            `<button class="btn btn-ghost p-1.5 text-green-600" onclick="loadTraceResources().then(() => openDispatchModal(${d.id}))" title="Despachar"><i data-lucide="send" class="w-4 h-4"></i></button>`
-                        )
-                    }
-                    <button class="btn btn-ghost p-1.5 text-destructive" onclick="deleteInventoryItem('${d._type}', ${d.id}, '${(isUnit ? d.item_nombre : d.nombre || '').replace(/'/g, '\\&apos;')}')" title="Eliminar"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                    <div class="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button class="btn btn-ghost p-2 rounded-xl" onclick="UI.showQR('${isUnit ? (d.codigo_patrimonial || '—') : (d.codigo || '—')}', '${isUnit ? 'EQUIPO' : (d.categoria_nombre || '—')}')" title="Ver QR"><i data-lucide="qr-code" class="w-4 h-4"></i></button>
+                        <button class="btn btn-ghost p-2 rounded-xl" onclick="${isUnit ? `viewAssetDetails(${d.id})` : `viewCatalogItem(${d.id})`}" title="Ver detalle"><i data-lucide="eye" class="w-4 h-4"></i></button>
+                        ${isUnit ? 
+                            `<button class="btn btn-ghost p-2 rounded-xl text-primary" onclick="loadTraceResources().then(() => openAssignmentModal(${d.id}))" title="Asignar"><i data-lucide="user-plus" class="w-4 h-4"></i></button>` : 
+                            (d.categoria_tipo === 'mobiliario' ? 
+                                `<button class="btn btn-ghost p-2 rounded-xl text-amber-600" onclick="loadTraceResources().then(() => openTransferModal(${d.id}))" title="Trasladar"><i data-lucide="move" class="w-4 h-4"></i></button>` :
+                                `<button class="btn btn-ghost p-2 rounded-xl text-emerald-600" onclick="loadTraceResources().then(() => openDispatchModal(${d.id}))" title="Despachar"><i data-lucide="send" class="w-4 h-4"></i></button>`
+                            )
+                        }
+                        <button class="btn btn-ghost p-2 rounded-xl text-destructive" onclick="deleteInventoryItem('${d._type}', ${d.id}, '${(isUnit ? d.item_nombre : d.nombre || '').replace(/'/g, '\\&apos;')}')" title="Eliminar"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                    </div>
                 </td>
             </tr>
         `;
@@ -154,13 +156,13 @@ function renderInventoryRows(data) {
 
 function getCategoryTypeBadge(type) {
     if (type === 'equipo') return 'badge-blue';
-    if (type === 'mobiliario') return 'badge-orange';
+    if (type === 'mobiliario') return 'badge-cyan';
     if (type === 'insumo') return 'badge-green';
     return 'badge-gray';
 }
 
 function getStatusBadge(status) {
-    const map = { 'Operativo': 'badge-green', 'Mantenimiento': 'badge-yellow', 'Baja': 'badge-red', 'Reparación': 'badge-orange' };
+    const map = { 'Operativo': 'badge-green', 'Mantenimiento': 'badge-yellow', 'Baja': 'badge-red', 'Reparación': 'badge-amber' };
     return map[status] || 'badge-gray';
 }
 
@@ -190,7 +192,6 @@ window.applyAdvancedFilters = function() {
                 matchStatus = d.estado === status;
             }
         }
-
         return matchSearch && matchSede && matchCat && matchLoc && matchStatus;
     });
 
@@ -199,34 +200,37 @@ window.applyAdvancedFilters = function() {
 
 window.Views.inventory = function() {
     return `
-        ${UI.pageHeader('Inventario General','Consulta avanzada y estado global de bienes', `
-            <button class="btn btn-outline" onclick="loadInventory()"><i data-lucide="refresh-cw"></i></button>
+        ${UI.pageHeader('Inventario General','Control centralizado de activos e insumos institucionales', `
+            <button class="btn btn-outline shadow-sm btn-sm-auto" onclick="loadInventory()"><i data-lucide="refresh-cw" class="w-4 h-4 mr-2"></i>Sincronizar</button>
+            <button class="btn btn-primary shadow-lg btn-sm-auto" onclick="Router.go('registration')"><i data-lucide="plus" class="w-4 h-4 mr-2"></i>Nuevo Bien</button>
         `)}
 
         <!-- PANEL DE FILTROS -->
-        <div class="card p-4 mb-6 bg-muted/20 border-primary/10">
+        <div class="card p-6 mb-8 bg-white shadow-xl shadow-slate-200/50 border-primary/5">
             <div id="inventory-filters">
-                <div class="h-10 flex items-center justify-center text-muted-foreground text-xs italic">Cargando filtros...</div>
+                <div class="h-12 flex items-center justify-center text-muted-foreground text-xs font-bold uppercase tracking-widest italic animate-pulse">Preparando filtros inteligentes...</div>
             </div>
         </div>
 
-        <div class="card overflow-hidden">
-            <table class="data">
-                <thead>
-                    <tr>
-                        <th>Código</th>
-                        <th>Descripción del Bien</th>
-                        <th>Categoría</th>
-                        <th>Ubicación / Sede</th>
-                        <th class="text-center">Estado / Stock</th>
-                        <th>Responsable</th>
-                        <th class="text-right">Acciones</th>
-                    </tr>
-                </thead>
-                <tbody id="inventory-table-body">
-                    <tr><td colspan="7" class="text-center py-20 text-muted-foreground">Cargando inventario...</td></tr>
-                </tbody>
-            </table>
+        <div class="card overflow-hidden shadow-2xl shadow-slate-200/40">
+            <div class="table-container">
+                <table class="data">
+                    <thead>
+                        <tr>
+                            <th>Código</th>
+                            <th>Descripción del Bien</th>
+                            <th>Categoría</th>
+                            <th>Ubicación / Sede</th>
+                            <th class="text-center">Estado / Stock</th>
+                            <th>Responsable</th>
+                            <th class="text-right">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody id="inventory-table-body">
+                        <tr><td colspan="7" class="text-center py-32 text-muted-foreground animate-pulse font-medium uppercase tracking-widest text-xs">Cargando base de datos maestra...</td></tr>
+                    </tbody>
+                </table>
+            </div>
         </div>
     `;
 };
@@ -239,30 +243,30 @@ window.Views.inventory.afterMount = function() {
 window.deleteInventoryItem = function(type, id, nombre) {
     const isUnit = type === 'unit';
     const msg = isUnit
-        ? `¿Eliminar el equipo <strong>${nombre}</strong>? Se quitará del inventario permanentemente.`
-        : `¿Eliminar <strong>${nombre}</strong> y todo su historial de stock? Esta acción no se puede deshacer.`;
+        ? `¿Seguro que desea eliminar el equipo <strong>${nombre}</strong>?`
+        : `¿Seguro que desea eliminar <strong>${nombre}</strong> y todo su historial de stock?`;
 
     UI.modal({
-        title: 'Confirmar Eliminación',
-        body: `<div class="space-y-3">
-            <p class="text-sm">${msg}</p>
-            <div class="p-3 rounded-lg bg-destructive/10 border border-destructive/20 text-xs text-destructive font-medium">
-                ⚠ Esta acción es permanente y no se puede revertir.
+        title: 'Confirmar Baja Permanente',
+        body: `<div class="space-y-4">
+            <div class="p-4 rounded-2xl bg-destructive/5 border border-destructive/10 flex items-center gap-4 text-destructive">
+                <i data-lucide="alert-octagon" class="w-8 h-8"></i>
+                <div class="text-xs font-black uppercase tracking-tight">${msg}</div>
             </div>
+            <p class="text-sm text-slate-500 px-2 font-medium">Esta acción no se puede deshacer y el registro será removido permanentemente de todos los reportes institucionales.</p>
         </div>`,
-        confirmText: 'Sí, eliminar',
+        confirmText: 'Sí, eliminar permanentemente',
+        confirmClass: 'btn-danger',
         onConfirm: async () => {
-            UI.loading('Eliminando registro...');
+            UI.loading('Procesando baja...');
             let ok = false;
             let errorMsg = '';
 
             if (isUnit) {
-                // Eliminar activo (equipo individual)
                 const r = await fetch(`api/assets.php?id=${id}`, { method: 'DELETE' }).then(x => x.json()).catch(() => ({}));
                 ok = r.ok;
                 errorMsg = r.error || '';
             } else {
-                // Eliminar ítem de catálogo (mobiliario/insumo) con cascada
                 const r = await fetch(`api/items.php?id=${id}&force=1`, { method: 'DELETE' }).then(x => x.json()).catch(() => ({}));
                 ok = r.ok;
                 errorMsg = r.error || '';
@@ -271,9 +275,9 @@ window.deleteInventoryItem = function(type, id, nombre) {
             UI.stopLoading();
             if (ok) {
                 UI.toast('Registro eliminado correctamente', 'success');
-                loadInventory(); // Recargar tabla
+                loadInventory();
             } else {
-                UI.toast('Error al eliminar: ' + (errorMsg || 'Error del servidor'), 'error');
+                UI.toast('Error al procesar: ' + (errorMsg || 'Error del servidor'), 'error');
             }
         }
     });
@@ -287,6 +291,6 @@ window.openInventoryScanner = function() {
             searchInput.dispatchEvent(new Event('input', { bubbles: true }));
         }
         applyAdvancedFilters();
-        return true; // Cerrar el modal tras detección exitosa
+        return true;
     });
 };
