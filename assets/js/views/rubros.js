@@ -24,11 +24,11 @@ async function loadRubros() {
   try {
     const resp = await fetch('api/rubros.php');
     const data = await resp.json();
-    if (!data.categories || data.categories.length === 0) {
+    if (!data.rubros || data.rubros.length === 0) {
       tbody.innerHTML = '<tr><td colspan="4" class="text-center py-10 text-muted-foreground">No hay rubros registrados.</td></tr>';
       return;
     }
-    tbody.innerHTML = data.categories.map(r => `
+    tbody.innerHTML = data.rubros.map(r => `
       <tr>
         <td class="font-mono text-xs">${r.codigo || '—'}</td>
         <td class="font-medium">${r.nombre}</td>

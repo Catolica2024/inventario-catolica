@@ -76,9 +76,13 @@ body { background: var(--background); color: var(--foreground); font-feature-set
 
 /* Inputs Modernos */
 .input, .select, .textarea {
-  width:100%; height:2.75rem; padding:.5rem 1rem; border:1.5px solid var(--border); border-radius:.75rem;
+  width:100%; height:2.75rem; padding-top:.5rem; padding-bottom:.5rem; padding-left:1rem; padding-right:1rem; 
+  border:1.5px solid var(--border); border-radius:.75rem;
   background:var(--card); color:var(--foreground); font-size:.875rem; outline:none; transition: all 0.2s;
 }
+/* Forzar espacio para iconos si se usan clases de utilidad */
+.pl-10 { padding-left: 2.5rem !important; }
+.pr-10 { padding-right: 2.5rem !important; }
 .input:focus, .select:focus, .textarea:focus { 
   border-color: var(--primary); 
   box-shadow: 0 0 0 4px var(--ring);
@@ -133,24 +137,41 @@ table.data tr:last-child td { border-bottom: none; }
 
 /* Modal Premium */
 .modal-backdrop { 
-  position:fixed; inset:0; background: rgba(15,23,42,0.4); 
-  backdrop-filter: blur(8px); display:flex; align-items:center; justify-content:center; 
-  z-index: 100; padding:1rem; 
+  position:fixed; inset:0; background: rgba(15,23,42,0.65); 
+  backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+  display:flex; align-items:center; justify-content:center; 
+  z-index: 1000; padding:1rem; 
 }
 .modal { 
   background:#fff; border-radius: 1.5rem; max-width: 540px; width:100%; 
   max-height: 90vh; display: flex; flex-direction: column;
   box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  position: relative; z-index: 1001;
 }
 .modal-header { padding: 1.25rem 1.5rem; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
 .modal-body { flex: 1; overflow-y: auto; padding: 1.5rem; }
 .modal-footer { padding: 1.25rem 1.5rem; border-top: 1px solid var(--border); background: #f8fafc; border-bottom-left-radius: 1.5rem; border-bottom-right-radius: 1.5rem; }
 
+/* Login Styles */
+.login-bg { 
+  background: var(--background);
+  background-image: radial-gradient(circle at 1px 1px, #cbd5e1 1px, transparent 0);
+  background-size: 32px 32px;
+}
+.login-blob {
+  position: absolute;
+  filter: blur(80px);
+  opacity: 0.15;
+  border-radius: 9999px;
+  z-index: 0;
+  pointer-events: none;
+}
+
 /* Loading */
 .loading-overlay {
-  position: fixed; inset: 0; background: rgba(255,255,255,0.7);
+  position: fixed; inset: 0; background: rgba(255,255,255,0.8);
   display: flex; flex-direction: column; align-items: center; justify-content: center;
-  z-index: 9999; backdrop-filter: blur(8px);
+  z-index: 9999; backdrop-filter: blur(12px);
 }
 .spinner {
   width: 48px; height: 48px; border: 4px solid #f3f3f3;
@@ -176,6 +197,15 @@ table.data tr:last-child td { border-bottom: none; }
   .card { border-radius: 0.75rem; }
   .btn { width: 100%; }
   .btn-sm-auto { width: auto; }
+  .login-blob { width: 16rem !important; height: 16rem !important; }
+  
+  .table-container { 
+    margin-left: -1.25rem; 
+    margin-right: -1.25rem; 
+    padding-left: 1.25rem; 
+    padding-right: 1.25rem;
+    width: calc(100% + 2.5rem);
+  }
 }
 
 /* Animations */

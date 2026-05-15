@@ -21,7 +21,7 @@ try {
                 break;
             }
             $rows = $pdo->query("SELECT * FROM rubros ORDER BY nombre ASC")->fetchAll();
-            json_response(['categories' => $rows]); // Mantengo la clave 'categories' para compatibilidad inicial si es necesario, o la cambio a 'rubros'
+            json_response(['rubros' => $rows]);
             break;
             
         case 'POST':

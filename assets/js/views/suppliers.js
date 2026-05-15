@@ -39,8 +39,8 @@ async function loadSuppliers() {
 }
 
 window.newSupplier = async function() {
-    const catsResp = await fetch('api/categories_inventario.php').then(r => r.json());
-    const cats = catsResp.categories || [];
+    const resp = await fetch('api/rubros.php').then(r => r.json());
+    const rubros = resp.rubros || [];
 
     UI.modal({
         title: 'Registrar Nuevo Proveedor',
@@ -55,10 +55,10 @@ window.newSupplier = async function() {
                     <input id="sup-ruc" class="input mt-1 w-full" maxlength="11" placeholder="20555555555">
                 </div>
                 <div>
-                    <label class="text-sm font-medium">Categoría / Rubro</label>
-                    <select id="sup-cat" class="select mt-1 w-full">
-                        <option value="">Seleccione...</option>
-                        ${cats.map(c => `<option value="${c.id}">${c.nombre}</option>`).join('')}
+                    <label class="text-sm font-medium">Rubro del Proveedor</label>
+                    <select id="sup-rubro" class="select mt-1 w-full">
+                        <option value="">Seleccione rubro...</option>
+                        ${rubros.map(r => `<option value="${r.id}">${r.nombre}</option>`).join('')}
                     </select>
                 </div>
                 <div>
@@ -83,7 +83,7 @@ window.newSupplier = async function() {
             const body = {
                 razon_social: name,
                 ruc: document.getElementById('sup-ruc').value,
-                categoria_id: document.getElementById('sup-cat').value || null,
+                rubro_id: document.getElementById('sup-rubro').value || null,
                 contacto: document.getElementById('sup-contact').value,
                 telefono: document.getElementById('sup-phone').value,
                 direccion: document.getElementById('sup-address').value

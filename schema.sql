@@ -126,11 +126,18 @@ CREATE TABLE IF NOT EXISTS activos (
     FOREIGN KEY (personal_id) REFERENCES personal(id)
 );
 
--- 7. Proveedores
+CREATE TABLE IF NOT EXISTS rubros (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    codigo VARCHAR(20) UNIQUE,
+    nombre VARCHAR(100) NOT NULL,
+    descripcion TEXT
+);
+
 CREATE TABLE IF NOT EXISTS proveedores (
     id INT AUTO_INCREMENT PRIMARY KEY,
     ruc VARCHAR(11) UNIQUE,
     razon_social VARCHAR(150) NOT NULL,
+    rubro_id INT,
     direccion TEXT,
     contacto VARCHAR(100),
     email VARCHAR(100),
@@ -138,7 +145,8 @@ CREATE TABLE IF NOT EXISTS proveedores (
     banco VARCHAR(100),
     numero_cuenta VARCHAR(100),
     cci VARCHAR(100),
-    estado ENUM('activo', 'inactivo') DEFAULT 'activo'
+    estado ENUM('activo', 'inactivo') DEFAULT 'activo',
+    FOREIGN KEY (rubro_id) REFERENCES rubros(id) ON DELETE SET NULL
 );
 
 -- 8. Movimientos y Stock

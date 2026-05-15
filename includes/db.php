@@ -15,7 +15,7 @@ if ($is_local) {
     define('DB_PORT', '3306');
     define('DB_NAME', 'lacatoli_inventario');
     define('DB_USER', 'lacatoli_admin');
-    define('DB_PASS', 'a+WA3DvNQ(3CwPXY');
+    define('DB_PASS', 'V&tHqt[@x5Uv[9b{');
 }
 
 define('DB_CHARSET', 'utf8mb4');

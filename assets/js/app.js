@@ -24,6 +24,7 @@
       { id:'purchases',  label:'Órdenes de Compra',   icon:'shopping-cart' },
       { id:'recepcions', label:'Recepciones',         icon:'package-check' },
       { id:'suppliers',  label:'Proveedores',         icon:'truck' },
+      { id:'rubros',     label:'Rubros de Proveedores', icon:'tags' },
     ]},
     { label:'Aprobaciones', items:[
       { id:'approvals',  label:'Aprobaciones',        icon:'check-square' },
