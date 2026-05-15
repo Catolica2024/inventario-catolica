@@ -1,69 +1,63 @@
 # Católica School — Sistema de Gestión de Inventario
 
-Proyecto migrado a **HTML + Tailwind (CDN) + JavaScript vainilla**, con stubs de **PHP** preparados para conectar a una base de datos MySQL/MariaDB.
+Sistema profesional de gestión de activos, inventario de consumibles y control de adquisiciones para la institución educativa Católica School.
 
-## 📁 Estructura
+## 🛠️ Arquitectura Técnica
+
+- **Frontend**: HTML5 + Vanilla JavaScript (Arquitectura modular por vistas).
+- **Estilos**: Tailwind CSS 3.4 (Compilado vía CLI para máxima optimización).
+- **Backend**: PHP 7.4+ (Arquitectura RESTful con PDO MySQL).
+- **Seguridad**: Autenticación real basada en roles y contraseñas hasheadas (bcrypt).
+
+## 📁 Estructura del Proyecto
 
 ```
-catolica-school/
-├── index.html               # Punto de entrada (carga app + Tailwind CDN)
+inventario-catolica/
+├── index.html               # Punto de entrada principal (SPA)
 ├── assets/
-│   ├── css/styles.css       # Estilos personalizados (tokens institucionales)
+│   ├── css/
+│   │   ├── input.css        # Código fuente de estilos Tailwind
+│   │   └── styles.css       # CSS compilado y minificado para producción
 │   └── js/
-│       ├── auth.js          # Manejo de sesión (localStorage)
-│       ├── roles.js         # Definición de roles y permisos
-│       ├── router.js        # Router por hash (#dashboard, #inventory, ...)
-│       ├── components.js    # Helpers UI (toast, modal, headers)
-│       ├── app.js           # Bootstrap + sidebar + header
-│       └── views/           # Una vista por sección
-├── api/                     # Endpoints PHP (stubs listos para conectar a BD)
-│   ├── auth.php
-│   └── items.php
-└── includes/
-    └── db.php               # Conexión PDO (MySQL/MariaDB)
+│       ├── auth.js          # Manejo de sesión y seguridad
+│       ├── roles.js         # Configuración de RBAC (Role-Based Access Control)
+│       ├── router.js        # Motor de navegación dinámica
+│       ├── components.js    # Componentes UI reutilizables
+│       ├── app.js           # Inicialización de la aplicación
+│       └── views/           # Módulos funcionales (Dashboard, Inventario, Compras, etc.)
+├── api/                     # Endpoints de la API REST en PHP
+├── includes/
+│   ├── db.php               # Singleton de conexión a base de datos y utilidades JSON
+│   └── mailer.php           # Motor de notificaciones por correo electrónico
+└── package.json             # Scripts de compilación (Tailwind CLI)
 ```
 
-## 🚀 Cómo ejecutar
+## 🚀 Despliegue y Desarrollo
 
-### Opción A — Solo frontend (sin PHP)
-Abre `index.html` directamente en el navegador o con cualquier servidor estático:
+### Compilación de Estilos
+El sistema utiliza Tailwind CLI. Para generar el CSS de producción:
 ```bash
-npx serve .
-# o
-python3 -m http.server 8080
+npm run build
 ```
 
-### Opción B — Con PHP (para conectar la BD real)
-Requiere PHP 7.4+ y MySQL.
+Para desarrollo con recarga automática de estilos:
 ```bash
-php -S localhost:8080
+npm run watch
 ```
-Luego abre http://localhost:8080
 
-## 🔐 Login
+### Configuración de Base de Datos
+1. Crear una base de datos MySQL (ej: `catolica_school`).
+2. Ejecutar el script `schema.sql` para crear la estructura de tablas y datos iniciales.
+3. Editar `includes/db.php` con las credenciales de su servidor local (XAMPP/WAMP/Laragon).
 
-El selector de rol fue **eliminado**. El rol del usuario se asigna desde el backend (tabla `usuarios`) y el **superadministrador** lo gestiona desde la sección **Usuarios y Roles**.
+## 🔐 Gestión de Accesos
+El acceso está restringido por roles. Los roles disponibles son:
+- **admin**: Acceso total y gestión de usuarios.
+- **gerente_general**: Reportes y aprobaciones de alto nivel.
+- **jefe_finanzas**: Gestión presupuestaria y financiera.
+- **almacenero**: Control físico de ingresos y salidas.
+- **comprador**: Operativa de proveedores y órdenes de compra.
+- **personal**: Consultas básicas y solicitudes.
 
-> En esta demo (sin BD), `auth.js` asigna el rol según el correo:
-> `admin@…` → admin · `gerente@…` → gerente_general · `finanzas@…` → jefe_finanzas · `almacen@…` → almacenero · `compras@…` → comprador · cualquier otro → personal.
-
-Cuando conectes el backend PHP, edita `assets/js/auth.js` para llamar a `api/auth.php` y eliminar la simulación.
-
-## 🎨 Identidad visual
-
-- **Azul institucional:** `#1b5cff`
-- **Cian:** `#36a2bc`
-- **Amarillo:** `#f4da40`
-- Tipografía: **Inter** (Google Fonts)
-
-## 🗄️ Base de datos
-
-Edita `includes/db.php` con tus credenciales. El esquema esperado incluye las tablas:
-`categorias`, `items`, `activos`, `lotes`, `ubicaciones`, `proveedores`, `personal`, `cargos`, `asignaciones`, `movimientos`, `mantenimientos`, `ordenes_compra`, `detalle_ordenes`, `usuarios`, `roles`, `permisos`.
-
-## 📦 Próximos pasos sugeridos
-
-1. Crear el esquema SQL en MySQL.
-2. Reemplazar los datos demo en cada vista (`assets/js/views/*.js`) por llamadas `fetch('api/...')`.
-3. Implementar los endpoints PHP restantes siguiendo el patrón de `api/items.php`.
-4. (Opcional) Compilar Tailwind en producción en lugar del CDN.
+---
+© 2024 Católica School · Área de Tecnología e Infraestructura.

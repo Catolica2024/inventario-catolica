@@ -1,165 +1,260 @@
--- Crear base de datos
-CREATE DATABASE IF NOT EXISTS catolica_school CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-USE catolica_school;
+-- Católica School - Esquema de Base de Datos Sincronizado para Hosting
+-- Generado por Antigravity (Experto en Arquitectura de Software)
 
--- 1. Roles
-CREATE TABLE roles (
+SET FOREIGN_KEY_CHECKS = 0;
+
+
+-- 1. Roles y Permisos
+CREATE TABLE IF NOT EXISTS roles (
     id INT AUTO_INCREMENT PRIMARY KEY,
     nombre VARCHAR(50) NOT NULL UNIQUE,
-    descripcion VARCHAR(255)
+    descripcion VARCHAR(255),
+    can_delete TINYINT(1) DEFAULT 0
 );
 
-INSERT INTO roles (nombre, descripcion) VALUES 
-('admin', 'Superadministrador con acceso total'),
-('gerente_general', 'Supervisión y reportes globales'),
-('jefe_finanzas', 'Control de presupuestos y órdenes de compra'),
-('almacenero', 'Gestión de stock y movimientos'),
-('comprador', 'Gestión de proveedores y adquisiciones'),
-('personal', 'Consulta y solicitud de activos');
+INSERT INTO roles (nombre, descripcion, can_delete) VALUES 
+('admin', 'Superadministrador con acceso total', 1),
+('gerente_general', 'Supervisión y aprobaciones estratégicas', 0),
+('jefe_finanzas', 'Control presupuestario y financiero', 0),
+('almacenero', 'Gestión física de almacenes y stock', 0),
+('comprador', 'Gestión de adquisiciones y proveedores', 0),
+('personal', 'Consulta y recepción de activos', 0),
+('tesoreria', 'Procesamiento de pagos y vouchers', 0);
 
--- 2. Usuarios
-CREATE TABLE usuarios (
+-- 2. Sedes y Áreas
+CREATE TABLE IF NOT EXISTS sedes (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    nombre VARCHAR(100) NOT NULL,
+    direccion VARCHAR(255),
+    codigo VARCHAR(10) UNIQUE
+);
+
+INSERT INTO sedes (nombre, direccion, codigo) VALUES 
+('Sede Central', 'Av. Institucional 123', 'SC'),
+('Anexo Primaria', 'Calle Educación 456', 'AP');
+
+CREATE TABLE IF NOT EXISTS areas (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    nombre VARCHAR(100) NOT NULL,
+    sede_id INT,
+    FOREIGN KEY (sede_id) REFERENCES sedes(id)
+);
+
+INSERT INTO areas (nombre, sede_id) VALUES 
+('Tecnología', 1), ('Administración', 1), ('Finanzas', 1), ('Mantenimiento', 1);
+
+-- 3. Usuarios
+CREATE TABLE IF NOT EXISTS usuarios (
     id INT AUTO_INCREMENT PRIMARY KEY,
     nombre VARCHAR(100) NOT NULL,
     email VARCHAR(100) NOT NULL UNIQUE,
     password_hash VARCHAR(255) NOT NULL,
     rol_id INT NOT NULL,
+    permisos TEXT,
+    personal_id INT,
     estado ENUM('activo', 'inactivo') DEFAULT 'activo',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (rol_id) REFERENCES roles(id)
 );
 
--- Usuario por defecto: admin@catolica.edu / password: admin123
+-- Admin por defecto (admin123)
 INSERT INTO usuarios (nombre, email, password_hash, rol_id) VALUES 
-('Administrador Sistema', 'admin@catolica.edu', '$2y$10$Zf/c5Zt9dv4OICPCvAsCJ.6tNLCZvNdamQk1euspaXbi.AxnSPuQW', 1);
+('Admin Católica', 'admin@catolica.edu', '$2y$10$Zf/c5Zt9dv4OICPCvAsCJ.6tNLCZvNdamQk1euspaXbi.AxnSPuQW', 1);
 
--- 3. Categorías
-CREATE TABLE categorias (
+
+-- 4. Categorías e Ítems
+CREATE TABLE IF NOT EXISTS categorias_inventario (
     id INT AUTO_INCREMENT PRIMARY KEY,
-    codigo VARCHAR(10) UNIQUE,
+    prefijo VARCHAR(5) UNIQUE,
     nombre VARCHAR(100) NOT NULL,
+    tipo ENUM('equipo', 'mobiliario', 'insumo') DEFAULT 'insumo',
+    stock_minimo INT DEFAULT 5,
     descripcion TEXT
 );
 
-INSERT INTO categorias (codigo, nombre, descripcion) VALUES 
-('CAT-01', 'Tecnología', 'Equipos electrónicos y de cómputo'),
-('CAT-02', 'Mobiliario', 'Sillas, mesas y muebles'),
-('CAT-03', 'Limpieza', 'Insumos y productos de limpieza'),
-('CAT-04', 'Deportes', 'Material deportivo y recreativo');
+INSERT INTO categorias_inventario (prefijo, nombre, tipo, stock_minimo) VALUES 
+('LAP', 'Laptops / Notebooks', 'equipo', 3),
+('SIL', 'Sillas y Asientos', 'mobiliario', 10),
+('PAP', 'Papelería y Útiles', 'insumo', 20);
 
--- 4. Ítems (Catálogo)
-CREATE TABLE items (
+CREATE TABLE IF NOT EXISTS items (
     id INT AUTO_INCREMENT PRIMARY KEY,
     codigo VARCHAR(20) UNIQUE,
     nombre VARCHAR(150) NOT NULL,
     marca VARCHAR(100),
     modelo VARCHAR(100),
-    categoria_id INT,
-    ficha_tecnica TEXT,
+    categoria_inventario_id INT,
     stock_minimo INT DEFAULT 0,
-    imagen VARCHAR(255),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (categoria_id) REFERENCES categorias(id)
+    FOREIGN KEY (categoria_inventario_id) REFERENCES categorias_inventario(id)
 );
 
-INSERT INTO items (codigo, nombre, marca, modelo, categoria_id, stock_minimo) VALUES 
-('ITM-001', 'Laptop Lenovo ThinkPad', 'Lenovo', 'X1 Carbon', 1, 5),
-('ITM-002', 'Silla escolar madera', 'Muebles SAC', 'Estándar', 2, 20),
-('ITM-003', 'Detergente líquido 1L', 'Sapolio', 'Limpieza Total', 3, 10);
-
--- 5. Personal
-CREATE TABLE personal (
+-- 5. Personal y Ubicaciones
+CREATE TABLE IF NOT EXISTS personal (
     id INT AUTO_INCREMENT PRIMARY KEY,
     dni VARCHAR(15) UNIQUE,
     nombre VARCHAR(150) NOT NULL,
     cargo VARCHAR(100),
-    area VARCHAR(100),
-    telefono VARCHAR(20)
+    area_id INT,
+    email VARCHAR(100),
+    estado ENUM('activo', 'inactivo') DEFAULT 'activo',
+    FOREIGN KEY (area_id) REFERENCES areas(id)
 );
 
-INSERT INTO personal (dni, nombre, cargo, area) VALUES 
-('45123789', 'Mariela Salazar', 'Docente', 'Secundaria'),
-('41234567', 'Ricardo Torres', 'Coordinador TI', 'Tecnología');
-
--- 6. Ubicaciones
-CREATE TABLE ubicaciones (
+CREATE TABLE IF NOT EXISTS ubicaciones (
     id INT AUTO_INCREMENT PRIMARY KEY,
-    codigo VARCHAR(10) UNIQUE,
     nombre VARCHAR(100) NOT NULL,
     tipo VARCHAR(50),
-    responsable_id INT,
-    FOREIGN KEY (responsable_id) REFERENCES personal(id)
+    sede_id INT,
+    estado ENUM('activo', 'inactivo') DEFAULT 'activo',
+    FOREIGN KEY (sede_id) REFERENCES sedes(id)
 );
 
-INSERT INTO ubicaciones (codigo, nombre, tipo, responsable_id) VALUES 
-('UB-001', 'Aula 201', 'Aula', 1),
-('UB-002', 'Laboratorio Cómputo 1', 'Laboratorio', 2);
-
--- 7. Activos (Ítems individualizados)
-CREATE TABLE activos (
+-- 6. Activos (Ítems individualizados)
+CREATE TABLE IF NOT EXISTS activos (
     id INT AUTO_INCREMENT PRIMARY KEY,
-    numero_serie VARCHAR(50) UNIQUE,
+    numero_serie VARCHAR(100) UNIQUE,
+    codigo_interno VARCHAR(50) UNIQUE,
     item_id INT NOT NULL,
     ubicacion_id INT,
-    estado ENUM('Operativo', 'Mantenimiento', 'Baja', 'Reparación') DEFAULT 'Operativo',
+    personal_id INT,
+    estado VARCHAR(50) DEFAULT 'Operativo',
+    observaciones_tecnicas TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (item_id) REFERENCES items(id),
+    FOREIGN KEY (ubicacion_id) REFERENCES ubicaciones(id),
+    FOREIGN KEY (personal_id) REFERENCES personal(id)
+);
+
+-- 7. Proveedores
+CREATE TABLE IF NOT EXISTS proveedores (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    ruc VARCHAR(11) UNIQUE,
+    razon_social VARCHAR(150) NOT NULL,
+    direccion TEXT,
+    contacto VARCHAR(100),
+    email VARCHAR(100),
+    telefono VARCHAR(50),
+    banco VARCHAR(100),
+    numero_cuenta VARCHAR(100),
+    cci VARCHAR(100),
+    estado ENUM('activo', 'inactivo') DEFAULT 'activo'
+);
+
+-- 8. Movimientos y Stock
+CREATE TABLE IF NOT EXISTS movimientos (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    item_id INT NOT NULL,
+    tipo ENUM('Entrada', 'Salida', 'Baja') NOT NULL,
+    cantidad INT NOT NULL,
+    ubicacion_id INT,
+    fecha DATETIME DEFAULT CURRENT_TIMESTAMP,
+    observacion TEXT,
     FOREIGN KEY (item_id) REFERENCES items(id),
     FOREIGN KEY (ubicacion_id) REFERENCES ubicaciones(id)
 );
 
-INSERT INTO activos (numero_serie, item_id, ubicacion_id, estado) VALUES 
-('L-204', 1, 2, 'Operativo'),
-('P-051', 1, 2, 'Mantenimiento');
-
--- 8. Proveedores
-CREATE TABLE proveedores (
+-- 9. Adquisiciones (OC / OS)
+CREATE TABLE IF NOT EXISTS ordenes_compra (
     id INT AUTO_INCREMENT PRIMARY KEY,
-    ruc VARCHAR(11) UNIQUE,
-    razon_social VARCHAR(150) NOT NULL,
-    contacto VARCHAR(100),
-    telefono VARCHAR(20),
-    categoria_id INT,
-    estado ENUM('activo', 'inactivo') DEFAULT 'activo',
-    FOREIGN KEY (categoria_id) REFERENCES categorias(id)
+    numero_oc VARCHAR(20) UNIQUE,
+    tipo ENUM('compra', 'servicio') DEFAULT 'compra',
+    proveedor_id INT NOT NULL,
+    activo_id INT,
+    creado_por INT,
+    fecha DATE,
+    fecha_requerida DATE,
+    fecha_recepcion DATETIME,
+    area_id INT,
+    moneda VARCHAR(5) DEFAULT 'PEN',
+    subtotal DECIMAL(12,2),
+    igv DECIMAL(12,2),
+    total DECIMAL(12,2),
+    monto DECIMAL(12,2),
+    condicion_pago VARCHAR(50),
+    condicion_detalle TEXT,
+    estado ENUM('Pendiente', 'Aprobada', 'Rechazada', 'Recibida', 'Completada') DEFAULT 'Pendiente',
+    aprobado_gerente TINYINT(1) DEFAULT 0,
+    aprobado_finanzas TINYINT(1) DEFAULT 0,
+    rechazado_gerente TINYINT(1) DEFAULT 0,
+    rechazado_finanzas TINYINT(1) DEFAULT 0,
+    pagado TINYINT(1) DEFAULT 0,
+    voucher_url TEXT,
+    pdf_oc_url TEXT,
+    pdf_mov_url TEXT,
+    conformidad_url TEXT,
+    comprobante_url TEXT,
+    stock_actualizado TINYINT(1) DEFAULT 0,
+    observaciones TEXT,
+    FOREIGN KEY (proveedor_id) REFERENCES proveedores(id),
+    FOREIGN KEY (creado_por) REFERENCES usuarios(id)
 );
 
-INSERT INTO proveedores (ruc, razon_social, contacto, telefono, categoria_id) VALUES 
-('20512345678', 'Tecno Perú SAC', 'Luis Mendoza', '987654321', 1);
-
--- 9. Movimientos (Consumibles)
-CREATE TABLE movimientos (
+CREATE TABLE IF NOT EXISTS ordenes_compra_items (
     id INT AUTO_INCREMENT PRIMARY KEY,
-    item_id INT NOT NULL,
-    tipo ENUM('Entrada', 'Salida') NOT NULL,
-    cantidad INT NOT NULL,
-    responsable_id INT,
-    fecha DATETIME DEFAULT CURRENT_TIMESTAMP,
-    observacion TEXT,
-    FOREIGN KEY (item_id) REFERENCES items(id),
-    FOREIGN KEY (responsable_id) REFERENCES personal(id)
+    orden_id INT NOT NULL,
+    item_id INT,
+    categoria_nombre VARCHAR(100),
+    prefijo VARCHAR(10),
+    descripcion TEXT,
+    unidad VARCHAR(50) DEFAULT 'Unidad',
+    cantidad INT,
+    precio_unitario DECIMAL(12,2),
+    total DECIMAL(12,2),
+    FOREIGN KEY (orden_id) REFERENCES ordenes_compra(id)
+);
+
+CREATE TABLE IF NOT EXISTS ordenes_cuotas (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    orden_id INT NOT NULL,
+    numero_cuota INT,
+    total_cuotas INT,
+    monto_cuota DECIMAL(12,2),
+    fecha_vencimiento DATE,
+    pagado TINYINT(1) DEFAULT 0,
+    fecha_pago DATETIME,
+    voucher_url TEXT,
+    FOREIGN KEY (orden_id) REFERENCES ordenes_compra(id)
+);
+
+CREATE TABLE IF NOT EXISTS ordenes_compra_tokens (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    orden_id INT NOT NULL,
+    token VARCHAR(100) UNIQUE,
+    rol VARCHAR(50),
+    usado TINYINT(1) DEFAULT 0,
+    expiracion DATETIME,
+    FOREIGN KEY (orden_id) REFERENCES ordenes_compra(id)
 );
 
 -- 10. Mantenimientos
-CREATE TABLE mantenimientos (
+CREATE TABLE IF NOT EXISTS mantenimientos (
     id INT AUTO_INCREMENT PRIMARY KEY,
     activo_id INT NOT NULL,
-    tipo ENUM('Preventivo', 'Correctivo') NOT NULL,
-    tecnico VARCHAR(100),
-    estado ENUM('Programado', 'En proceso', 'Completado') DEFAULT 'Programado',
+    item_id INT,
+    proveedor_id INT,
+    orden_compra_id INT,
+    tipo ENUM('Preventivo', 'Correctivo') DEFAULT 'Correctivo',
+    estado VARCHAR(50),
     fecha_inicio DATE,
     fecha_fin DATE,
-    observacion TEXT,
-    FOREIGN KEY (activo_id) REFERENCES activos(id)
+    costo DECIMAL(12,2),
+    descripcion_problema TEXT,
+    descripcion_solucion TEXT,
+    FOREIGN KEY (activo_id) REFERENCES activos(id),
+    FOREIGN KEY (orden_compra_id) REFERENCES ordenes_compra(id)
 );
 
--- 11. Órdenes de Compra
-CREATE TABLE ordenes_compra (
+-- 11. Notificaciones
+CREATE TABLE IF NOT EXISTS notificaciones (
     id INT AUTO_INCREMENT PRIMARY KEY,
-    numero_oc VARCHAR(20) UNIQUE,
-    proveedor_id INT NOT NULL,
-    fecha DATE,
-    monto DECIMAL(10,2),
-    estado ENUM('Pendiente', 'Aprobada', 'Rechazada') DEFAULT 'Pendiente',
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (proveedor_id) REFERENCES proveedores(id)
+    usuario_id INT NOT NULL,
+    titulo VARCHAR(150),
+    mensaje TEXT,
+    tipo ENUM('info', 'success', 'warning', 'danger', 'error') DEFAULT 'info',
+    leido TINYINT(1) DEFAULT 0,
+    fecha TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
 );
+
+SET FOREIGN_KEY_CHECKS = 1;

@@ -1,5 +1,4 @@
-// Autenticación simple del lado cliente (demo).
-// En producción reemplazar por llamadas a /api/auth.php
+// assets/js/auth.js — Manejo de sesión y autenticación con el backend.
 window.Auth = {
   KEY: 'catolica_user',
   getUser() {
