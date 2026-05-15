@@ -150,11 +150,13 @@ window.Views.staff = function() {
     ${UI.pageHeader('Gestión de Personal','Docentes, Administrativos y Servicios', `
       <button class="btn btn-primary" onclick="newStaff()"><i data-lucide="plus"></i>Nuevo Personal</button>
     `)}
-    <div class="card overflow-hidden">
-      <table class="data">
-        <thead><tr><th>Código</th><th>DNI/ID</th><th>Nombre</th><th>Cargo</th><th>Área</th><th>Contacto</th><th class="text-right">Acciones</th></tr></thead>
-        <tbody id="staff-table-body"><tr><td colspan="7" class="text-center py-10 text-muted-foreground">Cargando...</td></tr></tbody>
-      </table>
+    <div class="card">
+      <div class="table-container">
+        <table class="data">
+          <thead><tr><th>Código</th><th>DNI/ID</th><th>Nombre</th><th>Cargo</th><th>Área</th><th>Contacto</th><th class="text-right">Acciones</th></tr></thead>
+          <tbody id="staff-table-body"><tr><td colspan="7" class="text-center py-10 text-muted-foreground">Cargando...</td></tr></tbody>
+        </table>
+      </div>
     </div>`;
 };
 window.toggleStaffStatus = async function(id, currentStatus, name) {

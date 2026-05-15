@@ -129,13 +129,15 @@ window.Views.rubros = function() {
     ${UI.pageHeader('Rubros de Proveedores','Categorización comercial de proveedores', `
       <button class="btn btn-primary" onclick="newRubro()"><i data-lucide="plus"></i>Nuevo rubro</button>
     `)}
-    <div class="card overflow-hidden">
-      <table class="data">
-        <thead><tr><th>Código</th><th>Nombre</th><th>Descripción</th><th class="text-right">Acciones</th></tr></thead>
-        <tbody id="rubros-table-body">
-          <tr><td colspan="4" class="text-center py-10 text-muted-foreground">Cargando...</td></tr>
-        </tbody>
-      </table>
+    <div class="card">
+      <div class="table-container">
+        <table class="data">
+          <thead><tr><th>Código</th><th>Nombre</th><th>Descripción</th><th class="text-right">Acciones</th></tr></thead>
+          <tbody id="rubros-table-body">
+            <tr><td colspan="4" class="text-center py-10 text-muted-foreground">Cargando...</td></tr>
+          </tbody>
+        </table>
+      </div>
     </div>`;
 };
 

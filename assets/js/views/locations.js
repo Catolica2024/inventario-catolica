@@ -195,11 +195,13 @@ window.Views.locations = function() {
     ${UI.pageHeader('Aulas y Espacios','Gestión de infraestructura y sedes', `
       <button class="btn btn-primary" onclick="newLocation()"><i data-lucide="plus"></i>Nuevo Espacio</button>
     `)}
-    <div class="card overflow-hidden">
-      <table class="data">
-        <thead><tr><th>Código</th><th>Nombre / Nro</th><th>Tipo</th><th>Sede</th><th>Responsable</th><th class="text-right">Acciones</th></tr></thead>
-        <tbody id="locations-table-body"><tr><td colspan="6" class="text-center py-10 text-muted-foreground">Cargando espacios...</td></tr></tbody>
-      </table>
+    <div class="card">
+      <div class="table-container">
+        <table class="data">
+          <thead><tr><th>Código</th><th>Nombre / Nro</th><th>Tipo</th><th>Sede</th><th>Responsable</th><th class="text-right">Acciones</th></tr></thead>
+          <tbody id="locations-table-body"><tr><td colspan="6" class="text-center py-10 text-muted-foreground">Cargando espacios...</td></tr></tbody>
+        </table>
+      </div>
     </div>`;
 };
 

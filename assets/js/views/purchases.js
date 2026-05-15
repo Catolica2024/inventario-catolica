@@ -141,30 +141,32 @@ window.Views['new-purchase'] = function () {
         </div>
 
         <!-- Ítems de la OC -->
-        <div class="card p-5">
-          <div class="flex items-center justify-between mb-4">
-            <h3 class="font-semibold flex items-center gap-2"><i data-lucide="list" class="w-4 h-4 text-primary"></i>Detalle de la compra</h3>
-            <button class="btn btn-outline btn-sm" onclick="addOCItem()"><i data-lucide="plus" class="w-4 h-4"></i>Agregar ítem</button>
-          </div>
-          <div class="overflow-x-auto">
-            <table class="data w-full text-sm" id="oc-items-table">
-              <thead>
-                <tr>
-                  <th class="w-8">#</th>
-                  <th class="w-48">Categoría</th>
-                  <th class="w-20">Prefijo</th>
-                  <th>Descripción / Detalle</th>
-                  <th class="w-28">Unidad</th>
-                  <th class="w-24">Cantidad</th>
-                  <th class="w-32">Precio Unit.</th>
-                  <th class="w-32 text-right">Total</th>
-                  <th class="w-10"></th>
-                </tr>
-              </thead>
-              <tbody id="oc-items-body">
-                <tr id="oc-empty-row"><td colspan="8" class="text-center py-6 text-muted-foreground">Agrega al menos un ítem para continuar.</td></tr>
-              </tbody>
-            </table>
+        <div class="card">
+          <div class="p-5">
+            <div class="flex items-center justify-between mb-4">
+              <h3 class="font-semibold flex items-center gap-2"><i data-lucide="list" class="w-4 h-4 text-primary"></i>Detalle de la compra</h3>
+              <button class="btn btn-outline btn-sm" onclick="addOCItem()"><i data-lucide="plus" class="w-4 h-4"></i>Agregar ítem</button>
+            </div>
+            <div class="table-container">
+              <table class="data w-full text-sm" id="oc-items-table">
+                <thead>
+                  <tr>
+                    <th class="w-8">#</th>
+                    <th class="w-48">Categoría</th>
+                    <th class="w-20">Prefijo</th>
+                    <th>Descripción / Detalle</th>
+                    <th class="w-28">Unidad</th>
+                    <th class="w-24">Cantidad</th>
+                    <th class="w-32">Precio Unit.</th>
+                    <th class="w-32 text-right">Total</th>
+                    <th class="w-10"></th>
+                  </tr>
+                </thead>
+                <tbody id="oc-items-body">
+                  <tr id="oc-empty-row"><td colspan="8" class="text-center py-6 text-muted-foreground">Agrega al menos un ítem para continuar.</td></tr>
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       </div>
@@ -1412,15 +1414,17 @@ window.Views.purchases = function () {
         <button class="btn btn-primary" onclick="Router.go('new-purchase')"><i data-lucide="plus" class="w-4 h-4 mr-2"></i>Nueva Orden</button>
       </div>
     `)}
-    <div class="card overflow-hidden">
-      <table class="data">
-        <thead>
-          <tr><th>N° OC/OS</th><th>Proveedor / Área</th><th>Fecha</th><th>Monto Total</th><th>Estado</th><th class="text-right">Acciones</th></tr>
-        </thead>
-        <tbody id="purchases-table-body">
-          <tr><td colspan="6" class="text-center py-10 text-muted-foreground">Cargando órdenes...</td></tr>
-        </tbody>
-      </table>
+    <div class="card">
+      <div class="table-container">
+        <table class="data">
+          <thead>
+            <tr><th>N° OC/OS</th><th>Proveedor / Área</th><th>Fecha</th><th>Monto Total</th><th>Estado</th><th class="text-right">Acciones</th></tr>
+          </thead>
+          <tbody id="purchases-table-body">
+            <tr><td colspan="6" class="text-center py-10 text-muted-foreground">Cargando órdenes...</td></tr>
+          </tbody>
+        </table>
+      </div>
     </div>`;
 };
 

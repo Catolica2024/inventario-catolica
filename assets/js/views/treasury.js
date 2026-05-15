@@ -20,23 +20,25 @@ window.Views.treasury = function () {
       </div>
 
       <!-- Tabla principal -->
-      <div class="card overflow-hidden">
-        <table class="data">
-          <thead>
-            <tr>
-              <th>Documento</th>
-              <th>Proveedor</th>
-              <th>Condición de Pago</th>
-              <th>Monto Total</th>
-              <th>Estado Pago</th>
-              <th>Documentación</th>
-              <th class="text-right">Acciones</th>
-            </tr>
-          </thead>
-          <tbody id="treasury-table-body">
-            <tr><td colspan="6" class="text-center py-10 text-muted-foreground">Cargando datos...</td></tr>
-          </tbody>
-        </table>
+      <div class="card">
+        <div class="table-container">
+          <table class="data">
+            <thead>
+              <tr>
+                <th>Documento</th>
+                <th>Proveedor</th>
+                <th>Condición de Pago</th>
+                <th>Monto Total</th>
+                <th>Estado Pago</th>
+                <th>Documentación</th>
+                <th class="text-right">Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="treasury-table-body">
+              <tr><td colspan="6" class="text-center py-10 text-muted-foreground">Cargando datos...</td></tr>
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>`;
 };

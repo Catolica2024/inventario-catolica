@@ -91,11 +91,13 @@ window.Views.sedes = function() {
     ${UI.pageHeader('Gestión de Sedes','Sucursales y campus del colegio', `
       <button class="btn btn-primary" onclick="newSede()"><i data-lucide="plus"></i>Nueva sede</button>
     `)}
-    <div class="card overflow-hidden">
-      <table class="data">
-        <thead><tr><th>Código</th><th>Nombre</th><th>Distrito</th><th>Provincia</th><th class="text-right">Acciones</th></tr></thead>
-        <tbody id="sedes-table-body"><tr><td colspan="5" class="text-center py-10 text-muted-foreground">Cargando...</td></tr></tbody>
-      </table>
+    <div class="card">
+      <div class="table-container">
+        <table class="data">
+          <thead><tr><th>Código</th><th>Nombre</th><th>Distrito</th><th>Provincia</th><th class="text-right">Acciones</th></tr></thead>
+          <tbody id="sedes-table-body"><tr><td colspan="5" class="text-center py-10 text-muted-foreground">Cargando...</td></tr></tbody>
+        </table>
+      </div>
     </div>`;
 };
 window.Views.sedes.afterMount = loadSedes;

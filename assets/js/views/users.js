@@ -144,11 +144,13 @@ window.Views.users = function() {
         <button class="btn btn-primary" onclick="newUser()"><i data-lucide="user-plus"></i>Nuevo usuario</button>
       </div>
     `)}
-    <div class="card overflow-hidden">
-      <table class="data">
-        <thead><tr><th>Nombre</th><th>Email</th><th>Rol</th><th>Estado</th><th class="text-right">Acciones</th></tr></thead>
-        <tbody id="users-table-body"><tr><td colspan="5" class="text-center py-10 text-muted-foreground">Cargando...</td></tr></tbody>
-      </table>
+    <div class="card">
+      <div class="table-container">
+        <table class="data">
+          <thead><tr><th>Nombre</th><th>Email</th><th>Rol</th><th>Estado</th><th class="text-right">Acciones</th></tr></thead>
+          <tbody id="users-table-body"><tr><td colspan="5" class="text-center py-10 text-muted-foreground">Cargando...</td></tr></tbody>
+        </table>
+      </div>
     </div>`;
 };
 window.toggleUserStatus = async function(id, currentStatus, name) {
@@ -210,7 +212,7 @@ window.openRolesModal = async function() {
                         </p>
                         <p class="text-[10px] text-muted-foreground mt-1">Habilite o deshabilite la capacidad de borrar registros históricos para cada perfil. El perfil <b>admin</b> siempre mantiene esta capacidad por integridad del sistema.</p>
                     </div>
-                    <div class="overflow-x-auto">
+                    <div class="table-container">
                         <table class="w-full text-left">
                             <thead class="text-[10px] uppercase font-bold text-muted-foreground border-b bg-muted/30">
                                 <tr>

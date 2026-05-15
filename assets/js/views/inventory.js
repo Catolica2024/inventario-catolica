@@ -216,7 +216,7 @@ window.Views.inventory = function() {
             </div>
         </div>
 
-        <div class="card overflow-hidden shadow-2xl shadow-slate-200/40">
+        <div class="card shadow-2xl shadow-slate-200/40">
             <div class="table-container">
                 <table class="data">
                     <thead>

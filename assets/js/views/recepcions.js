@@ -360,15 +360,17 @@ window.startAssetQRScannerForOnboarding = function() {
 window.Views.recepcions = function() {
   return `
     ${UI.pageHeader('Recepción de Almacén', 'Control de ingreso de mercadería y equipos')}
-    <div class="card overflow-hidden">
-      <table class="data">
-        <thead>
-          <tr><th>N° OC/OS</th><th>Proveedor / Área</th><th>Fecha</th><th>Estado</th><th class="text-right">Acciones</th></tr>
-        </thead>
-        <tbody id="recepcions-table-body">
-          <tr><td colspan="5" class="text-center py-10 text-muted-foreground">Cargando...</td></tr>
-        </tbody>
-      </table>
+    <div class="card">
+      <div class="table-container">
+        <table class="data">
+          <thead>
+            <tr><th>N° OC/OS</th><th>Proveedor / Área</th><th>Fecha</th><th>Estado</th><th class="text-right">Acciones</th></tr>
+          </thead>
+          <tbody id="recepcions-table-body">
+            <tr><td colspan="5" class="text-center py-10 text-muted-foreground">Cargando...</td></tr>
+          </tbody>
+        </table>
+      </div>
     </div>`;
 };
 

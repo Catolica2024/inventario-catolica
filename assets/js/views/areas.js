@@ -128,11 +128,13 @@ window.Views.areas = function() {
     ${UI.pageHeader('Áreas y Niveles','Gestión de la estructura organizacional por sede', `
       <button class="btn btn-primary" onclick="newArea()"><i data-lucide="plus"></i>Nueva Área</button>
     `)}
-    <div class="card overflow-hidden">
-      <table class="data">
-        <thead><tr><th>Código</th><th>Nombre</th><th>Sede</th><th>Descripción</th><th class="text-right">Acciones</th></tr></thead>
-        <tbody id="areas-table-body"><tr><td colspan="5" class="text-center py-10 text-muted-foreground">Cargando áreas...</td></tr></tbody>
-      </table>
+    <div class="card">
+      <div class="table-container">
+        <table class="data">
+          <thead><tr><th>Código</th><th>Nombre</th><th>Sede</th><th>Descripción</th><th class="text-right">Acciones</th></tr></thead>
+          <tbody id="areas-table-body"><tr><td colspan="5" class="text-center py-10 text-muted-foreground">Cargando áreas...</td></tr></tbody>
+        </table>
+      </div>
     </div>`;
 };
 

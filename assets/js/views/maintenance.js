@@ -52,11 +52,11 @@
                     </div>
                 </div>
 
-                <div class="card overflow-hidden">
+                <div class="card">
                     <div class="p-4 border-b border-border bg-muted/20">
                         <h3 class="font-bold text-sm uppercase">Historial de Mantenimientos</h3>
                     </div>
-                    <div class="overflow-x-auto">
+                    <div class="table-container">
                         <table class="w-full text-left">
                             <thead class="bg-muted/50 text-[10px] uppercase font-bold text-muted-foreground">
                                 <tr>

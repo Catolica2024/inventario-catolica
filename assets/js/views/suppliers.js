@@ -101,11 +101,13 @@ window.Views.suppliers = function() {
     ${UI.pageHeader('Gestión de Proveedores','Directorio maestro de socios comerciales', `
       <button class="btn btn-primary" onclick="newSupplier()"><i data-lucide="plus"></i>Nuevo Proveedor</button>
     `)}
-    <div class="card overflow-hidden">
-      <table class="data">
-        <thead><tr><th>Proveedor / RUC</th><th>Rubro</th><th>Contacto</th><th>Teléfono</th><th>Estado</th><th class="text-right">Acciones</th></tr></thead>
-        <tbody id="suppliers-table-body"><tr><td colspan="6" class="text-center py-10 text-muted-foreground">Cargando proveedores...</td></tr></tbody>
-      </table>
+    <div class="card">
+      <div class="table-container">
+        <table class="data">
+          <thead><tr><th>Proveedor / RUC</th><th>Rubro</th><th>Contacto</th><th>Teléfono</th><th>Estado</th><th class="text-right">Acciones</th></tr></thead>
+          <tbody id="suppliers-table-body"><tr><td colspan="6" class="text-center py-10 text-muted-foreground">Cargando proveedores...</td></tr></tbody>
+        </table>
+      </div>
     </div>`;
 };
 

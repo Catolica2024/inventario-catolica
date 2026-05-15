@@ -8,10 +8,12 @@ window.Views.history = function() {
   ];
   return `
     ${UI.pageHeader('Historial','Bitácora detallada de operaciones del sistema')}
-    <div class="card overflow-hidden">
-      <table class="data">
-        <thead><tr><th>Fecha</th><th>Usuario</th><th>Acción</th><th>Detalle</th></tr></thead>
-        <tbody>${events.map(e=>`<tr>${e.map(v=>`<td>${v}</td>`).join('')}</tr>`).join('')}</tbody>
-      </table>
+    <div class="card">
+      <div class="table-container">
+        <table class="data">
+          <thead><tr><th>Fecha</th><th>Usuario</th><th>Acción</th><th>Detalle</th></tr></thead>
+          <tbody${events.map(e=>`<tr>${e.map(v=>`<td>${v}</td>`).join('')}</tr>`).join('')}</tbody>
+        </table>
+      </div>
     </div>`;
 };

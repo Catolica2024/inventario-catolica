@@ -69,7 +69,7 @@ window.Views.dashboard.afterMount = async function(user) {
             </div>
           </div>
 
-          <div class="card overflow-hidden border-primary/5 shadow-xl shadow-slate-200/50">
+          <div class="card border-primary/5 shadow-xl shadow-slate-200/50">
             <div class="p-6 border-b border-border bg-slate-50/50">
                 <h3 class="text-sm font-black uppercase tracking-[0.15em] text-primary flex items-center gap-2">
                     <i data-lucide="activity" class="w-4 h-4"></i> Mantenimientos Recientes

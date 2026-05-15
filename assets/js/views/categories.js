@@ -80,11 +80,13 @@ window.Views['categories-inv'] = function() {
     ${UI.pageHeader('Categorías de Inventario','Configuración de rubros y prefijos de codificación', `
       <button class="btn btn-primary" onclick="newInvCategory()"><i data-lucide="plus"></i>Nueva Categoría</button>
     `)}
-    <div class="card overflow-hidden">
-      <table class="data">
-        <thead><tr><th>Prefijo</th><th>Nombre</th><th>Tipo</th><th class="text-center">Stock Mín.</th><th>Descripción</th><th class="text-right">Acciones</th></tr></thead>
-        <tbody id="categories-inv-table-body"><tr><td colspan="6" class="text-center py-10 text-muted-foreground">Cargando categorías...</td></tr></tbody>
-      </table>
+    <div class="card">
+      <div class="table-container">
+        <table class="data">
+          <thead><tr><th>Prefijo</th><th>Nombre</th><th>Tipo</th><th class="text-center">Stock Mín.</th><th>Descripción</th><th class="text-right">Acciones</th></tr></thead>
+          <tbody id="categories-inv-table-body"><tr><td colspan="6" class="text-center py-10 text-muted-foreground">Cargando categorías...</td></tr></tbody>
+        </table>
+      </div>
     </div>`;
 };
 

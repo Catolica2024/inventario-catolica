@@ -316,15 +316,17 @@ window.Views.approvals = function() {
           <i data-lucide="history" class="w-4 h-4 text-muted-foreground"></i>
           <h2 class="font-semibold">Historial de resoluciones</h2>
         </div>
-        <div class="card overflow-hidden">
-          <table class="data text-sm">
-            <thead>
-              <tr><th>N° OC</th><th>Proveedor</th><th>Fecha</th><th>Monto</th><th>Estado</th><th class="text-right"></th></tr>
-            </thead>
-            <tbody id="approvals-history-body">
-              <tr><td colspan="5" class="text-center py-8 text-muted-foreground">Cargando...</td></tr>
-            </tbody>
-          </table>
+        <div class="card">
+          <div class="table-container">
+            <table class="data text-sm">
+              <thead>
+                <tr><th>N° OC</th><th>Proveedor</th><th>Fecha</th><th>Monto</th><th>Estado</th><th class="text-right"></th></tr>
+              </thead>
+              <tbody id="approvals-history-body">
+                <tr><td colspan="5" class="text-center py-8 text-muted-foreground">Cargando...</td></tr>
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
 

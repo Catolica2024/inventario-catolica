@@ -31,22 +31,24 @@ window.Views.assignments = function () {
             </div>
         `)}
 
-        <div class="card overflow-hidden">
-            <table class="data">
-                <thead>
-                    <tr>
-                        <th>Activo / Código</th>
-                        <th>Asignado a</th>
-                        <th>Fecha Entrega</th>
-                        <th>Estado</th>
-                        <th>Fecha Devolución</th>
-                        <th class="text-right">Acciones</th>
-                    </tr>
-                </thead>
-                <tbody id="assignments-table-body">
-                    <tr><td colspan="6" class="text-center py-10">Cargando asignaciones...</td></tr>
-                </tbody>
-            </table>
+        <div class="card">
+            <div class="table-container">
+                <table class="data">
+                    <thead>
+                        <tr>
+                            <th>Activo / Código</th>
+                            <th>Asignado a</th>
+                            <th>Fecha Entrega</th>
+                            <th>Estado</th>
+                            <th>Fecha Devolución</th>
+                            <th class="text-right">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody id="assignments-table-body">
+                        <tr><td colspan="6" class="text-center py-10">Cargando asignaciones...</td></tr>
+                    </tbody>
+                </table>
+            </div>
         </div>
     `;
 };
@@ -365,23 +367,25 @@ window.Views.transfers = function () {
             </div>
         </div>
 
-        <div class="card overflow-hidden">
-            <table class="data">
-                <thead>
-                    <tr>
-                        <th>Fecha</th>
-                        <th>Bien / Artículo</th>
-                        <th>Origen</th>
-                        <th>Destino</th>
-                        <th class="text-center">Cant.</th>
-                        <th>Responsable</th>
-                        <th class="text-right">Acciones</th>
-                    </tr>
-                </thead>
-                <tbody id="transfers-table-body">
-                    <tr><td colspan="7" class="text-center py-10">Cargando historial de traslados...</td></tr>
-                </tbody>
-            </table>
+        <div class="card">
+            <div class="table-container">
+                <table class="data">
+                    <thead>
+                        <tr>
+                            <th>Fecha</th>
+                            <th>Bien / Artículo</th>
+                            <th>Origen</th>
+                            <th>Destino</th>
+                            <th class="text-center">Cant.</th>
+                            <th>Responsable</th>
+                            <th class="text-right">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody id="transfers-table-body">
+                        <tr><td colspan="7" class="text-center py-10">Cargando historial de traslados...</td></tr>
+                    </tbody>
+                </table>
+            </div>
         </div>
     `;
 };
@@ -887,22 +891,24 @@ window.Views.dispatch = function () {
             </div>
         `)}
 
-        <div class="card overflow-hidden">
-            <table class="data">
-                <thead>
-                    <tr>
-                        <th>Fecha</th>
-                        <th>Insumo</th>
-                        <th>Entregado a</th>
-                        <th class="text-center">Cant.</th>
-                        <th>Entregado por</th>
-                        <th>Observaciones</th>
-                    </tr>
-                </thead>
-                <tbody id="dispatch-table-body">
-                    <tr><td colspan="6" class="text-center py-10">Cargando historial de despachos...</td></tr>
-                </tbody>
-            </table>
+        <div class="card">
+            <div class="table-container">
+                <table class="data">
+                    <thead>
+                        <tr>
+                            <th>Fecha</th>
+                            <th>Insumo</th>
+                            <th>Entregado a</th>
+                            <th class="text-center">Cant.</th>
+                            <th>Entregado por</th>
+                            <th class="text-right">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody id="dispatch-table-body">
+                        <tr><td colspan="6" class="text-center py-10">Cargando historial de despachos...</td></tr>
+                    </tbody>
+                </table>
+            </div>
         </div>
     `;
 };
@@ -1273,7 +1279,7 @@ window.viewCatalogItem = async function (id) {
                             <h4 class="text-xs font-bold text-muted-foreground uppercase flex items-center gap-2 mb-2">
                                 <i data-lucide="list-ordered" class="w-3.5 h-3.5"></i> Historial de Movimientos
                             </h4>
-                            <div class="max-h-[250px] overflow-y-auto pr-2">
+                            <div class="max-h-[250px] table-container pr-2">
                                 <table class="w-full text-left text-[11px]">
                                     <thead class="sticky top-0 bg-white border-b border-border">
                                         <tr>
