@@ -1,6 +1,14 @@
 <?php
 // includes/mailer.php - Lógica de envío de correos institucionales
 
+require_once __DIR__ . '/phpmailer/Exception.php';
+require_once __DIR__ . '/phpmailer/PHPMailer.php';
+require_once __DIR__ . '/phpmailer/SMTP.php';
+
+use PHPMailer\PHPMailer\PHPMailer;
+use PHPMailer\PHPMailer\SMTP;
+use PHPMailer\PHPMailer\Exception;
+
 class Mailer {
     // Configuración de correos (Ajustar según necesidad)
     private static $EMAILS = [
@@ -144,12 +152,41 @@ class Mailer {
     }
 
     private static function sendHTML($to, $subject, $html) {
-        $headers = "MIME-Version: 1.0" . "\r\n";
-        $headers .= "Content-type:text/html;charset=UTF-8" . "\r\n";
-        $headers .= "From: Católica School <operations@colegiolacatolica.edu.pe>" . "\r\n";
-        
-        // El usuario solicitó remover las copias CC por ahora
-        return mail($to, $subject, $html, $headers);
+        $mail = new PHPMailer(true);
+
+        try {
+            $mail->isSMTP();
+            $mail->Host       = SMTP_HOST;
+            $mail->SMTPAuth   = true;
+            $mail->Username   = SMTP_USER;
+            $mail->Password   = SMTP_PASS;
+            
+            if (SMTP_SECURE === 'ssl') {
+                $mail->SMTPSecure = PHPMailer::ENCRYPTION_SMTPS;
+            } else if (SMTP_SECURE === 'tls') {
+                $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
+            } else {
+                $mail->SMTPSecure = '';
+                $mail->SMTPAuth   = false;
+            }
+            
+            $mail->Port       = SMTP_PORT;
+            $mail->CharSet    = 'UTF-8';
+
+            // Destinatarios
+            $mail->setFrom(SMTP_FROM_EMAIL, SMTP_FROM_NAME);
+            $mail->addAddress($to);
+
+            // Contenido
+            $mail->isHTML(true);
+            $mail->Subject = $subject;
+            $mail->Body    = $html;
+
+            return $mail->send();
+        } catch (Exception $e) {
+            error_log("PHPMailer Error enviando a {$to}: " . $mail->ErrorInfo);
+            return false;
+        }
     }
 
     private static function getTemplate($oc, $items, $token, $rol, $base_url) {
@@ -272,12 +309,46 @@ class Mailer {
         </div>";
     }
     public static function sendPaymentVoucherToSupplier($data) {
-        $headers = "MIME-Version: 1.0" . "\r\n";
-        $headers .= "Content-type:text/html;charset=UTF-8" . "\r\n";
-        $headers .= "From: Católica School <operations@colegiolacatolica.edu.pe>" . "\r\n";
-        $headers .= "Cc: " . ($data['cc'] ?? 'compras@colegiolacatolica.edu.pe') . "\r\n";
-        
-        return @mail($data['to'], $data['subject'], self::getPaymentVoucherTemplate($data), $headers);
+        $mail = new PHPMailer(true);
+
+        try {
+            $mail->isSMTP();
+            $mail->Host       = SMTP_HOST;
+            $mail->SMTPAuth   = true;
+            $mail->Username   = SMTP_USER;
+            $mail->Password   = SMTP_PASS;
+            
+            if (SMTP_SECURE === 'ssl') {
+                $mail->SMTPSecure = PHPMailer::ENCRYPTION_SMTPS;
+            } else if (SMTP_SECURE === 'tls') {
+                $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
+            } else {
+                $mail->SMTPSecure = '';
+                $mail->SMTPAuth   = false;
+            }
+            
+            $mail->Port       = SMTP_PORT;
+            $mail->CharSet    = 'UTF-8';
+
+            // Destinatarios
+            $mail->setFrom(SMTP_FROM_EMAIL, SMTP_FROM_NAME);
+            $mail->addAddress($data['to']);
+            
+            $cc = $data['cc'] ?? 'compras@colegiolacatolica.edu.pe';
+            if ($cc) {
+                $mail->addCC($cc);
+            }
+
+            // Contenido
+            $mail->isHTML(true);
+            $mail->Subject = $data['subject'];
+            $mail->Body    = self::getPaymentVoucherTemplate($data);
+
+            return $mail->send();
+        } catch (Exception $e) {
+            error_log("PHPMailer Error en sendPaymentVoucherToSupplier a {$data['to']}: " . $mail->ErrorInfo);
+            return false;
+        }
     }
 
     private static function getPaymentVoucherTemplate($d) {
