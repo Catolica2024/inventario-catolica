@@ -86,6 +86,9 @@ CREATE TABLE IF NOT EXISTS items (
     categoria_inventario_id INT,
     stock_minimo INT DEFAULT 0,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    unidad_medida VARCHAR(50) DEFAULT 'Unidad',
+    unidad_compra VARCHAR(50) DEFAULT 'Unidad',
+    factor_conversion DECIMAL(10,2) DEFAULT 1.00,
     FOREIGN KEY (categoria_inventario_id) REFERENCES categorias_inventario(id)
 );
 
@@ -210,6 +213,7 @@ CREATE TABLE IF NOT EXISTS ordenes_compra_items (
     cantidad INT,
     precio_unitario DECIMAL(12,2),
     total DECIMAL(12,2),
+    factor_conversion DECIMAL(10,2) DEFAULT 1.00,
     FOREIGN KEY (orden_id) REFERENCES ordenes_compra(id)
 );
 

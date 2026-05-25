@@ -173,7 +173,7 @@ try {
 
             // Insertar ítems
             if (!empty($items)) {
-                $si = $pdo->prepare("INSERT INTO ordenes_compra_items (orden_id, item_id, categoria_nombre, prefijo, descripcion, unidad, cantidad, precio_unitario, total) VALUES (?,?,?,?,?,?,?,?,?)");
+                $si = $pdo->prepare("INSERT INTO ordenes_compra_items (orden_id, item_id, categoria_nombre, prefijo, descripcion, unidad, cantidad, precio_unitario, total, factor_conversion) VALUES (?,?,?,?,?,?,?,?,?,?)");
                 foreach ($items as $it) {
                     $si->execute([
                         $orden_id,
@@ -184,7 +184,8 @@ try {
                         $it['unidad'] ?? 'Unidad',
                         $it['cantidad'],
                         $it['precio_unitario'],
-                        $it['total']
+                        $it['total'],
+                        $it['factor_conversion'] ?? 1.00
                     ]);
                 }
             }
@@ -626,12 +627,20 @@ try {
 
                         foreach ($ocItems as $item) {
                             if ($item['categoria_tipo'] === 'insumo' || $item['categoria_tipo'] === 'mobiliario') {
+                                $factor = !empty($item['factor_conversion']) ? floatval($item['factor_conversion']) : 1.00;
+                                $cantidadConvertida = intval(round($item['cantidad'] * $factor));
+
+                                $obs = "Entrada automática por recepción de " . $ocData['numero_oc'];
+                                if ($factor != 1.00) {
+                                    $obs .= " (" . $item['cantidad'] . " " . ($item['unidad'] ?: 'Und.') . " x " . $factor . ")";
+                                }
+
                                 // Registrar movimiento de entrada automático
                                 $mov = $pdo->prepare("INSERT INTO movimientos (item_id, tipo, cantidad, observacion, fecha) VALUES (?, 'Entrada', ?, ?, NOW())");
                                 $mov->execute([
                                     $item['item_id'], 
-                                    $item['cantidad'], 
-                                    "Entrada automática por recepción de " . $ocData['numero_oc']
+                                    $cantidadConvertida, 
+                                    $obs
                                 ]);
                             } else if ($item['categoria_tipo'] === 'equipo' || $item['categoria_tipo'] === 'activo') {
                                 // Crear registros de activos pendientes (uno por cada unidad comprada)

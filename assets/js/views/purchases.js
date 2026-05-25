@@ -157,19 +157,21 @@ window.Views['new-purchase'] = function () {
               <table class="data w-full text-sm" id="oc-items-table">
                 <thead>
                   <tr>
-                    <th class="w-8">#</th>
-                    <th class="w-48">Categoría</th>
-                    <th class="w-20">Prefijo</th>
-                    <th>Descripción / Detalle</th>
-                    <th class="w-28">Unidad</th>
-                    <th class="w-24">Cantidad</th>
-                    <th class="w-32">Precio Unit.</th>
-                    <th class="w-32 text-right">Total</th>
-                    <th class="w-10"></th>
+                    <th class="w-8 !p-1 text-center">#</th>
+                    <th class="w-48 !p-1">Categoría</th>
+                    <th class="w-20 !p-1 text-center">Prefijo</th>
+                    <th class="!p-1">Descripción / Detalle</th>
+                    <th class="w-28 !p-1">U. Compra</th>
+                    <th class="w-20 !p-1 text-right">Factor</th>
+                    <th class="w-20 !p-1 text-right">Cant.</th>
+                    <th class="w-32 !p-1 text-center">Equiv. Almacén</th>
+                    <th class="w-28 !p-1 text-right">Precio Unit.</th>
+                    <th class="w-28 text-right !p-1">Total</th>
+                    <th class="w-10 !p-1"></th>
                   </tr>
                 </thead>
                 <tbody id="oc-items-body">
-                  <tr id="oc-empty-row"><td colspan="8" class="text-center py-6 text-muted-foreground">Agrega al menos un ítem para continuar.</td></tr>
+                  <tr id="oc-empty-row"><td colspan="11" class="text-center py-6 text-muted-foreground">Agrega al menos un ítem para continuar.</td></tr>
                 </tbody>
               </table>
             </div>
@@ -275,8 +277,8 @@ window.Views['new-purchase'].afterMount = async function () {
     areaSel.appendChild(o);
   });
 
-  // Fecha requerida por defecto: hoy + 7 días
-  const def = new Date(); def.setDate(def.getDate() + 7);
+  // Fecha requerida por defecto: hoy
+  const def = new Date();
   document.getElementById('oc-fecha-req').value = def.toISOString().split('T')[0];
 
   _ocItemRows = 0;
@@ -448,22 +450,39 @@ window.addOCItem = function () {
   const tr = document.createElement('tr');
   tr.id = `oc-row-${n}`;
   tr.innerHTML = `
-    <td class="text-center text-muted-foreground text-xs">${n}</td>
-    <td>
-        <input class="input w-full text-sm font-bold" id="oc-cat-${n}" list="oc-categories-list" placeholder="Categoría..." onchange="onCategorySelect(${n})">
+    <td class="text-center text-muted-foreground text-xs !p-1">${n}</td>
+    <td class="!p-1">
+        <input class="input w-full text-sm font-bold !px-2 !h-9" id="oc-cat-${n}" list="oc-categories-list" placeholder="Categoría..." onchange="onCategorySelect(${n})">
     </td>
-    <td>
-        <input class="input w-full text-sm font-mono text-center bg-muted cursor-not-allowed" id="oc-prefijo-${n}" readonly placeholder="---">
+    <td class="!p-1">
+        <input class="input w-full text-sm font-mono text-center bg-muted cursor-not-allowed !px-1 !h-9" id="oc-prefijo-${n}" readonly placeholder="---">
     </td>
-    <td>
-        <input class="input w-full text-sm" id="oc-desc-${n}" placeholder="Detalle adicional...">
+    <td class="!p-1">
+        <input class="input w-full text-sm !px-2 !h-9" id="oc-desc-${n}" placeholder="Detalle adicional...">
     </td>
-    <td><input class="input w-full text-sm" id="oc-unidad-${n}" placeholder="Und." value="Unidad"></td>
-    <td><input class="input w-full text-sm text-right" id="oc-qty-${n}" type="number" min="1" value="1" oninput="recalcOCRow(${n})"></td>
-    <td><input class="input w-full text-sm text-right" id="oc-pu-${n}" type="number" min="0" step="0.01" value="0.00" oninput="recalcOCRow(${n})"></td>
-    <td class="text-right font-semibold" id="oc-total-${n}">0.00</td>
-    <td class="text-center">
-      <button class="btn btn-ghost p-1 text-destructive" onclick="removeOCItem(${n})"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+    <td class="!p-1">
+      <select class="select w-full text-sm !px-2 !h-9" id="oc-unidad-${n}" onchange="recalcOCRow(${n})">
+        <option value="Unidad">Unidad(es)</option>
+        <option value="Bidón">Bidón(es)</option>
+        <option value="Paquete">Paquete(s)</option>
+        <option value="Saco">Saco(s)</option>
+        <option value="Caja">Caja(s)</option>
+        <option value="Galón">Galón(es)</option>
+        <option value="Kilo">Kilo(s)</option>
+        <option value="Litro">Litro(s)</option>
+      </select>
+    </td>
+    <td class="!p-1"><input class="input w-full text-sm text-right font-semibold !px-2 !h-9" id="oc-factor-${n}" type="number" min="1" step="1" value="1" oninput="recalcOCRow(${n})"></td>
+    <td class="!p-1"><input class="input w-full text-sm text-right !px-2 !h-9" id="oc-qty-${n}" type="number" min="1" value="1" oninput="recalcOCRow(${n})"></td>
+    <td class="!p-1">
+        <input class="input w-full text-[11px] font-semibold text-green-700 bg-green-50 border-green-200 text-center cursor-not-allowed !px-1 !h-9" id="oc-equiv-${n}" readonly placeholder="1 Unid.">
+    </td>
+    <td class="!p-1"><input class="input w-full text-sm text-right !px-2 !h-9" id="oc-pu-${n}" type="number" min="0" step="0.01" value="0.00" oninput="recalcOCRow(${n})"></td>
+    <td class="text-right font-semibold !p-1" id="oc-total-${n}">0.00</td>
+    <td class="!p-1" style="text-align:center;overflow:visible;">
+      <button style="display:inline-flex;align-items:center;justify-content:center;width:2.25rem;height:2.25rem;border-radius:0.5rem;background:transparent;color:#ef4444;cursor:pointer;border:none;padding:0;flex-shrink:0;" onclick="removeOCItem(${n})" title="Eliminar fila">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path><path d="M10 11v6"></path><path d="M14 11v6"></path><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"></path></svg>
+      </button>
     </td>`;
   tbody.appendChild(tr);
   lucide.createIcons();
@@ -484,17 +503,48 @@ window.onCategorySelect = function (n) {
     if (masterItem) {
         input.dataset.itemId = masterItem.id;
         input.dataset.categoryId = cat.id;
+        input.dataset.baseUnit = masterItem.unidad_medida || 'Unidad';
+        
+        // Auto-completar unidad de compra y factor
+        const undComp = document.getElementById(`oc-unidad-${n}`);
+        const factorEl = document.getElementById(`oc-factor-${n}`);
+        
+        if (undComp) {
+            const dbVal = masterItem.unidad_compra || 'Unidad';
+            // Verificar si el valor existe en el select
+            let exists = Array.from(undComp.options).some(opt => opt.value.toLowerCase() === dbVal.toLowerCase());
+            if (!exists) {
+                // Agregar dinámicamente si no existe (robusto ante nuevas unidades)
+                const newOpt = document.createElement('option');
+                newOpt.value = dbVal;
+                newOpt.textContent = dbVal;
+                undComp.appendChild(newOpt);
+            }
+            // Seleccionar
+            for (let opt of undComp.options) {
+                if (opt.value.toLowerCase() === dbVal.toLowerCase()) {
+                    undComp.value = opt.value;
+                    break;
+                }
+            }
+        }
+        
+        if (factorEl) factorEl.value = parseFloat(masterItem.factor_conversion || 1);
+        
         UI.toast(`Vínculo de inventario detectado: ${masterItem.nombre}`, 'info');
+        recalcOCRow(n);
     } else {
-        // Si no existe, usamos el ID de categoría como fallback (el backend debería manejarlo)
-        // pero lo ideal es que exista un ítem.
+        // Si no existe, usamos el ID de categoría como fallback
         input.dataset.categoryId = cat.id;
+        input.dataset.baseUnit = 'Unidad';
         UI.toast(`Categoría vinculada. Nota: No se encontró ítem maestro para stock.`, 'warning');
+        recalcOCRow(n);
     }
   } else {
     prefijoEl.value = '---';
     delete input.dataset.categoryId;
     delete input.dataset.itemId;
+    delete input.dataset.baseUnit;
     if (val) UI.toast('Esa categoría no existe. Debe crearla primero.', 'warning');
   }
 };
@@ -504,7 +554,7 @@ window.removeOCItem = function (n) {
   recalcOCTotals();
   if (!document.getElementById('oc-items-body').querySelector('tr')) {
     const tbody = document.getElementById('oc-items-body');
-    tbody.innerHTML = '<tr id="oc-empty-row"><td colspan="9" class="text-center py-6 text-muted-foreground">Agrega al menos un ítem para continuar.</td></tr>';
+    tbody.innerHTML = '<tr id="oc-empty-row"><td colspan="11" class="text-center py-6 text-muted-foreground">Agrega al menos un ítem para continuar.</td></tr>';
   }
 };
 
@@ -514,6 +564,17 @@ window.recalcOCRow = function (n) {
   const total = qty * pu;
   const el = document.getElementById(`oc-total-${n}`);
   if (el) el.textContent = total.toFixed(2);
+
+  // Calcular equivalencia en unidades base para visual aid
+  const factor = parseFloat(document.getElementById(`oc-factor-${n}`)?.value || 1);
+  const catInput = document.getElementById(`oc-cat-${n}`);
+  const baseUnit = catInput?.dataset?.baseUnit || 'Unid.';
+  const equivEl = document.getElementById(`oc-equiv-${n}`);
+  if (equivEl) {
+    const totalBase = qty * factor;
+    equivEl.value = `${totalBase} ${baseUnit}`;
+  }
+
   recalcOCTotals();
 };
 
@@ -602,27 +663,28 @@ function getOCItems() {
   for (let i = 1; i <= _ocItemRows; i++) {
     const catEl = document.getElementById(`oc-cat-${i}`);
     const descEl = document.getElementById(`oc-desc-${i}`);
-    const catNombre = catEl?.value?.trim();
-    if (!catNombre) continue; // Fila vacía, se omite
+    if (!catEl) continue; // Fila eliminada, se omite
+    
+    const catNombre = catEl.value?.trim();
+    if (!catNombre) continue; // Fila vacía
     const desc = descEl?.value?.trim() || catNombre;
     const qty = parseFloat(document.getElementById(`oc-qty-${i}`)?.value || 0);
     const pu = parseFloat(document.getElementById(`oc-pu-${i}`)?.value || 0);
     const prefijo = document.getElementById(`oc-prefijo-${i}`)?.value || '';
+    const factor = parseFloat(document.getElementById(`oc-factor-${i}`)?.value || 1);
 
     // Validar que la categoría exista en el sistema
     const catValida = _ocCategories.find(c => c.nombre === catNombre);
     if (!catValida) {
       // Resaltar la fila con error
-      if (catEl) {
-        catEl.classList.add('border-red-500', 'ring-2', 'ring-red-400');
-        setTimeout(() => catEl.classList.remove('border-red-500', 'ring-2', 'ring-red-400'), 4000);
-      }
+      catEl.classList.add('border-red-500', 'ring-2', 'ring-red-400');
+      setTimeout(() => catEl.classList.remove('border-red-500', 'ring-2', 'ring-red-400'), 4000);
       invalidRow = { row: i, nombre: catNombre };
-      continue; // Marcar pero seguir para detectar todos los errores
+      continue;
     }
 
     // Categoría válida: limpiar estilos de error si hubiera
-    catEl?.classList.remove('border-red-500', 'ring-2', 'ring-red-400');
+    catEl.classList.remove('border-red-500', 'ring-2', 'ring-red-400');
 
     items.push({
       item_id: catEl.dataset.itemId || catValida.id || null,
@@ -632,7 +694,8 @@ function getOCItems() {
       unidad: document.getElementById(`oc-unidad-${i}`)?.value || 'Unidad',
       cantidad: qty,
       precio_unitario: pu,
-      total: qty * pu
+      total: qty * pu,
+      factor_conversion: factor
     });
   }
   return { items, invalidRow };

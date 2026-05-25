@@ -120,11 +120,16 @@ function renderInventoryRows(data) {
                     ${isUnit ? 
                         `<span class="badge ${getStatusBadge(d.estado)}">${d.estado}</span>` : 
                         `<div class="flex flex-col items-center">
-                            <div class="flex items-center gap-1.5">
-                                <span class="font-black text-lg ${d.stock_actual <= 0 ? 'text-destructive' : d.stock_actual <= (d.categoria_stock_minimo || d.stock_minimo) ? 'text-amber-500' : 'text-emerald-600'}">${d.stock_actual}</span>
-                                <span class="text-[9px] font-black text-muted-foreground uppercase tracking-widest">disp.</span>
+                            <div class="flex items-center gap-1">
+                                <span class="font-black text-base ${d.stock_actual <= 0 ? 'text-destructive' : d.stock_actual <= (d.categoria_stock_minimo || d.stock_minimo) ? 'text-amber-500' : 'text-emerald-600'}">${d.stock_actual}</span>
+                                <span class="text-[9px] font-black text-muted-foreground uppercase tracking-wider">${d.unidad_medida || 'unid.'}</span>
                             </div>
-                            <div class="text-[8px] font-bold text-slate-400 uppercase tracking-tighter">de ${d.stock_total || d.stock_actual} total</div>
+                            ${(d.factor_conversion && parseFloat(d.factor_conversion) > 1) ? `
+                                <div class="text-[8px] font-bold text-primary bg-primary/5 border border-primary/10 rounded-md px-1 py-0.5 mt-0.5" title="Conversión: 1 ${d.unidad_compra} = ${parseFloat(d.factor_conversion)} ${d.unidad_medida}">
+                                    ≈ ${(d.stock_actual / d.factor_conversion).toFixed(1).replace(/\.0$/, '')} ${d.unidad_compra}
+                                </div>
+                            ` : ''}
+                            <div class="text-[8px] font-bold text-slate-400 uppercase tracking-tighter mt-0.5">de ${d.stock_total || d.stock_actual} total</div>
                         </div>`
                     }
                 </td>

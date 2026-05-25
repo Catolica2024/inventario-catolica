@@ -220,3 +220,25 @@ table.data tr:last-child td { border-bottom: none; }
   100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
 }
 .badge-pulse { animation: pulse-soft 2s infinite; }
+
+/* OC Items Table – column layout & overflow fix */
+.btn-sm { padding: .3rem .7rem; font-size: .75rem; border-radius: .5rem; }
+
+#oc-items-table { min-width: 1280px; table-layout: fixed; }
+#oc-items-table th { overflow: hidden; }
+#oc-items-table td { overflow: visible; }
+#oc-items-table td .input,
+#oc-items-table td .select { min-width: 0; width: 100%; box-sizing: border-box; }
+
+/* Column widths: # | Cat | Prefijo | Desc | U.Compra | Factor | Cant | Equiv | Precio | Total | Del */
+#oc-items-table thead th:nth-child(1)  { width: 2.5rem; }
+#oc-items-table thead th:nth-child(2)  { width: 11rem; }
+#oc-items-table thead th:nth-child(3)  { width: 4.5rem; }
+#oc-items-table thead th:nth-child(4)  { width: 16rem; }
+#oc-items-table thead th:nth-child(5)  { width: 9.5rem; }
+#oc-items-table thead th:nth-child(6)  { width: 5.5rem; }
+#oc-items-table thead th:nth-child(7)  { width: 5.5rem; }
+#oc-items-table thead th:nth-child(8)  { width: 8rem; }
+#oc-items-table thead th:nth-child(9)  { width: 7rem; }
+#oc-items-table thead th:nth-child(10) { width: 6rem; }
+#oc-items-table thead th:nth-child(11) { width: 3rem; }

@@ -191,7 +191,7 @@ function renderInsumosForm() {
                     <input id="reg-code" class="input w-full h-11 bg-muted font-mono" readonly placeholder="Generado automáticamente">
                 </div>
                 <div>
-                    <label class="text-sm font-bold mb-1 block text-muted-foreground">Cantidad / Unidades <span class="text-destructive">*</span></label>
+                    <label class="text-sm font-bold mb-1 block text-muted-foreground">Cantidad de Compra Inicial <span class="text-destructive">*</span></label>
                     <input id="reg-qty" type="number" class="input w-full h-11" value="1" min="1">
                 </div>
                 <div>
@@ -204,6 +204,27 @@ function renderInsumosForm() {
                         <option value="">Seleccione Depósito...</option>
                         ${_regResources.locs.filter(l => l.tipo === 'Depósito' && l.estado === 'activo').map(l => `<option value="${l.id}">${l.nombre} (${l.sede_nombre})</option>`).join('')}
                     </select>
+                </div>
+                <div>
+                    <label class="text-sm font-bold mb-1 block text-muted-foreground">Unidad Base en Almacén <span class="text-destructive">*</span></label>
+                    <select id="reg-unidad-medida" class="select w-full h-11" onchange="updateRegConversionHint()">
+                        <option value="Unidad" selected>Unidad(es)</option>
+                        <option value="Galón">Galón(es)</option>
+                        <option value="Kilo">Kilo(s)</option>
+                        <option value="Litro">Litro(s)</option>
+                        <option value="Metro">Metro(s)</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="text-sm font-bold mb-1 block text-muted-foreground">Unidad de Compra por Defecto</label>
+                    <input id="reg-unidad-compra" class="input w-full h-11" placeholder="Ej: Bidón, Paquete, Saco, Caja" value="Paquete" oninput="updateRegConversionHint()">
+                </div>
+                <div>
+                    <label class="text-sm font-bold mb-1 block text-muted-foreground">Factor de Conversión por Defecto</label>
+                    <input id="reg-factor-conversion" type="number" class="input w-full h-11" value="1" min="1" step="1" oninput="updateRegConversionHint()">
+                </div>
+                <div class="md:col-span-2 p-3 bg-green-50 border border-green-200 rounded-xl text-xs text-green-800 font-semibold" id="reg-conversion-hint">
+                    💡 1 unidad de compra equivale a 1 unidad base en stock.
                 </div>
                 <div class="md:col-span-2">
                     <label class="text-sm font-bold mb-1 block text-muted-foreground">Detalles / Especificaciones <span class="text-xs text-muted-foreground font-normal">(Opcional)</span></label>
@@ -221,6 +242,9 @@ function renderInsumosForm() {
 
 window.Views.registration.afterMount = async function() {
     await loadRegResources();
+    if (_regActiveTab === 'insumo') {
+        updateRegConversionHint();
+    }
     lucide.createIcons();
 };
 
@@ -318,38 +342,58 @@ window.saveEquipment = async function() {
 
 window.saveStockItem = async function(type) {
     const cat_id = document.getElementById('reg-cat').value;
-    const qty = document.getElementById('reg-qty').value;
+    const qty = parseFloat(document.getElementById('reg-qty').value || 1);
     const loc_id = document.getElementById('reg-loc').value;
     if (!cat_id || !qty || !loc_id) { UI.toast('Complete todos los campos obligatorios', 'error'); return; }
 
     const catName = _regResources.cats.find(c => c.id == cat_id).nombre;
     
     let finalName = '';
+    let payload = { 
+        nombre: finalName, 
+        categoria_inventario_id: cat_id, 
+        codigo: document.getElementById('reg-code').value,
+        marca: document.getElementById('reg-brand').value 
+    };
+
     if (type === 'insumo') {
         const details = document.getElementById('reg-details')?.value.trim() || '';
         finalName = details ? `${catName} (${details})` : catName;
+        
+        payload.nombre = finalName;
+        payload.unidad_medida = document.getElementById('reg-unidad-medida')?.value || 'Unidad';
+        payload.unidad_compra = document.getElementById('reg-unidad-compra')?.value || 'Unidad';
+        payload.factor_conversion = parseFloat(document.getElementById('reg-factor-conversion')?.value || 1);
     } else {
         // Mobiliario
         const desc = document.getElementById('reg-name')?.value.trim() || '';
         finalName = desc ? `${catName} - ${desc}` : catName;
+        
+        payload.nombre = finalName;
+        payload.unidad_medida = 'Unidad';
+        payload.unidad_compra = 'Unidad';
+        payload.factor_conversion = 1.00;
     }
 
     UI.loading('Registrando stock...');
     try {
         const itm = await fetch('api/items.php', { method: 'POST', headers: { 'Content-Type': 'application/json' }, 
-            body: JSON.stringify({ 
-                nombre: finalName, 
-                categoria_inventario_id: cat_id, 
-                codigo: document.getElementById('reg-code').value,
-                stock_inicial: qty, 
-                marca: document.getElementById('reg-brand').value 
-            }) 
+            body: JSON.stringify(payload) 
         }).then(r => r.json());
 
         if (itm.ok) {
-            // Asignar a ubicación
+            // Asignar a ubicación. Al hacer la carga inicial, calculamos en unidades base
+            const factor = parseFloat(payload.factor_conversion || 1);
+            const convertedQty = qty * factor;
+
             await fetch('api/movements.php', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ item_id: itm.id, ubicacion_id: loc_id, cantidad: qty, tipo: 'Entrada', observacion: 'Carga inicial' })
+                body: JSON.stringify({ 
+                    item_id: itm.id, 
+                    ubicacion_id: loc_id, 
+                    cantidad: convertedQty, 
+                    tipo: 'Entrada', 
+                    observacion: 'Carga inicial' + (factor !== 1 ? ` (${qty} ${payload.unidad_compra} x ${factor})` : '') 
+                })
             });
             UI.toast('Registro completado con éxito', 'success');
             UI.showQR(document.getElementById('reg-code').value, catName);
@@ -357,4 +401,14 @@ window.saveStockItem = async function(type) {
         } else UI.toast('Error: ' + itm.error, 'error');
     } catch(e) { UI.toast('Error de conexión', 'error'); }
     finally { UI.stopLoading(); }
+};
+
+window.updateRegConversionHint = function() {
+    const baseUnit = document.getElementById('reg-unidad-medida')?.value || 'Unidad';
+    const purchaseUnit = document.getElementById('reg-unidad-compra')?.value.trim() || 'Paquete';
+    const factor = parseFloat(document.getElementById('reg-factor-conversion')?.value || 1);
+    const hintEl = document.getElementById('reg-conversion-hint');
+    if (hintEl) {
+        hintEl.innerHTML = `💡 1 <strong>${purchaseUnit}</strong> de este insumo ingresará como <strong>${factor} ${baseUnit}(es)</strong> al inventario.`;
+    }
 };

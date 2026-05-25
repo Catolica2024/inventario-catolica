@@ -73,7 +73,7 @@ try {
             $b = get_body();
             $pdo->beginTransaction();
             try {
-                $sql = "INSERT INTO items (codigo, nombre, marca, modelo, categoria_inventario_id, stock_minimo) VALUES (?,?,?,?,?,?)";
+                $sql = "INSERT INTO items (codigo, nombre, marca, modelo, categoria_inventario_id, stock_minimo, unidad_medida, unidad_compra, factor_conversion) VALUES (?,?,?,?,?,?,?,?,?)";
                 $stmt = $pdo->prepare($sql);
                 $stmt->execute([
                     $b['codigo'] ?? null,
@@ -81,7 +81,10 @@ try {
                     $b['marca'] ?? null,
                     $b['modelo'] ?? null,
                     $b['categoria_inventario_id'] ?? null,
-                    $b['stock_minimo'] ?? 0
+                    $b['stock_minimo'] ?? 0,
+                    $b['unidad_medida'] ?? 'Unidad',
+                    $b['unidad_compra'] ?? 'Unidad',
+                    $b['factor_conversion'] ?? 1.00
                 ]);
                 $itemId = $pdo->lastInsertId();
 
@@ -97,7 +100,7 @@ try {
         case 'PUT':
             $b = get_body();
             if (!isset($b['id'])) json_response(['error' => 'ID requerido'], 400);
-            $sql = "UPDATE items SET codigo=?, nombre=?, marca=?, modelo=?, categoria_inventario_id=?, stock_minimo=? WHERE id=?";
+            $sql = "UPDATE items SET codigo=?, nombre=?, marca=?, modelo=?, categoria_inventario_id=?, stock_minimo=?, unidad_medida=?, unidad_compra=?, factor_conversion=? WHERE id=?";
             $stmt = $pdo->prepare($sql);
             $stmt->execute([
                 $b['codigo'] ?? null,
@@ -106,6 +109,9 @@ try {
                 $b['modelo'] ?? null,
                 $b['categoria_inventario_id'] ?? null,
                 $b['stock_minimo'] ?? 0,
+                $b['unidad_medida'] ?? 'Unidad',
+                $b['unidad_compra'] ?? 'Unidad',
+                $b['factor_conversion'] ?? 1.00,
                 $b['id']
             ]);
             json_response(['ok' => true]);

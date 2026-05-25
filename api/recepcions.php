@@ -98,19 +98,28 @@ try {
                 // ARQUITECTURA EXPERTA: Solo registramos movimiento de stock directo para 'insumo' o 'mobiliario'.
                 // Los 'equipo' requieren un alta individualizada (serie, qr, etc) que se maneja en el asistente de alta.
                 if ($actualType !== 'equipo') {
+                    $factor = !empty($item['factor_conversion']) ? floatval($item['factor_conversion']) : 1.00;
+                    $cantidadConvertida = intval(round($item['cantidad'] * $factor));
+
                     $stmtMov = $pdo->prepare("INSERT INTO movimientos (item_id, tipo, cantidad, ubicacion_id, observacion) VALUES (?, 'Entrada', ?, ?, ?)");
+                    
+                    $obs = "Recepción de OC " . $purchase_id;
+                    if ($factor != 1.00) {
+                        $obs .= " (" . $item['cantidad'] . " " . ($item['unidad'] ?: 'Und.') . " x " . $factor . ")";
+                    }
+
                     $stmtMov->execute([
                         $finalItemId, 
-                        $item['cantidad'], 
+                        $cantidadConvertida, 
                         $b['ubicacion_id'] ?? 13, // Usar ubicación seleccionada o Almacén General por defecto
-                        "Recepción de OC " . $purchase_id
+                        $obs
                     ]);
                 }
                 
                 $receivedItems[] = [
                     'item_id' => $finalItemId,
                     'nombre' => $item['item_nombre'] ?: ($item['backup_nombre'] ?: 'Artículo S/N'),
-                    'cantidad' => $item['cantidad'],
+                    'cantidad' => ($actualType === 'equipo') ? $item['cantidad'] : $cantidadConvertida,
                     'tipo' => $actualType
                 ];
             }

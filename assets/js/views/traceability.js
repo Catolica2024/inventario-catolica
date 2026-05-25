@@ -999,7 +999,7 @@ window.openDispatchModal = function (preselectedId = null) {
                 </div>
                 <div class="grid grid-cols-2 gap-3">
                     <div>
-                        <label class="text-xs font-bold mb-1 block uppercase text-muted-foreground">Cantidad <span class="text-destructive">*</span></label>
+                        <label class="text-xs font-bold mb-1 block uppercase text-muted-foreground">Cantidad a Despachar (<span class="font-bold text-primary" id="disp-unit-label">${selectedItem ? selectedItem.unidad_medida || 'unid.' : 'unid.'}</span>) <span class="text-destructive">*</span></label>
                         <input type="number" id="disp-qty" class="input w-full" value="1" min="1">
                     </div>
                     <div>
@@ -1102,6 +1102,9 @@ window.openDispatchModal = function (preselectedId = null) {
         `;
         idInput.value = stock > 0 ? id : '';
         infoDiv.className = `mt-2 p-3 rounded-lg border ${stock > 0 ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50'} text-xs`;
+
+        const label = document.getElementById('disp-unit-label');
+        if (label) label.textContent = unidad;
     };
 
     lucide.createIcons();
