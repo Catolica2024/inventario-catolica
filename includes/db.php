@@ -12,6 +12,7 @@ if ($is_local) {
     define('DB_PASS', '');
 
     // CONFIGURACIÓN SMTP LOCAL (Ej: Mailtrap o servidor mock de desarrollo)
+    define('USE_NATIVE_MAIL', false);
     define('SMTP_HOST', 'sandbox.smtp.mailtrap.io');
     define('SMTP_PORT', 2525);
     define('SMTP_USER', 'tu_usuario_mailtrap');
@@ -26,12 +27,8 @@ if ($is_local) {
     define('DB_USER', 'lacatoli_admin');
     define('DB_PASS', 'V&tHqt[@x5Uv[9b{');
 
-    // CONFIGURACIÓN SMTP PRODUCCIÓN (Google Workspace / Gmail Corporativo - Puerto 587/TLS)
-    define('SMTP_HOST', 'smtp.gmail.com'); // Servidor SMTP de Google
-    define('SMTP_PORT', 587); // Intentamos con 587 (TLS) porque el hosting tiene bloqueado el puerto 465
-    define('SMTP_USER', 'operations@colegiolacatolica.edu.pe');
-    define('SMTP_PASS', 'qpvpbiswvjiyexqs'); // Contraseña de aplicación generada
-    define('SMTP_SECURE', 'tls'); // Usar 'tls' para puerto 587
+    // CONFIGURACIÓN CORREO PRODUCCIÓN (Usar función mail nativa del hosting)
+    define('USE_NATIVE_MAIL', true);
     define('SMTP_FROM_EMAIL', 'operations@colegiolacatolica.edu.pe');
     define('SMTP_FROM_NAME', 'Católica School');
 }

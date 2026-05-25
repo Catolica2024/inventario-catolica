@@ -11,12 +11,58 @@ window.Views.treasury = function () {
       </div>
     `)}
 
-    <div class="space-y-6">
-      <!-- Tabs -->
-      <div class="card p-2 flex gap-1 bg-muted/20 w-fit">
-        <button id="tab-pending" class="btn btn-ghost px-6 py-2 rounded-lg bg-white shadow-sm" onclick="switchTreasuryTab('pending')">Pendientes de Pago</button>
-        <button id="tab-partial" class="btn btn-ghost px-6 py-2 rounded-lg" onclick="switchTreasuryTab('partial')">Cuotas en Curso</button>
-        <button id="tab-history" class="btn btn-ghost px-6 py-2 rounded-lg" onclick="switchTreasuryTab('history')">Historial de Pagos</button>
+    <div class="space-y-4">
+      <!-- Tabs premium con indicador activo -->
+      <div class="flex gap-0 border-b border-border">
+        <button id="tab-pending" class="treasury-tab active-tab" onclick="switchTreasuryTab('pending')">
+          <i data-lucide="clock" class="w-4 h-4"></i>
+          <span>Pendientes de Pago</span>
+          <span id="count-pending" class="tab-count">0</span>
+        </button>
+        <button id="tab-partial" class="treasury-tab" onclick="switchTreasuryTab('partial')">
+          <i data-lucide="layers" class="w-4 h-4"></i>
+          <span>Cuotas en Curso</span>
+          <span id="count-partial" class="tab-count">0</span>
+        </button>
+        <button id="tab-history" class="treasury-tab" onclick="switchTreasuryTab('history')">
+          <i data-lucide="history" class="w-4 h-4"></i>
+          <span>Historial de Pagos</span>
+          <span id="count-history" class="tab-count">0</span>
+        </button>
+      </div>
+
+      <!-- Filtros (solo visibles en Historial) -->
+      <div id="history-filters" class="hidden">
+        <div class="card p-3 bg-muted/30">
+          <div class="flex flex-wrap gap-3 items-end">
+            <div class="flex-1 min-w-[180px]">
+              <label class="text-[10px] font-bold uppercase text-muted-foreground mb-1 block">Buscar documento / proveedor</label>
+              <div class="relative">
+                <i data-lucide="search" class="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground"></i>
+                <input type="text" id="filter-search" class="input w-full h-9 pl-8 text-sm" placeholder="Ej: OC-2024-001 o Nombre proveedor..." oninput="applyHistoryFilters()">
+              </div>
+            </div>
+            <div>
+              <label class="text-[10px] font-bold uppercase text-muted-foreground mb-1 block">Desde</label>
+              <input type="date" id="filter-from" class="input h-9 text-sm" onchange="applyHistoryFilters()">
+            </div>
+            <div>
+              <label class="text-[10px] font-bold uppercase text-muted-foreground mb-1 block">Hasta</label>
+              <input type="date" id="filter-to" class="input h-9 text-sm" onchange="applyHistoryFilters()">
+            </div>
+            <div>
+              <label class="text-[10px] font-bold uppercase text-muted-foreground mb-1 block">Tipo</label>
+              <select id="filter-type" class="select h-9 text-sm" onchange="applyHistoryFilters()">
+                <option value="">Todos</option>
+                <option value="compra">Órdenes de Compra</option>
+                <option value="servicio">Órdenes de Servicio</option>
+              </select>
+            </div>
+            <button class="btn btn-ghost h-9 text-xs text-muted-foreground" onclick="clearHistoryFilters()">
+              <i data-lucide="x" class="w-3.5 h-3.5"></i> Limpiar
+            </button>
+          </div>
+        </div>
       </div>
 
       <!-- Tabla principal -->
@@ -35,25 +81,75 @@ window.Views.treasury = function () {
               </tr>
             </thead>
             <tbody id="treasury-table-body">
-              <tr><td colspan="6" class="text-center py-10 text-muted-foreground">Cargando datos...</td></tr>
+              <tr><td colspan="7" class="text-center py-10 text-muted-foreground">Cargando datos...</td></tr>
             </tbody>
           </table>
         </div>
       </div>
-    </div>`;
+    </div>
+
+    <style>
+      .treasury-tab {
+        display: flex; align-items: center; gap: 6px;
+        padding: 10px 20px; font-size: 13px; font-weight: 600;
+        color: var(--muted-foreground, #64748b);
+        border-bottom: 2px solid transparent;
+        margin-bottom: -1px; cursor: pointer;
+        background: transparent; border-top: none; border-left: none; border-right: none;
+        transition: color 0.15s, border-color 0.15s;
+      }
+      .treasury-tab:hover { color: var(--foreground, #1e293b); }
+      .treasury-tab.active-tab {
+        color: #1b5cff;
+        border-bottom-color: #1b5cff;
+      }
+      .tab-count {
+        display: inline-flex; align-items: center; justify-content: center;
+        min-width: 20px; height: 20px; padding: 0 6px;
+        border-radius: 10px; font-size: 10px; font-weight: 700;
+        background: #e2e8f0; color: #64748b;
+        transition: background 0.15s, color 0.15s;
+      }
+      .treasury-tab.active-tab .tab-count {
+        background: #dbeafe; color: #1b5cff;
+      }
+    </style>`;
 };
 
 let _treasuryData = [];
 let _treasuryCurrentTab = 'pending';
+// Filtros activos en historial (se leen directo del DOM en renderTreasuryTable)
+// No usamos variable intermedia para evitar datos obsoletos.
 
 window.switchTreasuryTab = function (tab) {
     _treasuryCurrentTab = tab;
     ['pending', 'partial', 'history'].forEach(t => {
         const btn = document.getElementById('tab-' + t);
         if (!btn) return;
-        btn.classList.toggle('bg-white', t === tab);
-        btn.classList.toggle('shadow-sm', t === tab);
+        btn.classList.toggle('active-tab', t === tab);
     });
+    // Mostrar/ocultar filtros según tab
+    const filterBar = document.getElementById('history-filters');
+    if (filterBar) filterBar.classList.toggle('hidden', tab !== 'history');
+    if (tab === 'history') applyHistoryFilters();
+    else renderTreasuryTable();
+    lucide.createIcons();
+};
+
+// applyHistoryFilters: simplemente re-renderiza (la lógica de filtro vive en renderTreasuryTable)
+window.applyHistoryFilters = function() {
+    renderTreasuryTable();
+};
+
+window.clearHistoryFilters = function() {
+    const s = document.getElementById('filter-search');
+    const f = document.getElementById('filter-from');
+    const t = document.getElementById('filter-to');
+    const tp = document.getElementById('filter-type');
+    if (s) s.value = '';
+    if (f) f.value = '';
+    if (t) t.value = '';
+    if (tp) tp.value = '';
     renderTreasuryTable();
 };
 
@@ -62,45 +158,108 @@ window.Views.treasury.afterMount = loadTreasuryData;
 async function loadTreasuryData() {
     const tbody = document.getElementById('treasury-table-body');
     if (!tbody) return;
+    
+    // Sincronizar UI con el tab actual (evita desincronización al navegar)
+    ['pending', 'partial', 'history'].forEach(t => {
+        const btn = document.getElementById('tab-' + t);
+        if (btn) btn.classList.toggle('active-tab', t === _treasuryCurrentTab);
+    });
+    const filterBar = document.getElementById('history-filters');
+    if (filterBar) filterBar.classList.toggle('hidden', _treasuryCurrentTab !== 'history');
+
     UI.loading('Cargando datos de tesorería...');
     try {
         const resp = await fetch('api/purchases.php').then(r => r.json());
-        _treasuryData = (resp.purchases || []).filter(p => p.estado === 'Aprobada' || p.estado === 'Recibida' || p.estado === 'Completada');
-        
+        // Incluir Aprobada, Recibida y Completada — todas deben ser rastreables
+        _treasuryData = (resp.purchases || []).filter(p =>
+            p.estado === 'Aprobada' || p.estado === 'Recibida' || p.estado === 'Completada'
+        );
+
         // --- ARCHITECTURE EXPERT: Pro-active payment check (Simulated Cron) ---
         fetch('api/cron_notifications.php').catch(e => console.error('Cron error:', e));
 
-        renderTreasuryTable();
+        // Actualizar contadores de tabs
+        _updateTabCounts();
+
+        // Si ya estamos en historial, aplicar filtros; si no, render normal
+        if (_treasuryCurrentTab === 'history') applyHistoryFilters();
+        else renderTreasuryTable();
     } catch {
-        tbody.innerHTML = '<tr><td colspan="6" class="text-center py-10 text-destructive">Error al cargar datos.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7" class="text-center py-10 text-destructive">Error al cargar datos.</td></tr>';
     } finally {
         UI.stopLoading();
     }
+}
+
+function _updateTabCounts() {
+    let pending = 0, partial = 0, history = 0;
+    _treasuryData.forEach(p => {
+        const tieneMovilidad = parseFloat(p.monto_movilidad || 0) > 0;
+        const movilidadPagada = tieneMovilidad ? (p.mobility_pagado == 1) : true;
+        const esCompletada = p.estado === 'Completada';
+        const esHistorial = (p.pagado == 1 && movilidadPagada) || esCompletada;
+        const esCreditoCuotas = p.condicion_pago === 'Credito' && parseInt(p.total_cuotas_reg || 0) > 0;
+        const esParcialCuotas = esCreditoCuotas && !esHistorial;
+
+        if (esHistorial) history++;
+        else if (esParcialCuotas) partial++;
+        else pending++;
+    });
+    const cp = document.getElementById('count-pending');
+    const cc = document.getElementById('count-partial');
+    const ch = document.getElementById('count-history');
+    if (cp) cp.textContent = pending;
+    if (cc) cc.textContent = partial;
+    if (ch) ch.textContent = history;
 }
 
 function renderTreasuryTable() {
     const tbody = document.getElementById('treasury-table-body');
     if (!tbody) return;
 
-    const list = _treasuryData.filter(p => {
-        const tieneMovilidad = parseFloat(p.monto_movilidad || 0) > 0;
-        const movilidadPagada = tieneMovilidad ? (p.mobility_pagado == 1) : true;
-        const ocPagada = p.pagado == 1;
+    // --- LÓGICA DE FILTRADO UNIFICADA ---
+    // Siempre calculamos desde _treasuryData fresco. Sin variables intermedias.
+    let list;
 
-        // 1. Historial: AMBOS deben estar pagados (OC/OS + Movilidad)
-        const esHistorial = ocPagada && movilidadPagada;
-        if (_treasuryCurrentTab === 'history') return esHistorial;
+    if (_treasuryCurrentTab === 'history') {
+        // HISTORIAL: toda OC pagada O con estado Completada (ciclo operativo terminado)
+        // Los filtros de usuario se leen directo del DOM en cada render.
+        const search = (document.getElementById('filter-search')?.value || '').toLowerCase().trim();
+        const from   = document.getElementById('filter-from')?.value || '';
+        const to     = document.getElementById('filter-to')?.value || '';
+        const type   = document.getElementById('filter-type')?.value || '';
 
-        // 2. Cuotas en Curso: SOLO para Crédito en Cuotas que no han terminado
-        const esCreditoCuotas = p.condicion_pago === 'Credito' && p.total_cuotas_reg > 0;
-        const esParcialCuotas = esCreditoCuotas && !esHistorial;
+        list = _treasuryData.filter(p => {
+            const tieneMovilidad = parseFloat(p.monto_movilidad || 0) > 0;
+            const movilidadPagada = tieneMovilidad ? (p.mobility_pagado == 1) : true;
 
-        if (_treasuryCurrentTab === 'partial') return esParcialCuotas;
+            // REGLA PRINCIPAL: pagada completamente O recibida (Completada)
+            const esHistorial = (p.pagado == 1 && movilidadPagada) || p.estado === 'Completada';
+            if (!esHistorial) return false;
 
-        // 3. Pendientes: Todo lo demás que no esté pagado totalmente
-        // Esto incluye: Al contado, Crédito en Días, Adelanto + Saldo, y OCs pagadas con movilidad pendiente
-        return !esHistorial && !esParcialCuotas;
-    });
+            // Filtros de usuario (opcionales)
+            if (search && !(
+                (p.numero_oc || '').toLowerCase().includes(search) ||
+                (p.proveedor_nombre || '').toLowerCase().includes(search)
+            )) return false;
+            if (from && p.fecha && p.fecha < from) return false;
+            if (to   && p.fecha && p.fecha > to)   return false;
+            if (type && p.tipo !== type) return false;
+
+            return true;
+        });
+    } else {
+        list = _treasuryData.filter(p => {
+            const tieneMovilidad = parseFloat(p.monto_movilidad || 0) > 0;
+            const movilidadPagada = tieneMovilidad ? (p.mobility_pagado == 1) : true;
+            const esHistorial = (p.pagado == 1 && movilidadPagada) || p.estado === 'Completada';
+            const esCreditoCuotas = p.condicion_pago === 'Credito' && parseInt(p.total_cuotas_reg || 0) > 0;
+            const esParcialCuotas = esCreditoCuotas && !esHistorial;
+
+            if (_treasuryCurrentTab === 'partial') return esParcialCuotas;
+            return !esHistorial && !esParcialCuotas; // pending
+        });
+    }
 
     if (list.length === 0) {
         const msgs = { pending: 'No hay pagos pendientes.', partial: 'No hay cuotas en curso.', history: 'No hay historial de pagos.' };
@@ -139,8 +298,15 @@ function renderTreasuryTable() {
 
         // Badge de estado pago
         let estadoBadge = '';
+        const esCompletadaSinPagar = p.estado === 'Completada' && p.pagado != 1;
         if (p.pagado == 1) {
             estadoBadge = '<span class="badge badge-green"><i data-lucide="check-circle" class="w-3 h-3"></i> Pagado</span>';
+        } else if (esCompletadaSinPagar) {
+            // OC completada operativamente (recepción hecha) pero el pago aún está registrado
+            estadoBadge = `<div class="flex flex-col gap-0.5">
+                <span class="badge badge-green text-[10px]"><i data-lucide="package-check" class="w-3 h-3"></i> Recibida</span>
+                <span class="text-[10px] text-orange-600 font-medium">Pago pendiente de confirmar</span>
+            </div>`;
         } else if (esCuotas && cuotasPag > 0) {
             estadoBadge = `<div class="flex flex-col gap-1">
                 <span class="badge badge-blue text-[10px]">${cuotasPag}/${cuotasTot} cuotas</span>
@@ -182,11 +348,16 @@ function renderTreasuryTable() {
             docStatusBadge = '<span class="text-[10px] text-green-600 font-bold flex items-center gap-1"><i data-lucide="check-check" class="w-3 h-3"></i> Toda la documentación se subió</span>';
         }
 
+        const budgetBadge = p.dentro_presupuesto == 1 ? 
+          `<span class="badge badge-green text-[9px] py-0.5 px-1.5 flex items-center gap-1 w-fit mt-1" title="Dentro de presupuesto"><i data-lucide="check" class="w-2.5 h-2.5"></i> En Ppto</span>` : 
+          `<span class="badge badge-red text-[9px] py-0.5 px-1.5 flex items-center gap-1 w-fit mt-1 animate-pulse" title="Fuera de presupuesto"><i data-lucide="alert-triangle" class="w-2.5 h-2.5"></i> Fuera Ppto</span>`;
+
         return `
         <tr>
             <td>
                 <div class="font-mono text-xs font-bold">${p.numero_oc}</div>
                 <div class="text-[10px] text-muted-foreground">${p.tipo === 'servicio' ? 'Orden de Servicio' : 'Orden de Compra'}</div>
+                ${budgetBadge}
             </td>
             <td class="font-medium text-sm">${p.proveedor_nombre}</td>
             <td>${condBadge}</td>
@@ -198,8 +369,8 @@ function renderTreasuryTable() {
             <td>${docStatusBadge}</td>
             <td class="text-right">
                 <button class="btn btn-primary btn-sm" onclick="openPaymentDetails(${p.id})">
-                    <i data-lucide="${p.pagado == 1 ? 'eye' : 'credit-card'}" class="w-3.5 h-3.5"></i>
-                    ${p.pagado == 1 ? 'Ver Detalle' : esCuotas ? 'Gestionar Cuotas' : 'Procesar Pago'}
+                    <i data-lucide="${(p.pagado == 1 || p.estado === 'Completada') ? 'eye' : 'credit-card'}" class="w-3.5 h-3.5"></i>
+                    ${p.pagado == 1 ? 'Ver Detalle' : p.estado === 'Completada' ? 'Ver Detalle' : esCuotas ? 'Gestionar Cuotas' : 'Procesar Pago'}
                 </button>
             </td>
         </tr>`;

@@ -194,6 +194,7 @@ CREATE TABLE IF NOT EXISTS ordenes_compra (
     comprobante_url TEXT,
     stock_actualizado TINYINT(1) DEFAULT 0,
     observaciones TEXT,
+    dentro_presupuesto TINYINT(1) DEFAULT 1,
     FOREIGN KEY (proveedor_id) REFERENCES proveedores(id),
     FOREIGN KEY (creado_por) REFERENCES usuarios(id)
 );

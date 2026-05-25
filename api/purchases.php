@@ -47,7 +47,7 @@ try {
             $where = "1=1";
             if (isset($_GET['approved_only'])) {
                 $where = "
-                    (oc.estado = 'Completada')
+                    (oc.estado IN ('Completada', 'Recibida'))
                     OR
                     (oc.estado = 'Aprobada' AND (
                         (oc.condicion_pago IN ('Al contado', 'Transferencia') AND oc.pagado = 1)
@@ -110,8 +110,8 @@ try {
             $pdo->beginTransaction();
             $stmt = $pdo->prepare("
                 INSERT INTO ordenes_compra
-                  (creado_por, numero_oc, tipo, proveedor_id, activo_id, fecha, area_id, moneda, condicion_pago, condicion_detalle, adelanto_porcentaje, adelanto_monto, saldo_monto, fecha_requerida, subtotal, igv, igv_porcentaje, precios_con_igv, total, monto, estado, observaciones, incluye_movilidad, monto_movilidad)
-                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                  (creado_por, numero_oc, tipo, proveedor_id, activo_id, fecha, area_id, moneda, condicion_pago, condicion_detalle, adelanto_porcentaje, adelanto_monto, saldo_monto, fecha_requerida, subtotal, igv, igv_porcentaje, precios_con_igv, total, monto, estado, observaciones, incluye_movilidad, monto_movilidad, dentro_presupuesto)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             ");
             $stmt->execute([
                 $b['usuario_id'] ?? null,
@@ -137,7 +137,8 @@ try {
                 'Pendiente',
                 $b['observaciones'] ?? null,
                 $b['incluye_movilidad'] ?? 1,
-                $b['monto_movilidad'] ?? 0
+                $b['monto_movilidad'] ?? 0,
+                isset($b['dentro_presupuesto']) ? (int)$b['dentro_presupuesto'] : 1
             ]);
             $orden_id = $pdo->lastInsertId();
 
@@ -271,8 +272,8 @@ try {
 
             // Si es una actualización completa (desde edición)
             if (isset($b['proveedor_id'])) {
-                $stmt = $pdo->prepare("UPDATE ordenes_compra SET proveedor_id=?, fecha=?, area_id=?, monto=?, estado=?, observaciones=? WHERE id=?");
-                $stmt->execute([$b['proveedor_id'], $b['fecha'], $b['area_id'] ?? null, $b['monto'], $b['estado'], $b['observaciones'] ?? null, $id]);
+                $stmt = $pdo->prepare("UPDATE ordenes_compra SET proveedor_id=?, fecha=?, area_id=?, monto=?, estado=?, observaciones=?, dentro_presupuesto=? WHERE id=?");
+                $stmt->execute([$b['proveedor_id'], $b['fecha'], $b['area_id'] ?? null, $b['monto'], $b['estado'], $b['observaciones'] ?? null, isset($b['dentro_presupuesto']) ? (int)$b['dentro_presupuesto'] : 1, $id]);
                 json_response(['ok' => true]);
                 break;
             }
@@ -321,6 +322,32 @@ try {
                 $stmt = $pdo->prepare("UPDATE ordenes_cuotas SET pagado = 1, fecha_pago = NOW(), voucher_url = ? WHERE id = ? AND orden_id = ?");
                 $stmt->execute([$b['voucher_url'] ?? null, $cuota_id, $id]);
 
+                // Notificar al proveedor sobre la cuota pagada
+                $ocFull = $pdo->prepare("
+                    SELECT oc.numero_oc, oc.moneda, p.razon_social as proveedor_nombre, p.email as proveedor_email, 
+                           c.numero_cuota, c.total_cuotas, c.monto_cuota
+                    FROM ordenes_compra oc 
+                    JOIN proveedores p ON oc.proveedor_id = p.id 
+                    JOIN ordenes_cuotas c ON c.orden_id = oc.id
+                    WHERE oc.id = ? AND c.id = ?
+                ");
+                $ocFull->execute([$id, $cuota_id]);
+                $ocData = $ocFull->fetch();
+
+                if ($ocData && $ocData['proveedor_email'] && ($b['voucher_url'] ?? null)) {
+                    require_once __DIR__ . '/../includes/mailer.php';
+                    Mailer::sendPaymentVoucherToSupplier([
+                        'to' => $ocData['proveedor_email'],
+                        'subject' => "Confirmación de Pago (Cuota {$ocData['numero_cuota']}/{$ocData['total_cuotas']}): {$ocData['numero_oc']}",
+                        'provider' => $ocData['proveedor_nombre'],
+                        'oc_number' => $ocData['numero_oc'],
+                        'concept' => "Pago de Cuota N° {$ocData['numero_cuota']} de {$ocData['total_cuotas']} de la Orden de Compra/Servicio",
+                        'monto' => $ocData['monto_cuota'],
+                        'moneda' => $ocData['moneda'],
+                        'voucher_url' => $b['voucher_url']
+                    ]);
+                }
+
                 // Revisar si todas las cuotas están pagadas → marcar OC como pagada
                 $totC = $pdo->prepare("SELECT COUNT(*) FROM ordenes_cuotas WHERE orden_id = ?");
                 $totC->execute([$id]);
@@ -333,6 +360,26 @@ try {
             } else if (($b['action'] ?? '') === 'pay_adelanto') {
                 $stmt = $pdo->prepare("UPDATE ordenes_compra SET adelanto_pagado = 1, adelanto_fecha = NOW(), adelanto_voucher = ? WHERE id = ?");
                 $stmt->execute([$b['voucher_url'], $id]);
+
+                // Notificar al proveedor sobre el adelanto
+                $ocFull = $pdo->prepare("SELECT oc.*, p.razon_social as proveedor_nombre, p.email as proveedor_email FROM ordenes_compra oc JOIN proveedores p ON oc.proveedor_id = p.id WHERE oc.id = ?");
+                $ocFull->execute([$id]);
+                $ocData = $ocFull->fetch();
+
+                if ($ocData && $ocData['proveedor_email'] && $b['voucher_url']) {
+                    require_once __DIR__ . '/../includes/mailer.php';
+                    Mailer::sendPaymentVoucherToSupplier([
+                        'to' => $ocData['proveedor_email'],
+                        'subject' => "Confirmación de Pago (Adelanto): {$ocData['numero_oc']}",
+                        'provider' => $ocData['proveedor_nombre'],
+                        'oc_number' => $ocData['numero_oc'],
+                        'concept' => 'Pago de ADELANTO de la Orden de Compra/Servicio',
+                        'monto' => $ocData['adelanto_monto'],
+                        'moneda' => $ocData['moneda'],
+                        'voucher_url' => $b['voucher_url']
+                    ]);
+                }
+
                 json_response(['ok' => true]);
             } else if (($b['action'] ?? '') === 'pay') {
                 $stmt = $pdo->prepare("UPDATE ordenes_compra SET pagado = 1, fecha_pago = NOW(), voucher_url = ? WHERE id = ?");
@@ -344,14 +391,17 @@ try {
                 $ocData = $ocFull->fetch();
 
                 if ($ocData && $ocData['proveedor_email'] && $b['voucher_url']) {
+                    $montoNotif = $ocData['condicion_pago'] === 'Adelanto + Saldo' ? $ocData['saldo_monto'] : $ocData['total'];
+                    $conceptNotif = $ocData['condicion_pago'] === 'Adelanto + Saldo' ? 'Pago de SALDO de la Orden de Compra/Servicio' : 'Pago de la Orden de Compra/Servicio';
+
                     require_once __DIR__ . '/../includes/mailer.php';
                     Mailer::sendPaymentVoucherToSupplier([
                         'to' => $ocData['proveedor_email'],
                         'subject' => "Confirmación de Pago: {$ocData['numero_oc']}",
                         'provider' => $ocData['proveedor_nombre'],
                         'oc_number' => $ocData['numero_oc'],
-                        'concept' => 'Pago de ítems de la Orden de Compra/Servicio',
-                        'monto' => $ocData['total'],
+                        'concept' => $conceptNotif,
+                        'monto' => $montoNotif,
                         'moneda' => $ocData['moneda'],
                         'voucher_url' => $b['voucher_url']
                     ]);
@@ -412,6 +462,99 @@ try {
                     ]);
                 }
                 json_response(['ok' => true]);
+            } else if (($b['action'] ?? '') === 'resend_payment_email') {
+                $type = $b['payment_type'] ?? null; // 'cuota', 'adelanto', 'saldo', 'mobility'
+                $cuota_id = $b['cuota_id'] ?? null;
+
+                // 1. Fetch the OC details and proveedor email
+                $ocFull = $pdo->prepare("
+                    SELECT oc.*, p.razon_social as proveedor_nombre, p.email as proveedor_email, p.contacto as proveedor_contacto 
+                    FROM ordenes_compra oc 
+                    JOIN proveedores p ON oc.proveedor_id = p.id 
+                    WHERE oc.id = ?
+                ");
+                $ocFull->execute([$id]);
+                $ocData = $ocFull->fetch();
+                if (!$ocData) json_response(['error' => 'Orden no encontrada'], 404);
+
+                $toEmail = $ocData['proveedor_email'];
+                $provName = $ocData['proveedor_nombre'];
+                $voucherUrl = null;
+                $monto = 0;
+                $concept = '';
+                $subject = '';
+
+                if ($type === 'cuota') {
+                    if (!$cuota_id) json_response(['error' => 'cuota_id requerido'], 400);
+                    $stmtCuota = $pdo->prepare("SELECT * FROM ordenes_cuotas WHERE id = ? AND orden_id = ?");
+                    $stmtCuota->execute([$cuota_id, $id]);
+                    $c = $stmtCuota->fetch();
+                    if (!$c || !$c['pagado']) json_response(['error' => 'La cuota no está pagada o no existe'], 400);
+                    
+                    $voucherUrl = $c['voucher_url'];
+                    $monto = $c['monto_cuota'];
+                    $concept = "Reenvío: Pago de Cuota N° {$c['numero_cuota']} de {$c['total_cuotas']} de la Orden de Compra/Servicio";
+                    $subject = "Confirmación de Pago (Cuota {$c['numero_cuota']}/{$c['total_cuotas']}): {$ocData['numero_oc']}";
+                } else if ($type === 'adelanto') {
+                    if (!$ocData['adelanto_pagado']) json_response(['error' => 'El adelanto no está pagado'], 400);
+                    $voucherUrl = $ocData['adelanto_voucher'];
+                    $monto = $ocData['adelanto_monto'];
+                    $concept = "Reenvío: Pago de ADELANTO de la Orden de Compra/Servicio";
+                    $subject = "Confirmación de Pago (Adelanto): {$ocData['numero_oc']}";
+                } else if ($type === 'saldo') {
+                    if (!$ocData['pagado']) json_response(['error' => 'La orden no está pagada'], 400);
+                    $voucherUrl = $ocData['voucher_url'];
+                    $monto = $ocData['condicion_pago'] === 'Adelanto + Saldo' ? $ocData['saldo_monto'] : $ocData['total'];
+                    $concept = "Reenvío: Pago de " . ($ocData['condicion_pago'] === 'Adelanto + Saldo' ? 'SALDO' : 'la Orden de Compra/Servicio');
+                    $subject = "Confirmación de Pago: {$ocData['numero_oc']}";
+                } else if ($type === 'mobility') {
+                    $stmtMob = $pdo->prepare("
+                        SELECT m.*, p.razon_social as mob_razon, p.email as mob_email, p.contacto as mob_contacto 
+                        FROM ordenes_movilidad m 
+                        JOIN proveedores p ON m.proveedor_id = p.id 
+                        WHERE m.orden_id = ?
+                    ");
+                    $stmtMob->execute([$id]);
+                    $mob = $stmtMob->fetch();
+                    if (!$mob || !$mob['pagado']) json_response(['error' => 'El pago de movilidad no está registrado o no existe'], 400);
+                    
+                    $toEmail = $mob['mob_email'];
+                    $provName = $mob['mob_razon'];
+                    $voucherUrl = $mob['voucher_url'];
+                    $monto = $mob['monto'];
+                    $concept = "Reenvío: Pago por servicio de movilidad / transporte";
+                    $subject = "Confirmación de Pago de Movilidad: {$ocData['numero_oc']}";
+                } else {
+                    json_response(['error' => 'Tipo de pago no soportado'], 400);
+                }
+
+                if (empty($toEmail)) json_response(['error' => 'El destinatario no tiene correo registrado'], 400);
+                if (empty($voucherUrl)) json_response(['error' => 'No hay voucher registrado para este pago'], 400);
+
+                require_once __DIR__ . '/../includes/mailer.php';
+                try {
+                    $mailData = [
+                        'to' => $toEmail,
+                        'cc' => 'compras@colegiolacatolica.edu.pe',
+                        'subject' => $subject,
+                        'provider' => $provName,
+                        'contact' => $ocData['proveedor_contacto'],
+                        'oc_number' => $ocData['numero_oc'],
+                        'concept' => $concept,
+                        'monto' => $monto,
+                        'amount' => $monto,
+                        'moneda' => $ocData['moneda'] ?? 'PEN',
+                        'voucher_url' => $voucherUrl
+                    ];
+
+                    if (@Mailer::sendPaymentVoucherToSupplier($mailData)) {
+                        json_response(['ok' => true]);
+                    } else {
+                        json_response(['error' => 'El servidor de correo rechazó el envío.'], 500);
+                    }
+                } catch (Throwable $mailEx) {
+                    json_response(['error' => 'Error interno al procesar el correo: ' . $mailEx->getMessage()], 500);
+                }
             } else if (($b['action'] ?? '') === 'receive') {
                 $conformidad = $b['conformidad_url'] ?? null;
                 $comprobante = $b['comprobante_url'] ?? null;
@@ -597,6 +740,7 @@ try {
                     'oc_number' => $oc['numero_oc'],
                     'concept' => $concepto,
                     'amount' => $monto,
+                    'monto' => $monto,
                     'moneda' => $oc['moneda'] ?? 'PEN',
                     'voucher_url' => $voucher_url
                 ];

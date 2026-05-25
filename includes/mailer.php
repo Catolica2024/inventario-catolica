@@ -12,8 +12,8 @@ use PHPMailer\PHPMailer\Exception;
 class Mailer {
     // Configuración de correos (Ajustar según necesidad)
     private static $EMAILS = [
-        'gerente' => 'correoprueba@colegiolacatolica.edu.pe',
-        'finanzas' => 'magisgonza8@gmail.com',
+        'gerente' => 'fjberrospi@colegiolacatolica.edu.pe',
+        'finanzas' => 'yichoy.finanzas@gmail.com',
         'tesoreria' => 'correoprueba2@colegiolacatolica.edu.pe',
         'contabilidad' => 'soportecentria@colegiolacatolica.edu.pe'
     ];
@@ -90,6 +90,7 @@ class Mailer {
                 <p style='font-size: 13px; color: #64748b;'>Por favor, ingrese al sistema para procesar el pago o verificar la documentación.</p>
             </div>
             <div style='background: #f1f5f9; padding: 15px; text-align: center; font-size: 11px; color: #64748b;'>
+                <p style='margin: 0 0 10px; color: #dc2626; font-weight: bold;'>⚠️ Por favor, NO responda a este correo. Toda gestión o consulta debe realizarse directamente con el encargado de compras.</p>
                 Este es un correo automático, por favor no lo responda.<br>
                 © " . date('Y') . " Católica School - Gestión de Tesorería.
             </div>
@@ -146,6 +147,7 @@ class Mailer {
                 </div>
             </div>
             <div style='background: #f8fafc; padding: 20px; text-align: center; border-top: 1px solid #e2e8f0;'>
+                <p style='margin: 0 0 10px; font-size: 11px; color: #dc2626; font-weight: bold;'>⚠️ Por favor, NO responda a este correo. Toda gestión o consulta debe realizarse directamente con el encargado de compras.</p>
                 <p style='margin: 0; font-size: 10px; color: #94a3b8;'>© " . date('Y') . " Católica School · Sistema de Gestión de Inventario</p>
             </div>
         </div>";
@@ -155,22 +157,38 @@ class Mailer {
         $mail = new PHPMailer(true);
 
         try {
-            $mail->isSMTP();
-            $mail->Host       = SMTP_HOST;
-            $mail->SMTPAuth   = true;
-            $mail->Username   = SMTP_USER;
-            $mail->Password   = SMTP_PASS;
-            
-            if (SMTP_SECURE === 'ssl') {
-                $mail->SMTPSecure = PHPMailer::ENCRYPTION_SMTPS;
-            } else if (SMTP_SECURE === 'tls') {
-                $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
+            if (defined('USE_NATIVE_MAIL') && USE_NATIVE_MAIL === true) {
+                // Modo producción: Usar la función mail() nativa del hosting de Yachay
+                $mail->isMail();
             } else {
-                $mail->SMTPSecure = '';
-                $mail->SMTPAuth   = false;
+                // Modo local/desarrollo: Usar SMTP
+                $mail->isSMTP();
+                $mail->Host       = SMTP_HOST;
+                $mail->SMTPAuth   = true;
+                $mail->Username   = SMTP_USER;
+                $mail->Password   = SMTP_PASS;
+                
+                if (SMTP_SECURE === 'ssl') {
+                    $mail->SMTPSecure = PHPMailer::ENCRYPTION_SMTPS;
+                } else if (SMTP_SECURE === 'tls') {
+                    $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
+                } else {
+                    $mail->SMTPSecure = '';
+                    $mail->SMTPAuth   = false;
+                }
+                
+                $mail->Port       = SMTP_PORT;
+
+                // Parche para hostings compartidos: Evitar fallos de verificación de certificado SSL
+                $mail->SMTPOptions = array(
+                    'ssl' => array(
+                        'verify_peer' => false,
+                        'verify_peer_name' => false,
+                        'allow_self_signed' => true
+                    )
+                );
             }
-            
-            $mail->Port       = SMTP_PORT;
+
             $mail->CharSet    = 'UTF-8';
 
             // Destinatarios
@@ -254,6 +272,12 @@ class Mailer {
                             <td style='padding: 6px 0; font-size: 11px; color: #64748b; font-weight: 700; text-transform: uppercase;'>Pago</td>
                             <td style='padding: 6px 0; font-size: 13px; font-weight: 700; text-align: right; color: #1e293b;'>{$oc['condicion_pago']}" . ($oc['condicion_detalle'] ? " ({$oc['condicion_detalle']})" : "") . "</td>
                         </tr>
+                        <tr>
+                            <td style='padding: 6px 0; font-size: 11px; color: #64748b; font-weight: 700; text-transform: uppercase;'>Presupuesto</td>
+                            <td style='padding: 6px 0; font-size: 13px; font-weight: 800; text-align: right; color: " . ($oc['dentro_presupuesto'] == 1 ? '#10b981' : '#ef4444') . ";'>
+                                " . ($oc['dentro_presupuesto'] == 1 ? '✅ DENTRO DE PRESUPUESTO' : '⚠️ FUERA DE PRESUPUESTO') . "
+                            </td>
+                        </tr>
                     </table>
                 </div>
 
@@ -300,6 +324,7 @@ class Mailer {
 
             <!-- Footer -->
             <div style='background: #f8fafc; padding: 24px; text-align: center; border-top: 1px solid #e2e8f0;'>
+                <p style='margin: 0 0 12px; font-size: 12px; color: #dc2626; font-weight: bold;'>⚠️ Por favor, NO responda a este correo. Toda gestión o consulta debe realizarse directamente con el encargado de compras.</p>
                 <p style='margin: 0; font-size: 11px; color: #94a3b8; line-height: 1.6;'>
                     Este es un correo automático generado por el Sistema de Gestión de Inventario.<br>
                     <strong>Católica School</strong> · Carabayllo, Lima, Perú.<br>
@@ -310,40 +335,19 @@ class Mailer {
     }
     public static function sendPaymentVoucherToSupplier($data) {
         $mail = new PHPMailer(true);
-
         try {
-            $mail->isSMTP();
-            $mail->Host       = SMTP_HOST;
-            $mail->SMTPAuth   = true;
-            $mail->Username   = SMTP_USER;
-            $mail->Password   = SMTP_PASS;
-            
-            if (SMTP_SECURE === 'ssl') {
-                $mail->SMTPSecure = PHPMailer::ENCRYPTION_SMTPS;
-            } else if (SMTP_SECURE === 'tls') {
-                $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
-            } else {
-                $mail->SMTPSecure = '';
-                $mail->SMTPAuth   = false;
-            }
-            
-            $mail->Port       = SMTP_PORT;
-            $mail->CharSet    = 'UTF-8';
-
-            // Destinatarios
+            // Use native mail() function for sending
+            $mail->isMail();
+            $mail->CharSet = 'UTF-8';
             $mail->setFrom(SMTP_FROM_EMAIL, SMTP_FROM_NAME);
             $mail->addAddress($data['to']);
-            
             $cc = $data['cc'] ?? 'compras@colegiolacatolica.edu.pe';
             if ($cc) {
                 $mail->addCC($cc);
             }
-
-            // Contenido
-            $mail->isHTML(true);
             $mail->Subject = $data['subject'];
-            $mail->Body    = self::getPaymentVoucherTemplate($data);
-
+            $mail->Body = self::getPaymentVoucherTemplate($data);
+            $mail->isHTML(true);
             return $mail->send();
         } catch (Exception $e) {
             error_log("PHPMailer Error en sendPaymentVoucherToSupplier a {$data['to']}: " . $mail->ErrorInfo);
@@ -353,6 +357,7 @@ class Mailer {
 
     private static function getPaymentVoucherTemplate($d) {
         $monSym = $d['moneda'] === 'USD' ? '$' : ($d['moneda'] === 'EUR' ? '€' : 'S/');
+        $monto = isset($d['monto']) ? $d['monto'] : ($d['amount'] ?? 0);
         return "
         <div style='font-family: sans-serif; color: #333; max-width: 600px; margin: auto; border: 1px solid #ddd; border-radius: 8px; overflow: hidden;'>
             <div style='background: #1b5cff; color: white; padding: 20px; text-align: center;'>
@@ -367,7 +372,7 @@ class Mailer {
                     <table style='width: 100%;'>
                         <tr><td style='padding:4px 0; font-size:12px; color:#64748b;'>Documento Ref:</td><td style='padding:4px 0; font-weight:bold; text-align:right;'>{$d['oc_number']}</td></tr>
                         <tr><td style='padding:4px 0; font-size:12px; color:#64748b;'>Concepto:</td><td style='padding:4px 0; font-weight:bold; text-align:right;'> " . ($d['concept'] ?? 'Pago de Orden de Compra / Servicio') . "</td></tr>
-                        <tr><td style='padding:4px 0; font-size:12px; color:#64748b;'>Monto Pagado:</td><td style='padding:4px 0; font-weight:bold; text-align:right; color:#1b5cff; font-size:16px;'>{$monSym} " . number_format($d['monto'], 2) . "</td></tr>
+                        <tr><td style='padding:4px 0; font-size:12px; color:#64748b;'>Monto Pagado:</td><td style='padding:4px 0; font-weight:bold; text-align:right; color:#1b5cff; font-size:16px;'>{$monSym} " . number_format($monto, 2) . "</td></tr>
                     </table>
                 </div>
 
@@ -383,6 +388,7 @@ class Mailer {
                 </p>
             </div>
             <div style='background: #f1f5f9; padding: 15px; text-align: center; font-size: 11px; color: #64748b;'>
+                <p style='margin: 0 0 10px; color: #dc2626; font-weight: bold;'>⚠️ Por favor, NO responda a este correo. Toda gestión o consulta debe realizarse directamente con el encargado de compras.</p>
                 Este es un correo automático de confirmación.<br>
                 © " . date('Y') . " Católica School - Gestión Institucional.
             </div>

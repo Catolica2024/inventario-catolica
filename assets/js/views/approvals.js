@@ -38,6 +38,7 @@ function renderPending() {
     
     // Solo puede aprobar si es su turno y aún no ha aprobado
     const canApprove = (isGerente && !p.aprobado_gerente) || (isFinanzas && !p.aprobado_finanzas);
+    const monSym = p.moneda === 'USD' ? '$' : (p.moneda === 'EUR' ? '€' : 'S/');
 
     return `
     <div class="card p-5 hover:border-primary transition-colors cursor-pointer" id="oc-card-${p.id}" onclick="viewOrderDetails(${p.id})">
@@ -48,6 +49,9 @@ function renderPending() {
             <span class="badge ${p.aprobado_gerente && p.aprobado_finanzas ? 'badge-green' : 'badge-yellow'}">
               ${p.aprobado_gerente && p.aprobado_finanzas ? 'Aprobada' : 'Pendiente'}
             </span>
+            <span class="badge ${p.dentro_presupuesto == 1 ? 'badge-green' : 'badge-red'}">
+              ${p.dentro_presupuesto == 1 ? 'En Presupuesto' : 'Fuera Presupuesto'}
+            </span>
           </div>
           <div class="flex gap-2 mt-2">
             <span class="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded ${p.aprobado_gerente ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-400'}">Gerencia</span>
@@ -55,8 +59,8 @@ function renderPending() {
           </div>
           <div class="text-sm text-muted-foreground mt-2">${p.proveedor_nombre} · ${p.fecha || '—'}</div>
           <div class="text-2xl font-bold mt-2">
-            S/ ${(parseFloat(p.total || 0) + parseFloat(p.monto_movilidad || 0)).toLocaleString('es-PE', {minimumFractionDigits:2})}
-            ${p.monto_movilidad > 0 ? `<span class="text-[10px] text-orange-600 block mt-0.5 font-normal">Incluye S/ ${parseFloat(p.monto_movilidad).toFixed(2)} de movilidad</span>` : ''}
+            ${monSym} ${(parseFloat(p.total || 0) + parseFloat(p.monto_movilidad || 0)).toLocaleString('es-PE', {minimumFractionDigits:2})}
+            ${p.monto_movilidad > 0 ? `<span class="text-[10px] text-orange-600 block mt-0.5 font-normal">Incluye ${monSym} ${parseFloat(p.monto_movilidad).toFixed(2)} de movilidad</span>` : ''}
           </div>
           ${p.observaciones ? `<div class="mt-2 p-2 rounded bg-muted text-[11px] italic text-muted-foreground line-clamp-2">"${p.observaciones}"</div>` : ''}
         </div>
@@ -81,6 +85,8 @@ window.viewOrderDetails = async function(id) {
     const oc = data.purchase;
     if (!oc) return;
 
+    const monSym = oc.moneda === 'USD' ? '$' : (oc.moneda === 'EUR' ? '€' : 'S/');
+
     const body = `
       <div class="space-y-5">
         <div class="grid grid-cols-2 gap-4 text-sm">
@@ -96,13 +102,16 @@ window.viewOrderDetails = async function(id) {
             </p>
           </div>
           <div><p class="text-muted-foreground">Moneda</p><p class="font-semibold">${oc.moneda || 'PEN'}</p></div>
+          <div>
+            <p class="text-muted-foreground">Presupuesto</p>
+            <p class="font-semibold">
+              ${oc.dentro_presupuesto == 1 ? 
+                `<span class="text-emerald-600 font-bold flex items-center gap-1.5"><i data-lucide="check-circle" class="w-4 h-4"></i> Dentro de Presupuesto</span>` : 
+                `<span class="text-red-500 font-bold flex items-center gap-1.5"><i data-lucide="alert-triangle" class="w-4 h-4"></i> Fuera de Presupuesto</span>`
+              }
+            </p>
+          </div>
         </div>
-
-        ${oc.condicion_pago === 'Adelanto + Saldo' ? `
-        <div class="p-3 rounded-lg bg-blue-50 border border-blue-100 flex justify-between text-xs">
-            <div><span class="text-blue-700 font-bold">Adelanto (${parseFloat(oc.adelanto_porcentaje).toFixed(0)}%):</span> S/ ${parseFloat(oc.adelanto_monto).toFixed(2)}</div>
-            <div><span class="text-blue-700 font-bold">Saldo:</span> S/ ${parseFloat(oc.saldo_monto).toFixed(2)}</div>
-        </div>` : ''}
 
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div class="p-4 rounded-xl bg-muted/20 border border-dashed">
@@ -154,6 +163,311 @@ window.viewOrderDetails = async function(id) {
             </div>
         </div>
 
+        <!-- Secciones de Detalles de Pago (Crédito, Cuotas, Adelanto, Contado, Transferencia) -->
+        ${(oc.condicion_pago === 'Al contado' || oc.condicion_pago === 'Transferencia') ? (() => {
+          const isPagada = oc.pagado == 1;
+          const fPago = oc.fecha_pago ? new Date(oc.fecha_pago).toLocaleDateString('es-PE') : null;
+          const monSym = oc.moneda === 'USD' ? '$' : (oc.moneda === 'EUR' ? '€' : 'S/');
+
+          return `
+          <div class="p-3.5 rounded-xl bg-slate-50 border border-slate-200/60 flex items-center justify-between gap-4">
+            <div class="flex items-center gap-2.5">
+              <div class="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center border border-slate-200">
+                <i data-lucide="wallet" class="w-4 h-4 text-slate-500"></i>
+              </div>
+              <div>
+                <h4 class="font-bold text-xs text-slate-800">Pago Único (${oc.condicion_pago})</h4>
+                <p class="text-[10px] text-slate-500 mt-0.5">${isPagada ? `Pagada el ${fPago}` : 'Pendiente de pago'}</p>
+              </div>
+            </div>
+            <div class="flex items-center gap-3">
+              <span class="text-[10px] font-bold px-2 py-0.5 rounded-full border ${isPagada ? 'text-green-700 bg-green-50 border-green-200' : 'text-yellow-700 bg-yellow-50 border-yellow-200'}">
+                ${isPagada ? 'Pagado' : 'Pendiente'}
+              </span>
+              <div class="flex items-center gap-1.5">
+                <span class="font-extrabold text-xs ${isPagada ? 'text-green-700' : 'text-primary'}">${monSym} ${parseFloat(oc.total).toFixed(2)}</span>
+                ${isPagada && oc.voucher_url ? `
+                  <div class="flex items-center gap-1 bg-white border rounded-lg p-0.5 shadow-sm">
+                    <a href="${oc.voucher_url}" target="_blank" class="p-1 text-slate-400 hover:text-primary transition-colors" title="Ver comprobante de pago">
+                      <i data-lucide="external-link" class="w-3.5 h-3.5 text-primary"></i>
+                    </a>
+                    <button onclick="resendPaymentEmail(${oc.id}, 'saldo')" class="p-1 text-slate-400 hover:text-primary transition-colors" title="Reenviar confirmación al proveedor">
+                      <i data-lucide="mail" class="w-3.5 h-3.5 text-primary"></i>
+                    </button>
+                  </div>
+                ` : ''}
+              </div>
+            </div>
+          </div>
+          `;
+        })() : ''}
+
+        ${oc.condicion_pago === 'Adelanto + Saldo' ? (() => {
+          const isAdelantoPagado = oc.adelanto_pagado == 1;
+          const isSaldoPagado = oc.pagado == 1;
+          const monSym = oc.moneda === 'USD' ? '$' : (oc.moneda === 'EUR' ? '€' : 'S/');
+          
+          const fAdelanto = oc.adelanto_fecha ? new Date(oc.adelanto_fecha).toLocaleDateString('es-PE') : null;
+          const fSaldo = oc.fecha_pago ? new Date(oc.fecha_pago).toLocaleDateString('es-PE') : null;
+
+          return `
+          <div class="p-3.5 rounded-xl bg-slate-50 border border-slate-200/60 space-y-2">
+            <h4 class="font-bold text-xs text-slate-800 flex items-center gap-1.5">
+              <i data-lucide="percent" class="w-4 h-4 text-primary"></i>
+              Detalle de Adelanto + Saldo
+            </h4>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <!-- Adelanto Card -->
+              <div class="p-2.5 rounded-lg border bg-white flex items-center justify-between gap-2">
+                <div>
+                  <div class="text-[10px] font-bold text-slate-800">Adelanto (${parseFloat(oc.adelanto_porcentaje).toFixed(0)}%)</div>
+                  <div class="text-[9px] text-slate-500 mt-0.5">
+                    ${isAdelantoPagado ? `Pagado el ${fAdelanto}` : 'Pendiente de pago'}
+                  </div>
+                </div>
+                <div class="flex items-center gap-1.5">
+                  <span class="font-extrabold text-xs ${isAdelantoPagado ? 'text-green-700' : 'text-primary'}">${monSym} ${parseFloat(oc.adelanto_monto).toFixed(2)}</span>
+                  ${isAdelantoPagado && oc.adelanto_voucher ? `
+                    <div class="flex items-center gap-1 bg-slate-50 border rounded-lg p-0.5 shadow-sm">
+                      <a href="${oc.adelanto_voucher}" target="_blank" class="p-1 text-slate-400 hover:text-primary transition-colors" title="Ver voucher del adelanto">
+                        <i data-lucide="external-link" class="w-3.5 h-3.5 text-primary"></i>
+                      </a>
+                      <button onclick="resendPaymentEmail(${oc.id}, 'adelanto')" class="p-1 text-slate-400 hover:text-primary transition-colors" title="Reenviar confirmación al proveedor">
+                        <i data-lucide="mail" class="w-3.5 h-3.5 text-primary"></i>
+                      </button>
+                    </div>
+                  ` : ''}
+                </div>
+              </div>
+              
+              <!-- Saldo Card -->
+              <div class="p-2.5 rounded-lg border bg-white flex items-center justify-between gap-2">
+                <div>
+                  <div class="text-[10px] font-bold text-slate-800">Saldo Final (${(100 - parseFloat(oc.adelanto_porcentaje)).toFixed(0)}%)</div>
+                  <div class="text-[9px] text-slate-500 mt-0.5">
+                    ${isSaldoPagado ? `Pagado el ${fSaldo}` : 'Se paga a la entrega'}
+                  </div>
+                </div>
+                <div class="flex items-center gap-1.5">
+                  <span class="font-extrabold text-xs ${isSaldoPagado ? 'text-green-700' : 'text-primary'}">${monSym} ${parseFloat(oc.saldo_monto).toFixed(2)}</span>
+                  ${isSaldoPagado && oc.voucher_url ? `
+                    <div class="flex items-center gap-1 bg-slate-50 border rounded-lg p-0.5 shadow-sm">
+                      <a href="${oc.voucher_url}" target="_blank" class="p-1 text-slate-400 hover:text-primary transition-colors" title="Ver voucher del saldo final">
+                        <i data-lucide="external-link" class="w-3.5 h-3.5 text-primary"></i>
+                      </a>
+                      <button onclick="resendPaymentEmail(${oc.id}, 'saldo')" class="p-1 text-slate-400 hover:text-primary transition-colors" title="Reenviar confirmación al proveedor">
+                        <i data-lucide="mail" class="w-3.5 h-3.5 text-primary"></i>
+                      </button>
+                    </div>
+                  ` : ''}
+                </div>
+              </div>
+            </div>
+          </div>
+          `;
+        })() : ''}
+
+        ${oc.cuotas && oc.cuotas.length > 0 ? (() => {
+          const cuotas = oc.cuotas;
+          const totalCuotas = cuotas.length;
+          const pagadas = cuotas.filter(c => c.pagado == 1).length;
+          const faltantes = totalCuotas - pagadas;
+          const pct = Math.round((pagadas / totalCuotas) * 100);
+          const monSym = oc.moneda === 'USD' ? '$' : (oc.moneda === 'EUR' ? '€' : 'S/');
+          
+          const cuotasHTML = cuotas.map(c => {
+            const isPagada = c.pagado == 1;
+            const venc = c.fecha_vencimiento ? new Date(c.fecha_vencimiento + 'T12:00:00').toLocaleDateString('es-PE') : '—';
+            const fPago = c.fecha_pago ? new Date(c.fecha_pago).toLocaleDateString('es-PE') : null;
+            
+            let statusText = '';
+            let statusClass = '';
+            if (isPagada) {
+              statusText = `Pagada${fPago ? ' el ' + fPago : ''}`;
+              statusClass = 'text-green-700 bg-green-50 border-green-200';
+            } else if (c.fecha_vencimiento) {
+              const today = new Date();
+              today.setHours(0,0,0,0);
+              const dueDate = new Date(c.fecha_vencimiento + 'T00:00:00');
+              const diffTime = dueDate - today;
+              const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+              
+              if (diffDays < 0) {
+                statusText = `Vencida hace ${Math.abs(diffDays)} días`;
+                statusClass = 'text-red-700 bg-red-50 border-red-200 font-bold';
+              } else if (diffDays === 0) {
+                statusText = 'Vence hoy';
+                statusClass = 'text-orange-700 bg-orange-50 border-orange-200 font-bold';
+              } else {
+                statusText = `Vence en ${diffDays} días`;
+                statusClass = 'text-yellow-700 bg-yellow-50 border-yellow-200';
+              }
+            } else {
+              statusText = 'Pendiente';
+              statusClass = 'text-slate-600 bg-slate-50 border-slate-200';
+            }
+            
+            return `
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between p-2.5 rounded-lg border border-slate-100 bg-white gap-2">
+              <div class="flex items-center gap-2.5">
+                <div class="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${isPagada ? 'bg-green-500 text-white' : 'bg-slate-100 text-slate-500 border border-slate-200'}">
+                  ${isPagada ? '✓' : c.numero_cuota}
+                </div>
+                <div>
+                  <div class="text-xs font-bold text-slate-800">Cuota ${c.numero_cuota} de ${c.total_cuotas}</div>
+                  <div class="text-[10px] text-slate-500 flex items-center gap-1">
+                    <i data-lucide="calendar" class="w-3 h-3"></i> Límite: ${venc}
+                  </div>
+                </div>
+              </div>
+              <div class="flex items-center justify-between sm:justify-end gap-3 w-full sm:w-auto">
+                <span class="text-[10px] font-bold px-2 py-0.5 rounded-full border ${statusClass}">${statusText}</span>
+                <div class="flex items-center gap-1.5">
+                  <span class="font-extrabold text-xs ${isPagada ? 'text-green-700' : 'text-primary'}">${monSym} ${parseFloat(c.monto_cuota).toFixed(2)}</span>
+                  ${isPagada && c.voucher_url ? `
+                    <div class="flex items-center gap-1 bg-slate-50 border rounded-lg p-0.5 shadow-sm">
+                      <a href="${c.voucher_url}" target="_blank" class="p-1 text-slate-400 hover:text-primary transition-colors" title="Ver comprobante de pago">
+                        <i data-lucide="external-link" class="w-3.5 h-3.5 text-primary"></i>
+                      </a>
+                      <button onclick="resendPaymentEmail(${oc.id}, 'cuota', ${c.id})" class="p-1 text-slate-400 hover:text-primary transition-colors" title="Reenviar confirmación al proveedor">
+                        <i data-lucide="mail" class="w-3.5 h-3.5 text-primary"></i>
+                      </button>
+                    </div>
+                  ` : ''}
+                </div>
+              </div>
+            </div>`;
+          }).join('');
+
+          return `
+          <div class="p-3.5 rounded-xl bg-slate-50 border border-slate-200/60 space-y-3">
+            <div class="flex items-center justify-between flex-wrap gap-2">
+              <div>
+                <h4 class="font-bold text-xs text-slate-800 flex items-center gap-1.5">
+                  <i data-lucide="calendar-days" class="w-4 h-4 text-primary"></i>
+                  Cronograma de Cuotas
+                </h4>
+                <p class="text-[9px] text-slate-500 font-medium mt-0.5">
+                  Estado actual: ${pagadas} pagadas · ${faltantes} pendientes (Faltan ${faltantes})
+                </p>
+              </div>
+              <div class="flex items-center gap-1.5 text-[10px] font-bold text-slate-700 bg-white px-2.5 py-0.5 rounded-full border border-slate-200">
+                <div class="w-12 bg-slate-100 rounded-full h-1.5 overflow-hidden border">
+                  <div class="bg-green-500 h-1.5 rounded-full transition-all" style="width: ${pct}%"></div>
+                </div>
+                <span>${pct}% pagado</span>
+              </div>
+            </div>
+            <div class="space-y-1 max-h-48 overflow-y-auto pr-1">
+              ${cuotasHTML}
+            </div>
+          </div>
+          `;
+        })() : ''}
+
+        ${oc.condicion_pago === 'Credito' && (!oc.cuotas || oc.cuotas.length === 0) ? (() => {
+          const isPagada = oc.pagado == 1;
+          const venc = oc.fecha_vencimiento ? new Date(oc.fecha_vencimiento + 'T12:00:00').toLocaleDateString('es-PE') : '—';
+          const fPago = oc.fecha_pago ? new Date(oc.fecha_pago).toLocaleDateString('es-PE') : null;
+          const monSym = oc.moneda === 'USD' ? '$' : (oc.moneda === 'EUR' ? '€' : 'S/');
+          
+          let statusText = '';
+          let statusClass = '';
+          if (isPagada) {
+            statusText = `Pagada el ${fPago}`;
+            statusClass = 'text-green-700 bg-green-50 border-green-200';
+          } else if (oc.fecha_vencimiento) {
+            const today = new Date();
+            today.setHours(0,0,0,0);
+            const dueDate = new Date(oc.fecha_vencimiento + 'T00:00:00');
+            const diffTime = dueDate - today;
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            
+            if (diffDays < 0) {
+              statusText = `Vencido hace ${Math.abs(diffDays)} días`;
+              statusClass = 'text-red-700 bg-red-50 border-red-200 font-bold';
+            } else if (diffDays === 0) {
+              statusText = 'Vence hoy';
+              statusClass = 'text-orange-700 bg-orange-50 border-orange-200 font-bold';
+            } else {
+              statusText = `Vence en ${diffDays} días`;
+              statusClass = 'text-yellow-700 bg-yellow-50 border-yellow-200';
+            }
+          } else {
+            statusText = 'Pendiente de pago';
+            statusClass = 'text-yellow-700 bg-yellow-50 border-yellow-200';
+          }
+
+          return `
+          <div class="p-3.5 rounded-xl bg-slate-50 border border-slate-200/60 flex items-center justify-between gap-4">
+            <div class="flex items-center gap-2.5">
+              <div class="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center border border-slate-200">
+                <i data-lucide="calendar" class="w-4 h-4 text-slate-500"></i>
+              </div>
+              <div>
+                <h4 class="font-bold text-xs text-slate-800">Pago Único a Crédito</h4>
+                <p class="text-[10px] text-slate-500 mt-0.5">Fecha límite de pago: ${venc}</p>
+              </div>
+            </div>
+            <div class="flex items-center gap-3">
+              <span class="text-[10px] font-bold px-2 py-0.5 rounded-full border ${statusClass}">${statusText}</span>
+              <div class="flex items-center gap-1.5">
+                <span class="font-extrabold text-xs ${isPagada ? 'text-green-700' : 'text-primary'}">${monSym} ${parseFloat(oc.total).toFixed(2)}</span>
+                ${isPagada && oc.voucher_url ? `
+                  <div class="flex items-center gap-1 bg-slate-50 border rounded-lg p-0.5 shadow-sm">
+                    <a href="${oc.voucher_url}" target="_blank" class="p-1 text-slate-400 hover:text-primary transition-colors" title="Ver comprobante de pago">
+                      <i data-lucide="external-link" class="w-4 h-4 text-primary"></i>
+                    </a>
+                    <button onclick="resendPaymentEmail(${oc.id}, 'saldo')" class="p-1 text-slate-400 hover:text-primary transition-colors" title="Reenviar confirmación al proveedor">
+                      <i data-lucide="mail" class="w-3.5 h-3.5 text-primary"></i>
+                    </button>
+                  </div>
+                ` : ''}
+              </div>
+            </div>
+          </div>
+          `;
+        })() : ''}
+
+        ${oc.monto_movilidad > 0 ? (() => {
+          const isMobPagada = oc.mobility && oc.mobility.pagado == 1;
+          const fPago = oc.mobility && oc.mobility.fecha_pago ? new Date(oc.mobility.fecha_pago).toLocaleDateString('es-PE') : null;
+          const monSym = oc.moneda === 'USD' ? '$' : (oc.moneda === 'EUR' ? '€' : 'S/');
+
+          return `
+          <div class="p-3.5 rounded-xl bg-slate-50 border border-slate-200/60 flex items-center justify-between gap-4">
+            <div class="flex items-center gap-2.5">
+              <div class="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center border border-slate-200">
+                <i data-lucide="truck" class="w-4 h-4 text-slate-500"></i>
+              </div>
+              <div>
+                <h4 class="font-bold text-xs text-slate-800">Servicio de Movilidad</h4>
+                <p class="text-[10px] text-slate-500 mt-0.5">${isMobPagada ? `Pagada el ${fPago}` : 'Pendiente de pago'}</p>
+              </div>
+            </div>
+            <div class="flex items-center gap-3">
+              <span class="text-[10px] font-bold px-2 py-0.5 rounded-full border ${isMobPagada ? 'text-orange-700 bg-orange-50 border-orange-200' : 'text-slate-500 bg-slate-50 border-slate-200'}">
+                ${isMobPagada ? 'Pagado' : 'Pendiente'}
+              </span>
+              <div class="flex items-center gap-1.5">
+                <span class="font-extrabold text-xs ${isMobPagada ? 'text-orange-700' : 'text-slate-500'}">${monSym} ${parseFloat(oc.monto_movilidad).toFixed(2)}</span>
+                ${isMobPagada && oc.mobility.voucher_url ? `
+                  <div class="flex items-center gap-1 bg-slate-50 border rounded-lg p-0.5 shadow-sm">
+                    <a href="${oc.mobility.voucher_url}" target="_blank" class="p-1 text-slate-400 hover:text-primary transition-colors" title="Ver comprobante de movilidad">
+                      <i data-lucide="external-link" class="w-3.5 h-3.5"></i>
+                    </a>
+                    <button onclick="resendPaymentEmail(${oc.id}, 'mobility')" class="p-1 text-slate-400 hover:text-primary transition-colors" title="Reenviar confirmación al transportista">
+                      <i data-lucide="mail" class="w-3.5 h-3.5 text-primary"></i>
+                    </button>
+                  </div>
+                ` : ''}
+              </div>
+            </div>
+          </div>
+          `;
+        })() : ''}
+
+
         ${oc.observaciones ? `
         <div class="p-3 rounded-lg bg-blue-50 border border-blue-100 text-sm">
           <p class="text-blue-700 font-semibold mb-1 flex items-center gap-1"><i data-lucide="info" class="w-3.5 h-3.5"></i> Observaciones / Sustento:</p>
@@ -172,23 +486,23 @@ window.viewOrderDetails = async function(id) {
                   <tr>
                     <td class="p-2">${it.descripcion}</td>
                     <td class="p-2 text-center">${it.cantidad}</td>
-                    <td class="p-2 text-right font-medium">S/ ${parseFloat(it.total).toFixed(2)}</td>
+                    <td class="p-2 text-right font-medium">${monSym} ${parseFloat(it.total).toFixed(2)}</td>
                   </tr>
                 `).join('')}
               </tbody>
               <tfoot class="bg-muted/50 font-bold border-t">
                 <tr>
                   <td colspan="2" class="p-2 text-right uppercase text-[9px]">Subtotal OC</td>
-                  <td class="p-2 text-right">S/ ${parseFloat(oc.total).toFixed(2)}</td>
+                  <td class="p-2 text-right">${monSym} ${parseFloat(oc.total).toFixed(2)}</td>
                 </tr>
                 ${oc.monto_movilidad > 0 ? `
                 <tr>
                   <td colspan="2" class="p-2 text-right uppercase text-[9px] text-orange-600">Movilidad (Sep.)</td>
-                  <td class="p-2 text-right text-orange-600">S/ ${parseFloat(oc.monto_movilidad).toFixed(2)}</td>
+                  <td class="p-2 text-right text-orange-600">${monSym} ${parseFloat(oc.monto_movilidad).toFixed(2)}</td>
                 </tr>
                 <tr class="bg-primary/5 text-primary">
                   <td colspan="2" class="p-2 text-right uppercase">Total Operación</td>
-                  <td class="p-2 text-right font-black border-t border-primary/20">S/ ${(parseFloat(oc.total) + parseFloat(oc.monto_movilidad)).toFixed(2)}</td>
+                  <td class="p-2 text-right font-black border-t border-primary/20">${monSym} ${(parseFloat(oc.total) + parseFloat(oc.monto_movilidad)).toFixed(2)}</td>
                 </tr>
                 ` : ''}
               </tfoot>
@@ -200,7 +514,7 @@ window.viewOrderDetails = async function(id) {
           <div class="text-muted-foreground text-xs font-mono">ID OC: ${oc.numero_oc}</div>
           <div class="text-right">
             <p class="text-xs text-muted-foreground">Total a aprobar</p>
-            <p class="text-xl font-bold text-primary">S/ ${(parseFloat(oc.total) + parseFloat(oc.monto_movilidad || 0)).toLocaleString('es-PE', {minimumFractionDigits:2})}</p>
+            <p class="text-xl font-bold text-primary">${monSym} ${(parseFloat(oc.total) + parseFloat(oc.monto_movilidad || 0)).toLocaleString('es-PE', {minimumFractionDigits:2})}</p>
           </div>
         </div>
       </div>`;
@@ -225,24 +539,28 @@ function renderHistory() {
     return;
   }
   const BADGE = { 'Aprobada': 'badge-green', 'Rechazada': 'badge-red' };
-  tbody.innerHTML = _historyOrders.map(p => `
+  tbody.innerHTML = _historyOrders.map(p => {
+    const monSym = p.moneda === 'USD' ? '$' : (p.moneda === 'EUR' ? '€' : 'S/');
+    return `
     <tr>
       <td class="font-mono text-xs font-bold">${p.numero_oc}</td>
       <td>${p.proveedor_nombre}</td>
       <td class="text-xs">${p.fecha || '—'}</td>
-      <td class="font-semibold">S/ ${(parseFloat(p.monto || 0) + parseFloat(p.monto_movilidad || 0)).toLocaleString('es-PE', {minimumFractionDigits:2})}</td>
+      <td class="font-semibold">${monSym} ${(parseFloat(p.monto || 0) + parseFloat(p.monto_movilidad || 0)).toLocaleString('es-PE', {minimumFractionDigits:2})}</td>
       <td><span class="badge ${BADGE[p.estado] || 'badge-gray'}">${p.estado}</span></td>
       <td class="text-right">
         <button class="btn btn-ghost p-1.5" onclick="viewOrderDetails(${p.id})"><i data-lucide="eye" class="w-4 h-4"></i></button>
       </td>
-    </tr>`).join('');
+    </tr>`;
+  }).join('');
 }
 
 window.approveOrder = function(id) {
   const oc = _pendingOrders.find(p => p.id == id);
+  const monSym = oc ? (oc.moneda === 'USD' ? '$' : (oc.moneda === 'EUR' ? '€' : 'S/')) : 'S/';
   UI.modal({
     title: 'Aprobar orden',
-    body: `<p>¿Confirmas la aprobación de la orden <strong>${oc ? oc.numero_oc : ''}</strong> por <strong>S/ ${oc ? (parseFloat(oc.monto || 0) + parseFloat(oc.monto_movilidad || 0)).toLocaleString('es-PE', {minimumFractionDigits:2}) : ''}</strong>?</p>`,
+    body: `<p>¿Confirmas la aprobación de la orden <strong>${oc ? oc.numero_oc : ''}</strong> por <strong>${monSym} ${oc ? (parseFloat(oc.monto || 0) + parseFloat(oc.monto_movilidad || 0)).toLocaleString('es-PE', {minimumFractionDigits:2}) : ''}</strong>?</p>`,
     confirmText: 'Sí, aprobar',
     onConfirm: async () => {
       UI.loading('Registrando aprobación...');
@@ -262,13 +580,14 @@ window.approveOrder = function(id) {
 
 window.rejectOrder = function(id) {
   const oc = _pendingOrders.find(p => p.id == id);
+  const monSym = oc ? (oc.moneda === 'USD' ? '$' : (oc.moneda === 'EUR' ? '€' : 'S/')) : 'S/';
   UI.modal({
     title: 'Rechazar orden de compra',
     body: `
       <div class="space-y-4">
         <div class="p-3 rounded-lg bg-muted text-sm">
           <div class="font-semibold">${oc ? oc.numero_oc : ''}</div>
-          <div class="text-muted-foreground">${oc ? oc.proveedor_nombre : ''} · S/ ${oc ? (parseFloat(oc.monto || 0) + parseFloat(oc.monto_movilidad || 0)).toLocaleString('es-PE', {minimumFractionDigits:2}) : ''}</div>
+          <div class="text-muted-foreground">${oc ? oc.proveedor_nombre : ''} · ${monSym} ${oc ? (parseFloat(oc.monto || 0) + parseFloat(oc.monto_movilidad || 0)).toLocaleString('es-PE', {minimumFractionDigits:2}) : ''}</div>
         </div>
         <div>
           <label class="text-sm font-medium">Motivo del rechazo <span class="text-destructive">*</span></label>
@@ -334,3 +653,32 @@ window.Views.approvals = function() {
 };
 
 window.Views.approvals.afterMount = loadApprovals;
+
+window.resendPaymentEmail = async function(ordenId, type, cuotaId = null) {
+  const confirm = window.confirm("¿Está seguro de que desea reenviar el correo de confirmación de pago al proveedor?");
+  if (!confirm) return;
+
+  UI.loading('Reenviando correo...');
+  try {
+    const res = await fetch('api/purchases.php', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id: ordenId,
+        action: 'resend_payment_email',
+        payment_type: type,
+        cuota_id: cuotaId
+      })
+    }).then(r => r.json());
+
+    UI.stopLoading();
+    if (res.ok) {
+      UI.toast('Correo de confirmación reenviado con éxito', 'success');
+    } else {
+      UI.toast('Error: ' + (res.error || 'No se pudo reenviar el correo'), 'error');
+    }
+  } catch (e) {
+    UI.stopLoading();
+    UI.toast('Error de red al intentar reenviar el correo', 'error');
+  }
+};

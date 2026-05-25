@@ -116,6 +116,35 @@ window.Views.dashboard.afterMount = async function(user) {
                 <div id="chart-states-legend" class="mt-8 space-y-3"></div>
             </div>
 
+            <div class="card p-8 bg-white border-primary/5 shadow-xl shadow-slate-200/50">
+                <h3 class="text-sm font-black uppercase tracking-[0.15em] text-primary flex items-center gap-2 mb-8">
+                    <i data-lucide="wallet" class="w-4 h-4"></i> Control Presupuestal
+                </h3>
+                <div class="h-[200px] relative flex items-center justify-center">
+                    <canvas id="chart-budget"></canvas>
+                    <div class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                        <div class="text-[8px] font-black text-muted-foreground uppercase tracking-widest">Total Gasto</div>
+                        <div class="text-xs font-black text-slate-800">S/ ${(data.gasto_presupuesto.total).toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                    </div>
+                </div>
+                <div class="mt-8 space-y-3">
+                    <div class="flex justify-between items-center group cursor-default">
+                        <div class="flex items-center gap-3">
+                            <span class="w-3 h-3 rounded-full bg-emerald-500 shadow-sm"></span>
+                            <span class="text-[11px] font-bold text-slate-500 group-hover:text-slate-800 transition-colors uppercase tracking-widest">En Presupuesto</span>
+                        </div>
+                        <span class="text-xs font-black text-emerald-600">S/ ${(data.gasto_presupuesto.dentro).toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                    </div>
+                    <div class="flex justify-between items-center group cursor-default">
+                        <div class="flex items-center gap-3">
+                            <span class="w-3 h-3 rounded-full bg-red-500 shadow-sm"></span>
+                            <span class="text-[11px] font-bold text-slate-500 group-hover:text-slate-800 transition-colors uppercase tracking-widest">Fuera Presupuesto</span>
+                        </div>
+                        <span class="text-xs font-black text-red-500">S/ ${(data.gasto_presupuesto.fuera).toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                    </div>
+                </div>
+            </div>
+
             <div class="bg-primary p-8 rounded-[2rem] text-white shadow-2xl shadow-primary/20 relative overflow-hidden group cursor-pointer" onclick="Router.go('reports')">
                 <div class="relative z-10">
                     <div class="text-[10px] font-black uppercase opacity-60 tracking-[0.2em] mb-2">Módulo de Inteligencia</div>
@@ -179,6 +208,27 @@ window.Views.dashboard.afterMount = async function(user) {
                 borderWidth: 0,
                 cutout: '80%',
                 hoverOffset: 15
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } }
+        }
+    });
+
+    // Presupuesto (Doughnut Chart)
+    const hasData = (data.gasto_presupuesto.dentro > 0 || data.gasto_presupuesto.fuera > 0);
+    new Chart(document.getElementById('chart-budget'), {
+        type: 'doughnut',
+        data: {
+            labels: ['En Presupuesto', 'Fuera Presupuesto'],
+            datasets: [{
+                data: hasData ? [data.gasto_presupuesto.dentro, data.gasto_presupuesto.fuera] : [1, 0],
+                backgroundColor: hasData ? ['#10b981', '#ef4444'] : ['#cbd5e1', '#e2e8f0'],
+                borderWidth: 0,
+                cutout: '75%',
+                hoverOffset: hasData ? 15 : 0
             }]
         },
         options: {

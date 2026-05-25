@@ -49,7 +49,7 @@ async function loadRecepcions() {
             <button class="btn btn-ghost p-1.5" title="Ver Detalles de la Orden" onclick="viewOrderDetails(${p.id})">
                 <i data-lucide="eye" class="w-4 h-4"></i>
             </button>
-            ${p.estado === 'Aprobada' ? `
+            ${(p.estado === 'Aprobada' || p.estado === 'Recibida') ? `
               <button class="btn btn-primary btn-sm" onclick="processRecepcion(${p.id}, '${p.numero_oc}')">
                 <i data-lucide="package-check" class="w-4 h-4 mr-1"></i>Recibir Todo
               </button>

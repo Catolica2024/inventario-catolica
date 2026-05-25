@@ -15,7 +15,7 @@ try {
     $compras_mes = $pdo->query("
         SELECT SUM(monto) 
         FROM ordenes_compra 
-        WHERE estado = 'Aprobada' 
+        WHERE estado IN ('Aprobada', 'Recibida', 'Completada') 
         AND MONTH(fecha) = MONTH(CURRENT_DATE()) 
         AND YEAR(fecha) = YEAR(CURRENT_DATE())
     ")->fetchColumn() ?: 0;
@@ -60,6 +60,18 @@ try {
         GROUP BY estado
     ")->fetchAll();
 
+    // 8. Gasto dentro y fuera de presupuesto (para órdenes Aprobadas, Recibidas, Completadas)
+    $gasto_presupuesto = $pdo->query("
+        SELECT 
+            SUM(CASE WHEN dentro_presupuesto = 1 THEN total ELSE 0 END) as dentro,
+            SUM(CASE WHEN dentro_presupuesto = 0 THEN total ELSE 0 END) as fuera
+        FROM ordenes_compra
+        WHERE estado IN ('Aprobada', 'Recibida', 'Completada')
+    ")->fetch();
+
+    $gasto_dentro = $gasto_presupuesto['dentro'] ?: 0;
+    $gasto_fuera = $gasto_presupuesto['fuera'] ?: 0;
+
     json_response([
         'kpis' => [
             'activos' => number_format($activos_totales),
@@ -69,7 +81,12 @@ try {
         ],
         'distribucion' => $distribucion,
         'estados_activos' => $estados_activos,
-        'recientes' => $recientes
+        'recientes' => $recientes,
+        'gasto_presupuesto' => [
+            'dentro' => (float)$gasto_dentro,
+            'fuera' => (float)$gasto_fuera,
+            'total' => (float)($gasto_dentro + $gasto_fuera)
+        ]
     ]);
 
 } catch (Throwable $e) {

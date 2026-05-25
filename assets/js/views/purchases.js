@@ -123,7 +123,7 @@ window.Views['new-purchase'] = function () {
                 <option value="0">0% (Inafecto/Exonerado)</option>
               </select>
             </div>
-            <div class="flex items-center gap-4 pt-6">
+            <div class="flex items-center gap-4 pt-6 flex-wrap">
               <div class="flex items-center gap-2">
                 <input type="checkbox" id="oc-precios-con-igv" class="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary" onchange="recalcOCTotals()">
                 <label for="oc-precios-con-igv" class="text-sm font-medium cursor-pointer">Precios incluyen IGV</label>
@@ -131,6 +131,12 @@ window.Views['new-purchase'] = function () {
               <div class="flex items-center gap-2">
                 <input type="checkbox" id="oc-incluye-movilidad" checked class="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary" onchange="toggleMobilityPrompt()">
                 <label for="oc-incluye-movilidad" class="text-sm font-medium cursor-pointer">Incluye movilidad</label>
+              </div>
+              <div class="flex items-center gap-2 border-l pl-4 border-slate-200">
+                <input type="checkbox" id="oc-dentro-presupuesto" checked class="w-4 h-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500" onchange="window.toggleBudgetStatus()">
+                <label for="oc-dentro-presupuesto" id="oc-budget-label" class="text-sm font-bold cursor-pointer text-emerald-600 flex items-center gap-1.5 transition-colors">
+                  <i data-lucide="check-circle" class="w-4 h-4"></i> Dentro de Presupuesto
+                </label>
               </div>
             </div>
             <div class="md:col-span-2">
@@ -358,6 +364,21 @@ window.toggleCreditDetails = function () {
     document.getElementById('oc-adelanto-porc').value = '';
   }
   recalcOCTotals();
+};
+
+window.toggleBudgetStatus = function() {
+  const chk = document.getElementById('oc-dentro-presupuesto');
+  const label = document.getElementById('oc-budget-label');
+  if (chk && label) {
+    if (chk.checked) {
+      label.className = "text-sm font-bold cursor-pointer text-emerald-600 flex items-center gap-1.5 transition-colors";
+      label.innerHTML = `<i data-lucide="check-circle" class="w-4 h-4"></i> Dentro de Presupuesto`;
+    } else {
+      label.className = "text-sm font-bold cursor-pointer text-red-500 flex items-center gap-1.5 transition-colors";
+      label.innerHTML = `<i data-lucide="alert-triangle" class="w-4 h-4"></i> Fuera de Presupuesto`;
+    }
+    lucide.createIcons();
+  }
 };
 
 window.toggleMobilityPrompt = function () {
@@ -697,6 +718,7 @@ window.generateOC = async function () {
       monto_movilidad: _ocMobilityData ? _ocMobilityData.monto : 0,
       mobility: _ocMobilityData,
       observaciones: document.getElementById('oc-observaciones').value.trim(),
+      dentro_presupuesto: document.getElementById('oc-dentro-presupuesto')?.checked ? 1 : 0,
       items
     };
 
@@ -1326,11 +1348,13 @@ async function loadPurchases() {
       const isAdelantoPaid = p.adelanto_pagado == 1;
       const isReceived = p.estado === 'Completada' || p.conformidad_url;
       const isOS = p.tipo === 'servicio';
+      const monSym = p.moneda === 'USD' ? '$' : (p.moneda === 'EUR' ? '€' : 'S/');
 
       let masterStatus = { label: 'Pendiente', class: 'badge-yellow', icon: 'clock' };
 
       if (isRejected) {
-          masterStatus = { label: 'Rechazada', class: 'badge-red', icon: 'x-circle' };
+          const label = p.tipo === 'servicio' ? 'Rechazada' : 'Rechazado';
+          masterStatus = { label: label, class: 'badge-red', icon: 'x-circle' };
       } else if (isReceived) {
           masterStatus = { 
               label: isOS ? 'Realizado ✓' : 'En Almacén ✓', 
@@ -1345,17 +1369,49 @@ async function loadPurchases() {
           masterStatus = { label: 'Pendiente de Pago', class: 'badge-indigo', icon: 'credit-card' };
       }
 
+      // Iconos dinámicos de aprobación y rechazo
+      let gerIcon = 'user-check';
+      let gerClass = 'text-slate-300';
+      let gerTitle = 'Gerencia: Pendiente';
+      if (p.aprobado_gerente == 1) {
+          gerClass = 'text-green-500';
+          gerTitle = 'Gerencia: Aprobado';
+      } else if (p.rechazado_gerente == 1) {
+          gerIcon = 'user-x';
+          gerClass = 'text-red-500';
+          gerTitle = 'Gerencia: Rechazado';
+      }
+
+      let finIcon = 'shield-check';
+      let finClass = 'text-slate-300';
+      let finTitle = 'Finanzas: Pendiente';
+      if (p.aprobado_finanzas == 1) {
+          finClass = 'text-green-500';
+          finTitle = 'Finanzas: Aprobado';
+      } else if (p.rechazado_finanzas == 1) {
+          finIcon = 'shield-x';
+          finClass = 'text-red-500';
+          finTitle = 'Finanzas: Rechazado';
+      }
+
+      const budgetBadge = p.dentro_presupuesto == 1 ? 
+        `<span class="badge badge-green text-[10px] py-0.5 px-2 flex items-center gap-1 w-fit" title="Dentro de presupuesto"><i data-lucide="check" class="w-3 h-3"></i> En Ppto</span>` : 
+        `<span class="badge badge-red text-[10px] py-0.5 px-2 flex items-center gap-1 w-fit animate-pulse" title="Fuera de presupuesto"><i data-lucide="alert-triangle" class="w-3 h-3"></i> Fuera Ppto</span>`;
+
       const statusHtml = `
         <div class="flex flex-col gap-2">
-            <span class="badge ${masterStatus.class} w-fit flex items-center gap-1.5 py-1 px-2.5">
-                <i data-lucide="${masterStatus.icon}" class="w-3 h-3"></i>
-                ${masterStatus.label}
-            </span>
+            <div class="flex items-center gap-2">
+                <span class="badge ${masterStatus.class} w-fit flex items-center gap-1.5 py-1 px-2.5">
+                    <i data-lucide="${masterStatus.icon}" class="w-3 h-3"></i>
+                    ${masterStatus.label}
+                </span>
+                ${budgetBadge}
+            </div>
             <div class="flex items-center gap-3 ml-1">
                 <!-- Micro-indicadores de flujo -->
                 <div class="flex gap-1" title="Aprobaciones (Gerencia / Finanzas)">
-                    <i data-lucide="user-check" class="w-3 h-3 ${p.aprobado_gerente ? 'text-green-500' : 'text-slate-300'}"></i>
-                    <i data-lucide="shield-check" class="w-3 h-3 ${p.aprobado_finanzas ? 'text-green-500' : 'text-slate-300'}"></i>
+                    <i data-lucide="${gerIcon}" class="w-3 h-3 ${gerClass}" title="${gerTitle}"></i>
+                    <i data-lucide="${finIcon}" class="w-3 h-3 ${finClass}" title="${finTitle}"></i>
                 </div>
                 <div class="w-px h-3 bg-slate-200"></div>
                 <div class="flex gap-1" title="Pagos OC (Adelanto / Total)">
@@ -1386,8 +1442,8 @@ async function loadPurchases() {
         </td>
         <td class="text-xs">${p.fecha || '—'}</td>
         <td class="font-bold text-sm">
-            S/ ${(parseFloat(p.total || 0) + parseFloat(p.monto_movilidad || 0)).toLocaleString('es-PE', { minimumFractionDigits: 2 })}
-            ${p.monto_movilidad > 0 ? `<div class="text-[9px] text-orange-600 font-medium">+ S/ ${parseFloat(p.monto_movilidad).toFixed(2)} Mov.</div>` : ''}
+            ${monSym} ${(parseFloat(p.total || 0) + parseFloat(p.monto_movilidad || 0)).toLocaleString('es-PE', { minimumFractionDigits: 2 })}
+            ${p.monto_movilidad > 0 ? `<div class="text-[9px] text-orange-600 font-medium">+ ${monSym} ${parseFloat(p.monto_movilidad).toFixed(2)} Mov.</div>` : ''}
         </td>
         <td>${statusHtml}</td>
         <td class="text-right">
