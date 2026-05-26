@@ -163,7 +163,7 @@ window.UI = {
         lucide.createIcons();
     }, 100);
   },
-  downloadQR(divId, code, category) {
+  downloadQR(divId, code, category, displayCode = null) {
     const qrCanvas = document.querySelector(`#${divId} canvas`);
     if (!qrCanvas) return;
 
@@ -187,30 +187,53 @@ window.UI = {
     const textX = qrSize + (padding * 2);
 
     ctx.fillStyle = '#1b5cff';
-    ctx.font = '900 14px Inter, sans-serif';
-    ctx.fillText('CATEGORÍA DEL BIEN:', textX, padding + 30);
-    ctx.fillStyle = '#0f172a';
-    ctx.font = '900 24px Inter, sans-serif';
-    ctx.fillText(category.toUpperCase(), textX, padding + 50);
+    ctx.font = '900 12px Inter, sans-serif';
+    ctx.fillText(displayCode ? 'TIPO Y NOMBRE DEL ESPACIO:' : 'CATEGORÍA DEL BIEN:', textX, padding + 10);
 
+    // Función auxiliar para dibujar texto multi-línea en canvas
+    function wrapText(context, text, x, y, maxWidth, lineHeight) {
+      const words = text.split(' ');
+      let line = '';
+      let currentY = y;
+      for (let n = 0; n < words.length; n++) {
+        let testLine = line + words[n] + ' ';
+        let metrics = context.measureText(testLine);
+        let testWidth = metrics.width;
+        if (testWidth > maxWidth && n > 0) {
+          context.fillText(line, x, currentY);
+          line = words[n] + ' ';
+          currentY += lineHeight;
+        } else {
+          line = testLine;
+        }
+      }
+      context.fillText(line, x, currentY);
+      return currentY + lineHeight;
+    }
+
+    ctx.fillStyle = '#0f172a';
+    ctx.font = '900 18px Inter, sans-serif';
+    const nextY = wrapText(ctx, category.toUpperCase(), textX, padding + 30, textWidth, 24);
+
+    const labelTitle = displayCode ? 'CÓDIGO DE ESPACIO:' : 'CÓDIGO PATRIMONIAL:';
     ctx.fillStyle = '#64748b';
-    ctx.font = '900 14px Inter, sans-serif';
-    ctx.fillText('CÓDIGO PATRIMONIAL:', textX, padding + 100);
+    ctx.font = '900 12px Inter, sans-serif';
+    ctx.fillText(labelTitle, textX, nextY + 15);
     ctx.fillStyle = '#1b5cff';
     ctx.font = '900 32px Inter, sans-serif';
-    ctx.fillText(code, textX, padding + 120);
+    ctx.fillText(displayCode || code, textX, nextY + 32);
 
     const link = document.createElement('a');
     link.download = `Etiqueta-${code}.png`;
     link.href = canvas.toDataURL("image/png");
     link.click();
   },
-  printQR(divId, code, category) {
+  printQR(divId, code, category, displayCode = null) {
     const qrCanvas = document.querySelector(`#${divId} canvas`);
     if (!qrCanvas) return;
 
     const imgData = qrCanvas.toDataURL("image/png");
-    const printWindow = window.open('', '_blank', 'width=500,height=500');
+    const printWindow = window.open('', '_blank', 'width=600,height=600');
     
     printWindow.document.write(`
         <html>
@@ -218,22 +241,40 @@ window.UI = {
             <title>Etiqueta - ${code}</title>
             <style>
                 @page { margin: 0; }
-                body { margin: 0; padding: 5mm; font-family: 'Inter', sans-serif; }
-                .label { width: 80mm; height: 40mm; border: 1px solid #eee; display: flex; align-items: center; gap: 10px; }
-                .qr { width: 35mm; height: 35mm; }
-                .info { flex: 1; }
-                .cat { font-size: 8pt; font-weight: 800; color: #64748b; margin: 0; text-transform: uppercase; }
-                .val { font-size: 12pt; font-weight: 900; color: #0f172a; margin: 0; }
-                .code { font-size: 16pt; font-weight: 900; color: #1b5cff; margin-top: 5px; }
+                body { margin: 0; padding: 3mm; font-family: 'Inter', sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+                .label { 
+                    width: 80mm; 
+                    height: 40mm; 
+                    border: 1px dashed #cbd5e1; 
+                    display: flex; 
+                    align-items: center; 
+                    gap: 12px; 
+                    box-sizing: border-box; 
+                    padding: 4mm;
+                    background: #ffffff;
+                }
+                .qr { width: 30mm; height: 30mm; }
+                .info { 
+                    flex: 1; 
+                    display: flex; 
+                    flex-direction: column; 
+                    justify-content: center;
+                    overflow: hidden;
+                }
+                .inst { font-size: 6.5pt; font-weight: 900; color: #1b5cff; margin: 0 0 2px 0; text-transform: uppercase; letter-spacing: 0.5px; }
+                .cat { font-size: 8pt; font-weight: 800; color: #0f172a; margin: 0; text-transform: uppercase; line-height: 1.25; }
+                .label-title { font-size: 6.5pt; font-weight: 900; color: #64748b; margin: 6px 0 1px 0; text-transform: uppercase; letter-spacing: 0.5px; }
+                .code { font-size: 15pt; font-weight: 900; color: #1b5cff; margin: 0; font-family: monospace; letter-spacing: 0.5px; }
             </style>
         </head>
         <body>
             <div class="label">
                 <img src="${imgData}" class="qr">
                 <div class="info">
-                    <p class="cat">I.E.P. LA CATOLICA</p>
+                    <p class="inst">I.E.P. LA CATOLICA</p>
                     <p class="cat">${category}</p>
-                    <p class="code">${code}</p>
+                    <p class="label-title">${displayCode ? 'CÓDIGO ESPACIO' : 'CÓDIGO PATRIMONIAL'}</p>
+                    <p class="code">${displayCode || code}</p>
                 </div>
             </div>
             <script>window.onload = () => { window.print(); window.close(); };</script>

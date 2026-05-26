@@ -106,12 +106,28 @@ CREATE TABLE IF NOT EXISTS personal (
 
 CREATE TABLE IF NOT EXISTS ubicaciones (
     id INT AUTO_INCREMENT PRIMARY KEY,
+    codigo VARCHAR(20) UNIQUE,
     nombre VARCHAR(100) NOT NULL,
     tipo VARCHAR(50),
+    pabellon VARCHAR(50),
+    piso INT,
     sede_id INT,
     estado ENUM('activo', 'inactivo') DEFAULT 'activo',
     FOREIGN KEY (sede_id) REFERENCES sedes(id)
 );
+
+CREATE TABLE IF NOT EXISTS ubicaciones_historial (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    ubicacion_id INT NOT NULL,
+    nombre VARCHAR(100) NULL,
+    tipo VARCHAR(50) NULL,
+    responsable_id INT NULL,
+    fecha_desde DATETIME DEFAULT CURRENT_TIMESTAMP,
+    fecha_hasta DATETIME NULL,
+    FOREIGN KEY (ubicacion_id) REFERENCES ubicaciones(id) ON DELETE CASCADE,
+    FOREIGN KEY (responsable_id) REFERENCES personal(id) ON DELETE SET NULL
+);
+
 
 -- 6. Activos (Ítems individualizados)
 CREATE TABLE IF NOT EXISTS activos (

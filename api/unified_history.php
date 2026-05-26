@@ -1,6 +1,39 @@
 <?php
 require_once __DIR__ . '/../includes/db.php';
 
+$method = $_SERVER['REQUEST_METHOD'];
+
+if ($method === 'DELETE') {
+    $action = $_GET['action'] ?? '';
+    $event_type = $_GET['event_type'] ?? '';
+    $event_id = $_GET['id'] ?? '';
+
+    if ($action !== 'delete' || !$event_type || !$event_id) {
+        json_response(['error' => 'Parámetros inválidos para eliminación'], 400);
+    }
+
+    try {
+        $pdo = db();
+        if ($event_type === 'traslado') {
+            $stmt = $pdo->prepare("DELETE FROM traslados WHERE id = ?");
+            $stmt->execute([$event_id]);
+        } elseif ($event_type === 'mantenimiento') {
+            $stmt = $pdo->prepare("DELETE FROM mantenimientos WHERE id = ?");
+            $stmt->execute([$event_id]);
+        } elseif ($event_type === 'uso_espacio') {
+            $stmt = $pdo->prepare("DELETE FROM ubicaciones_historial WHERE id = ?");
+            $stmt->execute([$event_id]);
+        } else {
+            json_response(['error' => 'Tipo de evento no soportado para eliminación'], 400);
+        }
+
+        json_response(['ok' => true]);
+    } catch (Exception $e) {
+        json_response(['error' => $e->getMessage()], 500);
+    }
+    exit;
+}
+
 $type = $_GET['type'] ?? ''; // 'location' or 'staff'
 $id = $_GET['id'] ?? '';
 
@@ -13,8 +46,8 @@ try {
     if ($type === 'location') {
         // 1. Traslados (Mobiliario)
         $stmt = $pdo->prepare("
-            SELECT 'traslado' as event_type, t.fecha, t.cantidad, i.nombre as item_name, 
-                   u1.nombre as origen, u2.nombre as destino, t.tipo, t.motivo
+            SELECT 'traslado' as event_type, t.id, t.fecha, t.cantidad, i.nombre as item_name, 
+                   u1.nombre as origen, u2.nombre as destino, t.tipo, t.motivo, NULL as fecha_hasta
             FROM traslados t
             JOIN items i ON t.item_id = i.id
             LEFT JOIN ubicaciones u1 ON t.ubicacion_origen_id = u1.id
@@ -26,8 +59,8 @@ try {
 
         // 2. Mantenimientos (Equipos en esta loc)
         $stmt = $pdo->prepare("
-            SELECT 'mantenimiento' as event_type, m.fecha_inicio as fecha, 1 as cantidad, i.nombre as item_name,
-                   m.tipo, m.estado, m.descripcion_problema as motivo, '' as tecnico
+            SELECT 'mantenimiento' as event_type, m.id, m.fecha_inicio as fecha, 1 as cantidad, i.nombre as item_name,
+                   m.tipo, m.estado, m.descripcion_problema as motivo, '' as tecnico, NULL as fecha_hasta
             FROM mantenimientos m
             JOIN activos a ON m.activo_id = a.id
             JOIN items i ON a.item_id = i.id
@@ -36,12 +69,14 @@ try {
         $stmt->execute([$id]);
         $history = array_merge($history, $stmt->fetchAll(PDO::FETCH_ASSOC));
 
-        // 3. Historial de Responsables
+        // 3. Historial de Uso y Responsables de la Ubicación
         $stmt = $pdo->prepare("
-            SELECT 'responsable' as event_type, uh.fecha_desde as fecha, 0 as cantidad, p.nombre as item_name,
-                   uh.tipo as sub_tipo, '' as origen, '' as destino, 'Asignación' as tipo, '' as motivo
+            SELECT 'uso_espacio' as event_type, uh.id, uh.fecha_desde as fecha, 0 as cantidad, 
+                   COALESCE(p.nombre, 'Sin responsable') as item_name,
+                   uh.tipo as sub_tipo, uh.nombre as sub_nombre, '' as origen, '' as destino, 
+                   'Uso y Responsable' as tipo, '' as motivo, uh.fecha_hasta
             FROM ubicaciones_historial uh
-            JOIN personal p ON uh.responsable_id = p.id
+            LEFT JOIN personal p ON uh.responsable_id = p.id
             WHERE uh.ubicacion_id = ?
         ");
         $stmt->execute([$id]);

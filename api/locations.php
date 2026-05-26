@@ -10,6 +10,9 @@ try {
             if (isset($_GET['action']) && $_GET['action'] === 'next_code') {
                 $sede_id = $_GET['sede_id'] ?? null;
                 $tipo = $_GET['tipo'] ?? 'Otro';
+                $pabellon = $_GET['pabellon'] ?? 'A';
+                $piso = isset($_GET['piso']) ? intval($_GET['piso']) : 1;
+                $sufijo = $_GET['sufijo'] ?? '';
                 if (!$sede_id) json_response(['error' => 'sede_id requerido'], 400);
 
                 // Obtener código de la sede
@@ -18,19 +21,64 @@ try {
                 $sede = $stmtSede->fetch();
                 $sedeCode = ($sede && $sede['codigo']) ? $sede['codigo'] : 'S';
 
-                $prefix = $sedeCode . '-ESP';
+                $prefixToStrip = $sedeCode . '-ESP-' . $pabellon;
+                $prefixQuery = $sedeCode . '-ESP-' . $pabellon . $piso . '%';
 
-                $rows = $pdo->prepare("SELECT codigo FROM ubicaciones WHERE codigo LIKE ? ORDER BY id DESC LIMIT 50");
-                $rows->execute([$prefix . '-%']);
+                $rows = $pdo->prepare("SELECT codigo FROM ubicaciones WHERE codigo LIKE ? ORDER BY id DESC");
+                $rows->execute([$prefixQuery]);
                 $data = $rows->fetchAll();
 
+                $minNum = $piso * 100 + 1;
+                $maxNum = $piso * 100 + 99;
+
                 $max = 0;
+                $existSuffix = [];
                 foreach ($data as $row) {
-                    $parts = explode('-', $row['codigo']);
-                    $n = intval(end($parts));
-                    if ($n > $max) $max = $n;
+                    $code = $row['codigo'];
+                    if (strpos($code, $prefixToStrip) === 0) {
+                        $numStr = substr($code, strlen($prefixToStrip));
+                        $numParts = explode('-', $numStr);
+                        $numStr = $numParts[0]; // Extraer solo la parte numérica (ej: 103 de 103-A)
+                        $s = $numParts[1] ?? '';
+                        if (is_numeric($numStr)) {
+                            $n = intval($numStr);
+                            if ($n >= $minNum && $n <= $maxNum) {
+                                if ($n > $max) $max = $n;
+                                if (!isset($existSuffix[$n])) {
+                                    $existSuffix[$n] = [];
+                                }
+                                if ($s !== '') {
+                                    $existSuffix[$n][$s] = true;
+                                }
+                            }
+                        }
+                    }
                 }
-                $next = $prefix . '-' . str_pad($max + 1, 4, '0', STR_PAD_LEFT);
+
+                $targetNum = null;
+                $isBathroom = (stripos($tipo, 'hig') !== false);
+                if ($isBathroom && ($sufijo === 'A' || $sufijo === 'B')) {
+                    $opposite = ($sufijo === 'A') ? 'B' : 'A';
+                    
+                    // Buscamos el mayor número N que tenga la letra opuesta pero NO tenga nuestra letra
+                    $candidates = [];
+                    foreach ($existSuffix as $n => $suffixes) {
+                        if (isset($suffixes[$opposite]) && !isset($suffixes[$sufijo])) {
+                            $candidates[] = $n;
+                        }
+                    }
+                    if (!empty($candidates)) {
+                        $targetNum = max($candidates);
+                    }
+                }
+                
+                if ($targetNum !== null) {
+                    $nextNum = $targetNum;
+                } else {
+                    $nextNum = ($max === 0) ? $minNum : ($max + 1);
+                }
+                
+                $next = $prefixToStrip . $nextNum;
                 json_response(['next_code' => $next]);
                 break;
             }
@@ -53,7 +101,7 @@ try {
                 FROM ubicaciones u
                 LEFT JOIN personal p ON u.responsable_id = p.id
                 LEFT JOIN sedes s ON u.sede_id = s.id
-                ORDER BY u.nombre ASC
+                ORDER BY u.sede_id ASC, u.pabellon ASC, u.piso ASC, u.codigo ASC
             ")->fetchAll();
             json_response(['locations' => $rows]);
             break;
@@ -66,12 +114,14 @@ try {
                 $check->execute([$codigo]);
                 if ($check->fetch()) json_response(['error' => 'El código "' . $codigo . '" ya está en uso por otra ubicación.'], 400);
             }
-            $sql = "INSERT INTO ubicaciones (codigo, nombre, tipo, responsable_id, sede_id, estado) VALUES (?,?,?,?,?,?)";
+            $sql = "INSERT INTO ubicaciones (codigo, nombre, tipo, pabellon, piso, responsable_id, sede_id, estado) VALUES (?,?,?,?,?,?,?,?)";
             $stmt = $pdo->prepare($sql);
             $stmt->execute([
                 $codigo,
                 $b['nombre'],
                 $b['tipo'] ?? null,
+                $b['pabellon'] ?? null,
+                $b['piso'] ? intval($b['piso']) : null,
                 $b['responsable_id'] ?: null,
                 $b['sede_id'] ?: null,
                 $b['estado'] ?? 'activo'
@@ -79,8 +129,8 @@ try {
             $id = $pdo->lastInsertId();
             
             // Iniciar historial
-            $pdo->prepare("INSERT INTO ubicaciones_historial (ubicacion_id, tipo, responsable_id) VALUES (?,?,?)")
-                ->execute([$id, $b['tipo'] ?? null, $b['responsable_id'] ?: null]);
+            $pdo->prepare("INSERT INTO ubicaciones_historial (ubicacion_id, nombre, tipo, responsable_id) VALUES (?,?,?,?)")
+                ->execute([$id, $b['nombre'], $b['tipo'] ?? null, $b['responsable_id'] ?: null]);
 
             json_response(['ok' => true, 'id' => $id]);
             break;
@@ -96,34 +146,37 @@ try {
             }
             
             // Obtener estado actual para comparar
-            $stmtCurr = $pdo->prepare("SELECT tipo, responsable_id FROM ubicaciones WHERE id = ?");
+            $stmtCurr = $pdo->prepare("SELECT nombre, tipo, responsable_id FROM ubicaciones WHERE id = ?");
             $stmtCurr->execute([$id]);
             $curr = $stmtCurr->fetch();
 
-            $sql = "UPDATE ubicaciones SET codigo=?, nombre=?, tipo=?, responsable_id=?, sede_id=?, estado=? WHERE id=?";
+            $sql = "UPDATE ubicaciones SET codigo=?, nombre=?, tipo=?, pabellon=?, piso=?, responsable_id=?, sede_id=?, estado=? WHERE id=?";
             $stmt = $pdo->prepare($sql);
             $stmt->execute([
                 $codigo,
                 $b['nombre'],
                 $b['tipo'] ?? null,
+                $b['pabellon'] ?? null,
+                $b['piso'] ? intval($b['piso']) : null,
                 $b['responsable_id'] ?: null,
                 $b['sede_id'] ?: null,
                 $b['estado'] ?? 'activo',
                 $id
             ]);
 
-            // Si el tipo o el responsable cambiaron, registrar en historial
+            // Si el nombre, tipo o el responsable cambiaron, registrar en historial
+            $newNombre = $b['nombre'];
             $newTipo = $b['tipo'] ?? null;
             $newResp = $b['responsable_id'] ?: null;
 
-            if ($curr && ($curr['tipo'] !== $newTipo || $curr['responsable_id'] != $newResp)) {
+            if ($curr && ($curr['nombre'] !== $newNombre || $curr['tipo'] !== $newTipo || $curr['responsable_id'] != $newResp)) {
                 // Cerrar el historial anterior (el más reciente que no tenga fecha_hasta)
                 $pdo->prepare("UPDATE ubicaciones_historial SET fecha_hasta = CURRENT_TIMESTAMP WHERE ubicacion_id = ? AND fecha_hasta IS NULL")
                     ->execute([$id]);
                 
                 // Insertar nuevo registro
-                $pdo->prepare("INSERT INTO ubicaciones_historial (ubicacion_id, tipo, responsable_id) VALUES (?,?,?)")
-                    ->execute([$id, $newTipo, $newResp]);
+                $pdo->prepare("INSERT INTO ubicaciones_historial (ubicacion_id, nombre, tipo, responsable_id) VALUES (?,?,?,?)")
+                    ->execute([$id, $newNombre, $newTipo, $newResp]);
             }
 
             json_response(['ok' => true]);
