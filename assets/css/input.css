@@ -197,17 +197,28 @@ table.data tr:last-child td { border-bottom: none; }
   .mobile-overlay.active { display: block; }
   
   .card { border-radius: 0.75rem; }
-  .btn { width: 100%; }
-  .btn-sm-auto { width: auto; }
   .login-blob { width: 16rem !important; height: 16rem !important; }
   
   .table-container { 
-    margin-left: -1.25rem; 
-    margin-right: -1.25rem; 
-    padding-left: 1.25rem; 
-    padding-right: 1.25rem;
-    width: calc(100% + 2.5rem);
+    margin-left: -1rem; 
+    margin-right: -1rem; 
+    padding-left: 1rem; 
+    padding-right: 1rem;
+    width: calc(100% + 2rem);
   }
+
+  /* === BUTTON RESPONSIVE RULES ===
+     Only make PRIMARY/OUTLINE action buttons full-width in page content and modals.
+     Ghost buttons (icon-only table actions, header toggles) stay auto-width.
+  */
+  /* Page content action buttons */
+  #view .btn:not(.btn-ghost) { width: 100%; }
+  /* Modal footer action buttons */
+  .modal-footer .btn:not(.btn-ghost) { width: 100%; }
+  /* NEVER make ghost/icon buttons or header buttons full-width */
+  .btn-ghost,
+  header .btn,
+  .btn-sm-auto { width: auto !important; flex-shrink: 0; }
 }
 
 /* Animations */
@@ -242,3 +253,64 @@ table.data tr:last-child td { border-bottom: none; }
 #oc-items-table thead th:nth-child(9)  { width: 7rem; }
 #oc-items-table thead th:nth-child(10) { width: 6rem; }
 #oc-items-table thead th:nth-child(11) { width: 3rem; }
+
+/* Mobile-specific global overrides (<= 640px) */
+@media (max-width: 640px) {
+  /* Scale down headers */
+  h1.text-3xl { font-size: 1.5rem !important; line-height: 2rem !important; }
+  h2.text-2xl { font-size: 1.25rem !important; line-height: 1.75rem !important; }
+  
+  /* Scale down empty states & large paddings to save screen space */
+  .card.p-20 { padding: 1.5rem !important; }
+  .py-20 { padding-top: 1.5rem !important; padding-bottom: 1.5rem !important; }
+  .py-24 { padding-top: 2rem !important; padding-bottom: 2rem !important; }
+  .py-32 { padding-top: 2.5rem !important; padding-bottom: 2.5rem !important; }
+  .p-8 { padding: 1rem !important; }
+  .md\:p-8 { padding: 1rem !important; }
+  
+  /* Adjust modal sizing and margins */
+  .modal-backdrop { padding: 0.5rem !important; align-items: flex-end !important; }
+  .modal { border-radius: 1.25rem 1.25rem 0 0 !important; max-height: 92vh !important; width: 100% !important; max-width: 100% !important; }
+  .modal-header { padding: 1rem 1rem !important; }
+  .modal-body { padding: 1rem !important; }
+  .modal-footer { 
+    padding: 0.75rem 1rem !important; 
+    border-bottom-left-radius: 0 !important; 
+    border-bottom-right-radius: 0 !important;
+    flex-direction: column-reverse !important;
+  }
+  /* Modal footer button groups – stack nicely */
+  .modal-footer > div { width: 100%; }
+  .modal-footer .flex.gap-2 { flex-direction: column-reverse; width: 100%; }
+  
+  /* Two-column form grids collapse to one column in modals on very narrow screens */
+  .modal-body .grid-cols-2 { grid-template-columns: 1fr !important; }
+  .modal-body .md\:grid-cols-2 { grid-template-columns: 1fr !important; }
+  
+  /* Flex elements that shouldn't squeeze on narrow screens */
+  .flex.gap-12 { gap: 1.5rem !important; flex-direction: column !important; }
+
+  /* Main content reduced padding at 320px */
+  #view { padding: 0.75rem !important; }
+
+  /* Page header bottom margin reduction */
+  .mb-8 { margin-bottom: 1.25rem !important; }
+}
+
+/* Touch-device hover action buttons visibility */
+@media (max-width: 1024px) {
+  .opacity-0.group-hover\:opacity-100 {
+    opacity: 1 !important;
+  }
+}
+
+/* Utility to hide scrollbars on premium elements */
+.scrollbar-none {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none;  /* IE and Edge */
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none; /* Chrome, Safari and Opera */
+}
+
+

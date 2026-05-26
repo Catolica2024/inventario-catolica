@@ -22,7 +22,7 @@ window.UI = {
           <div class="flex-1 flex flex-col md:flex-row gap-2">
             ${extraButtons.map((b, i) => `<button class="btn ${b.class || 'btn-outline'}" data-extra="${i}">${b.icon ? `<i data-lucide="${b.icon}"></i>` : ''}${b.text}</button>`).join('')}
           </div>
-          <div class="flex gap-2">
+          <div class="flex flex-col-reverse md:flex-row gap-2">
             ${!hideCancel ? '<button class="btn btn-outline" data-close>Cancelar</button>' : ''}
             ${!hideConfirm ? `<button class="btn ${opts.confirmClass || 'btn-primary'}" data-confirm>${confirmText}</button>` : ''}
           </div>
@@ -64,7 +64,7 @@ window.UI = {
     return `
       <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-8">
         <div>
-          <h1 class="text-3xl font-black tracking-tight text-foreground">${title}</h1>
+          <h1 class="text-2xl md:text-3xl font-black tracking-tight text-foreground">${title}</h1>
           ${subtitle ? `<p class="text-sm font-medium text-muted-foreground mt-1">${subtitle}</p>` : ''}
         </div>
         <div class="flex flex-wrap gap-2 items-center">
@@ -89,7 +89,7 @@ window.UI = {
     }
   },
   emptyState(text = 'Sin datos disponibles') {
-    return `<div class="card p-20 text-center text-muted-foreground border-dashed flex flex-col items-center justify-center">
+    return `<div class="card p-6 sm:p-20 text-center text-muted-foreground border-dashed flex flex-col items-center justify-center">
         <div class="w-16 h-16 rounded-full bg-slate-50 flex items-center justify-center mb-4">
             <i data-lucide="inbox" class="text-slate-300 w-8 h-8"></i>
         </div>

@@ -5,26 +5,26 @@ window.Views = window.Views || {};
 window.Views.treasury = function () {
     return `
     ${UI.pageHeader('Tesorería', 'Gestión de pagos, créditos y cuotas de OC/OS', `
-      <div class="flex gap-2">
+      <div class="flex flex-col sm:flex-row gap-2">
         <button class="btn btn-outline text-emerald-600" onclick="exportTreasuryExcel()"><i data-lucide="file-spreadsheet" class="w-4 h-4 mr-2"></i>Exportar Excel</button>
         <button class="btn btn-outline" onclick="loadTreasuryData()"><i data-lucide="refresh-cw" class="w-4 h-4 mr-2"></i>Actualizar</button>
       </div>
     `)}
 
     <div class="space-y-4">
-      <!-- Tabs premium con indicador activo -->
-      <div class="flex gap-0 border-b border-border">
-        <button id="tab-pending" class="treasury-tab active-tab" onclick="switchTreasuryTab('pending')">
+      <!-- Tabs premium con indicador activo, scrollable horizontalmente en móvil -->
+      <div class="flex overflow-x-auto whitespace-nowrap gap-0 border-b border-border scrollbar-none">
+        <button id="tab-pending" class="treasury-tab active-tab flex-shrink-0" onclick="switchTreasuryTab('pending')">
           <i data-lucide="clock" class="w-4 h-4"></i>
           <span>Pendientes de Pago</span>
           <span id="count-pending" class="tab-count">0</span>
         </button>
-        <button id="tab-partial" class="treasury-tab" onclick="switchTreasuryTab('partial')">
+        <button id="tab-partial" class="treasury-tab flex-shrink-0" onclick="switchTreasuryTab('partial')">
           <i data-lucide="layers" class="w-4 h-4"></i>
           <span>Cuotas en Curso</span>
           <span id="count-partial" class="tab-count">0</span>
         </button>
-        <button id="tab-history" class="treasury-tab" onclick="switchTreasuryTab('history')">
+        <button id="tab-history" class="treasury-tab flex-shrink-0" onclick="switchTreasuryTab('history')">
           <i data-lucide="history" class="w-4 h-4"></i>
           <span>Historial de Pagos</span>
           <span id="count-history" class="tab-count">0</span>
@@ -34,31 +34,31 @@ window.Views.treasury = function () {
       <!-- Filtros (solo visibles en Historial) -->
       <div id="history-filters" class="hidden">
         <div class="card p-3 bg-muted/30">
-          <div class="flex flex-wrap gap-3 items-end">
-            <div class="flex-1 min-w-[180px]">
+          <div class="grid grid-cols-1 sm:flex sm:flex-wrap gap-3 items-end">
+            <div class="sm:flex-1 min-w-[180px] w-full">
               <label class="text-[10px] font-bold uppercase text-muted-foreground mb-1 block">Buscar documento / proveedor</label>
               <div class="relative">
                 <i data-lucide="search" class="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground"></i>
                 <input type="text" id="filter-search" class="input w-full h-9 pl-8 text-sm" placeholder="Ej: OC-2024-001 o Nombre proveedor..." oninput="applyHistoryFilters()">
               </div>
             </div>
-            <div>
+            <div class="w-full sm:w-auto">
               <label class="text-[10px] font-bold uppercase text-muted-foreground mb-1 block">Desde</label>
-              <input type="date" id="filter-from" class="input h-9 text-sm" onchange="applyHistoryFilters()">
+              <input type="date" id="filter-from" class="input w-full sm:w-auto h-9 text-sm" onchange="applyHistoryFilters()">
             </div>
-            <div>
+            <div class="w-full sm:w-auto">
               <label class="text-[10px] font-bold uppercase text-muted-foreground mb-1 block">Hasta</label>
-              <input type="date" id="filter-to" class="input h-9 text-sm" onchange="applyHistoryFilters()">
+              <input type="date" id="filter-to" class="input w-full sm:w-auto h-9 text-sm" onchange="applyHistoryFilters()">
             </div>
-            <div>
+            <div class="w-full sm:w-auto">
               <label class="text-[10px] font-bold uppercase text-muted-foreground mb-1 block">Tipo</label>
-              <select id="filter-type" class="select h-9 text-sm" onchange="applyHistoryFilters()">
+              <select id="filter-type" class="select w-full sm:w-auto h-9 text-sm" onchange="applyHistoryFilters()">
                 <option value="">Todos</option>
                 <option value="compra">Órdenes de Compra</option>
                 <option value="servicio">Órdenes de Servicio</option>
               </select>
             </div>
-            <button class="btn btn-ghost h-9 text-xs text-muted-foreground" onclick="clearHistoryFilters()">
+            <button class="btn btn-ghost h-9 text-xs text-muted-foreground w-full sm:w-auto flex justify-center" onclick="clearHistoryFilters()">
               <i data-lucide="x" class="w-3.5 h-3.5"></i> Limpiar
             </button>
           </div>
@@ -97,6 +97,7 @@ window.Views.treasury = function () {
         margin-bottom: -1px; cursor: pointer;
         background: transparent; border-top: none; border-left: none; border-right: none;
         transition: color 0.15s, border-color 0.15s;
+        flex-shrink: 0;
       }
       .treasury-tab:hover { color: var(--foreground, #1e293b); }
       .treasury-tab.active-tab {

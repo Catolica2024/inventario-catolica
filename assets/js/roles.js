@@ -8,14 +8,18 @@ window.ROLES = [
   { id: 'personal', label: 'Personal', description: 'Consulta de inventario' },
 ];
 
+// MÓDULOS SENSIBLES: Requieren asignación explícita del Admin.
+// El dashboard muestra KPIs financieros y operativos estratégicos.
+window.SENSITIVE_MODULES = ['dashboard'];
+
 window.ROLE_PERMISSIONS = {
   admin: ['*'],
-  gerente_general: ['dashboard', 'notifications', 'search', 'inventory', 'approvals', 'reports', 'history'],
-  jefe_finanzas: ['dashboard', 'notifications', 'search', 'inventory', 'approvals', 'reports', 'history'],
-  almacenero: ['dashboard', 'notifications', 'search', 'inventory', 'assets', 'categories', 'locations', 'areas', 'movements', 'maintenance', 'add-item', 'new-purchase', 'history'],
-  comprador: ['dashboard', 'notifications', 'search', 'suppliers', 'categories', 'purchases', 'new-purchase', 'recepcions', 'areas', 'history', 'documents'],
-  tesoreria: ['dashboard', 'notifications', 'search', 'inventory', 'treasury', 'history'],
-  personal: ['dashboard', 'search', 'inventory', 'notifications'],
+  gerente_general: ['notifications', 'search', 'inventory', 'approvals', 'reports', 'history'],
+  jefe_finanzas: ['notifications', 'search', 'inventory', 'approvals', 'reports', 'history'],
+  almacenero: ['notifications', 'search', 'inventory', 'assets', 'categories', 'locations', 'areas', 'movements', 'maintenance', 'add-item', 'new-purchase', 'history'],
+  comprador: ['notifications', 'search', 'suppliers', 'categories', 'purchases', 'new-purchase', 'recepcions', 'areas', 'history', 'documents'],
+  tesoreria: ['notifications', 'search', 'inventory', 'treasury', 'history'],
+  personal: ['search', 'inventory', 'notifications'],
 };
 
 window.MODULES_LIST = [
@@ -46,9 +50,17 @@ window.canAccess = function (user, sectionId) {
   // EL ADMIN SIEMPRE TIENE ACCESO (Regla de oro del Arquitecto)
   if (user.role === 'admin') return true;
 
+  // MÓDULOS SENSIBLES: Solo accesibles si el Admin los asignó explícitamente.
+  // Se ignoran los permisos base del rol para estos módulos.
+  if (window.SENSITIVE_MODULES && window.SENSITIVE_MODULES.includes(sectionId)) {
+    if (!user.permissions) return false;
+    const customPerms = user.permissions.split(',').map(p => p.trim());
+    return customPerms.includes(sectionId);
+  }
+
   let perms = [];
 
-  // Cargar permisos del rol
+  // Cargar permisos del rol base
   const rolePerms = window.ROLE_PERMISSIONS[user.role] || [];
   perms = [...rolePerms];
 

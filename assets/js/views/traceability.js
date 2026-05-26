@@ -24,7 +24,7 @@ async function loadTraceResources() {
 window.Views.assignments = function () {
     return `
         ${UI.pageHeader('Asignaciones de Equipos', 'Gestión de entrega y devolución de activos al personal', `
-            <div class="flex gap-2">
+            <div class="flex flex-col sm:flex-row gap-2">
                 <button class="btn btn-outline text-emerald-600" onclick="exportAssignmentsExcel()"><i data-lucide="file-spreadsheet" class="w-4 h-4 mr-2"></i> Excel</button>
                 <button class="btn btn-outline" onclick="exportAssignmentsToPDF()"><i data-lucide="file-text" class="w-4 h-4 mr-2"></i> PDF</button>
                 <button class="btn btn-primary" onclick="openAssignmentModal()"><i data-lucide="plus" class="w-4 h-4 mr-2"></i> Nueva Asignación</button>
@@ -344,7 +344,7 @@ window.returnAsset = function (id, nombre) {
 window.Views.transfers = function () {
     return `
         ${UI.pageHeader('Traslados de Mobiliario', 'Historial de movimientos de bienes entre aulas y espacios', `
-            <div class="flex gap-2">
+            <div class="flex flex-col sm:flex-row gap-2">
                 <button class="btn btn-outline text-emerald-600" onclick="exportTransfersExcel()"><i data-lucide="file-spreadsheet" class="w-4 h-4 mr-2"></i> Excel</button>
                 <button class="btn btn-outline" onclick="exportTransfersToPDF()"><i data-lucide="file-text" class="w-4 h-4 mr-2"></i> PDF</button>
                 <button class="btn btn-outline" onclick="openLocationHistory()"><i data-lucide="history" class="w-4 h-4 mr-2"></i> Historial por Espacio</button>
@@ -885,7 +885,7 @@ window.openTransferModal = function (preselectedId = null) {
 window.Views.dispatch = function () {
     return `
         ${UI.pageHeader('Despacho de Insumos', 'Registro de entrega de materiales consumibles al personal', `
-            <div class="flex gap-2">
+            <div class="flex flex-col sm:flex-row gap-2">
                 <button class="btn btn-outline text-emerald-600" onclick="exportDispatchesExcel()"><i data-lucide="file-spreadsheet" class="w-4 h-4 mr-2"></i> Exportar Excel</button>
                 <button class="btn btn-primary" onclick="openDispatchModal()"><i data-lucide="send" class="w-4 h-4 mr-2"></i> Nuevo Despacho</button>
             </div>

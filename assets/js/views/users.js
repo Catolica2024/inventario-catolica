@@ -1,41 +1,140 @@
 window.Views = window.Views || {};
 
+// Parsear permisos del usuario como array
+function parsePerms(permisos) {
+  if (!permisos) return [];
+  return permisos.split(',').map(p => p.trim()).filter(Boolean);
+}
+
 async function loadUsers() {
   const tbody = document.getElementById('users-table-body');
   if (!tbody) return;
   try {
     const data = await fetch('api/users.php').then(r => r.json());
     if (!data.users || data.users.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="5" class="text-center py-10 text-muted-foreground">No hay usuarios registrados.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="6" class="text-center py-10 text-muted-foreground">No hay usuarios registrados.</td></tr>';
       return;
     }
-    tbody.innerHTML = data.users.map(u => `
-      <tr class="${u.estado === 'inactivo' ? 'bg-muted/30' : ''}">
-        <td class="font-medium ${u.estado === 'inactivo' ? 'opacity-50 grayscale' : ''}">
+    tbody.innerHTML = data.users.map(u => {
+      const permsArr = parsePerms(u.permisos);
+      const hasDashboard = permsArr.includes('dashboard');
+      const isAdmin = u.rol_nombre === 'admin';
+      const isInactive = u.estado === 'inactivo';
+      return `
+      <tr class="${isInactive ? 'bg-muted/30' : ''}">
+        <td class="font-medium ${isInactive ? 'opacity-50 grayscale' : ''}">
           <div>${u.nombre}</div>
           ${u.personal_nombre ? `<div class="text-[10px] text-muted-foreground italic">Vínculo: ${u.personal_nombre}</div>` : ''}
         </td>
-        <td class="text-muted-foreground text-sm ${u.estado === 'inactivo' ? 'opacity-50 grayscale' : ''}">${u.email}</td>
-        <td class="${u.estado === 'inactivo' ? 'opacity-50 grayscale' : ''}">
+        <td class="text-muted-foreground text-sm ${isInactive ? 'opacity-50 grayscale' : ''}">${u.email}</td>
+        <td class="${isInactive ? 'opacity-50 grayscale' : ''}">
           <span class="badge badge-blue">${u.rol_nombre}</span>
           ${u.permisos ? '<span class="badge badge-orange ml-1 text-[8px]">Personalizado</span>' : ''}
         </td>
-        <td class="${u.estado === 'inactivo' ? 'opacity-50 grayscale' : ''}"><span class="badge ${u.estado === 'activo' ? 'badge-green' : 'badge-red'}">${u.estado}</span></td>
+        <td class="${isInactive ? 'opacity-50 grayscale' : ''}">
+          <span class="badge ${u.estado === 'activo' ? 'badge-green' : 'badge-red'}">${u.estado}</span>
+        </td>
+
+        <!-- TOGGLE DASHBOARD -->
+        <td class="text-center">
+          ${isAdmin
+            ? `<span class="inline-flex items-center gap-1 text-[10px] font-bold text-primary uppercase tracking-wide">
+                <i data-lucide="shield-check" class="w-3.5 h-3.5"></i>Siempre
+               </span>`
+            : `<button
+                  id="dash-toggle-${u.id}"
+                  onclick="toggleDashboard(${u.id}, '${u.nombre.replace(/'/g, "\\'")}', ${hasDashboard})"
+                  class="relative inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider transition-all duration-200
+                         ${hasDashboard
+                           ? 'bg-primary/10 text-primary border border-primary/30 hover:bg-primary/20'
+                           : 'bg-muted text-muted-foreground border border-border hover:bg-muted/80'}
+                         ${isInactive ? 'opacity-40 pointer-events-none' : ''}"
+                  title="${hasDashboard ? 'Revocar acceso al Dashboard' : 'Conceder acceso al Dashboard'}">
+                  <span class="w-2 h-2 rounded-full ${hasDashboard ? 'bg-primary' : 'bg-slate-300'}"></span>
+                  ${hasDashboard ? 'Habilitado' : 'Deshabilitado'}
+               </button>`
+          }
+        </td>
+
         <td class="text-right whitespace-nowrap">
           <div class="flex justify-end gap-1">
-            <button class="btn btn-ghost p-1.5 ${u.estado === 'activo' ? 'text-destructive' : 'text-green-500'}" 
-                    title="${u.estado === 'activo' ? 'Dar de baja' : 'Activar'}" 
-                    onclick="toggleUserStatus(${u.id}, '${u.estado}', '${u.nombre.replace(/'/g, "\\'")}')">
-              <i data-lucide="${u.estado === 'activo' ? 'user-x' : 'user-check'}" class="w-4 h-4"></i>
+            <button class="btn btn-ghost p-1.5 ${isInactive ? 'text-green-500' : 'text-destructive'}"
+                    title="${isInactive ? 'Activar' : 'Dar de baja'}"
+                    onclick="toggleUserStatus(${u.id}, '${u.estado}', '${u.nombre.replace(/'/g, "\\'")}')"
+            ><i data-lucide="${isInactive ? 'user-check' : 'user-x'}" class="w-4 h-4"></i></button>
+            <button class="btn btn-ghost p-1.5 ${isInactive ? 'opacity-50 grayscale' : ''}" title="Editar" onclick="editUser(${u.id})">
+              <i data-lucide="pencil" class="w-4 h-4"></i>
             </button>
-            <button class="btn btn-ghost p-1.5 ${u.estado === 'inactivo' ? 'opacity-50 grayscale' : ''}" title="Editar" onclick="editUser(${u.id})"><i data-lucide="pencil" class="w-4 h-4"></i></button>
-            <button class="btn btn-ghost p-1.5 text-destructive ${u.estado === 'inactivo' ? 'opacity-50 grayscale' : ''}" title="Eliminar" onclick="deleteUser(${u.id}, '${u.nombre.replace(/'/g, "\\'")}')"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+            <button class="btn btn-ghost p-1.5 text-destructive ${isInactive ? 'opacity-50 grayscale' : ''}" title="Eliminar" onclick="deleteUser(${u.id}, '${u.nombre.replace(/'/g, "\\'")}')">
+              <i data-lucide="trash-2" class="w-4 h-4"></i>
+            </button>
           </div>
         </td>
-      </tr>`).join('');
+      </tr>`;
+    }).join('');
     lucide.createIcons();
-  } catch { tbody.innerHTML = '<tr><td colspan="5" class="text-center py-10 text-destructive">Error al cargar.</td></tr>'; }
+  } catch(e) { tbody.innerHTML = '<tr><td colspan="6" class="text-center py-10 text-destructive">Error al cargar.</td></tr>'; }
 }
+
+// Toggle acceso al Dashboard sin abrir modal de edición completa
+window.toggleDashboard = async function(userId, userName, currentlyEnabled) {
+  const action = currentlyEnabled ? 'revocar' : 'conceder';
+  const icon   = currentlyEnabled ? '🔒' : '📊';
+
+  UI.modal({
+    title: `${icon} ${currentlyEnabled ? 'Revocar' : 'Habilitar'} Dashboard`,
+    body: `
+      <div class="space-y-4">
+        <div class="flex items-start gap-4 p-4 rounded-2xl ${currentlyEnabled ? 'bg-destructive/5 border border-destructive/10' : 'bg-primary/5 border border-primary/10'}">
+          <div class="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${currentlyEnabled ? 'bg-destructive/10' : 'bg-primary/10'}">
+            <i data-lucide="${currentlyEnabled ? 'eye-off' : 'layout-dashboard'}" class="w-5 h-5 ${currentlyEnabled ? 'text-destructive' : 'text-primary'}"></i>
+          </div>
+          <div>
+            <p class="text-sm font-black">${currentlyEnabled ? 'Revocar' : 'Conceder'} acceso al Dashboard</p>
+            <p class="text-xs text-muted-foreground mt-1">
+              El usuario <strong>${userName}</strong>
+              ${currentlyEnabled
+                ? ' <strong>dejará de ver</strong> el Dashboard con KPIs, gráficos y estadísticas del sistema.'
+                : ' <strong>podrá visualizar</strong> el Dashboard con KPIs financieros, gráficos y estadísticas estratégicas del sistema.'}
+            </p>
+          </div>
+        </div>
+        ${!currentlyEnabled ? `<div class="p-3 bg-amber-50 border border-amber-200 rounded-xl">
+          <p class="text-[10px] font-bold text-amber-700 flex items-center gap-1.5">
+            <i data-lucide="alert-triangle" class="w-3.5 h-3.5"></i>
+            INFORMACIÓN SENSIBLE
+          </p>
+          <p class="text-[10px] text-amber-600 mt-1">El Dashboard expone KPIs operativos, montos de compras y estados del inventario. Asigne este acceso con discreción.</p>
+        </div>` : ''}
+      </div>`,
+    confirmText: currentlyEnabled ? 'Sí, revocar acceso' : 'Sí, habilitar acceso',
+    onConfirm: async () => {
+      UI.loading('Actualizando permisos...');
+      try {
+        const res = await fetch('api/users.php', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: userId, toggle_module: 'dashboard', value: !currentlyEnabled })
+        }).then(r => r.json());
+        UI.stopLoading();
+        if (res.ok) {
+          UI.toast(
+            currentlyEnabled ? `Dashboard revocado a ${userName}` : `Dashboard habilitado para ${userName}`,
+            currentlyEnabled ? 'warning' : 'success'
+          );
+          loadUsers();
+        } else {
+          UI.toast('Error: ' + res.error, 'error');
+        }
+      } catch(e) {
+        UI.stopLoading();
+        UI.toast('Error de conexión', 'error');
+      }
+    }
+  });
+  // Renderizar íconos dentro del modal
+  setTimeout(() => lucide.createIcons(), 50);
+};
 
 function userFormHTML(u, roles, staff, isNew) {
   const userPerms = u && u.permisos ? u.permisos.split(',') : [];
@@ -144,11 +243,34 @@ window.Views.users = function() {
         <button class="btn btn-primary" onclick="newUser()"><i data-lucide="user-plus"></i>Nuevo usuario</button>
       </div>
     `)}
+
+    <!-- Banner informativo Dashboard -->
+    <div class="flex items-start gap-4 p-4 mb-4 rounded-2xl bg-primary/5 border border-primary/10">
+      <div class="w-8 h-8 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+        <i data-lucide="layout-dashboard" class="w-4 h-4 text-primary"></i>
+      </div>
+      <div>
+        <p class="text-xs font-black text-primary uppercase tracking-wide">Control de acceso al Dashboard</p>
+        <p class="text-[11px] text-muted-foreground mt-0.5">El Dashboard contiene KPIs financieros y operativos confidenciales. Usa el toggle <strong>Dashboard</strong> por usuario para habilitar o revocar su visualización. El rol <strong>admin</strong> siempre tiene acceso.</p>
+      </div>
+    </div>
+
     <div class="card">
       <div class="table-container">
         <table class="data">
-          <thead><tr><th>Nombre</th><th>Email</th><th>Rol</th><th>Estado</th><th class="text-right">Acciones</th></tr></thead>
-          <tbody id="users-table-body"><tr><td colspan="5" class="text-center py-10 text-muted-foreground">Cargando...</td></tr></tbody>
+          <thead>
+            <tr>
+              <th>Nombre</th>
+              <th>Email</th>
+              <th>Rol</th>
+              <th>Estado</th>
+              <th class="text-center">Dashboard</th>
+              <th class="text-right">Acciones</th>
+            </tr>
+          </thead>
+          <tbody id="users-table-body">
+            <tr><td colspan="6" class="text-center py-10 text-muted-foreground">Cargando...</td></tr>
+          </tbody>
         </table>
       </div>
     </div>`;

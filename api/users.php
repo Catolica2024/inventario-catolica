@@ -83,6 +83,44 @@ try {
             json_response(['ok' => true]);
             break;
 
+        case 'PATCH':
+            // Toggle de un módulo sensible (ej. dashboard) en los permisos del usuario
+            $b = get_body();
+            $id            = $b['id'] ?? null;
+            $toggle_module = $b['toggle_module'] ?? null;
+            $value         = $b['value'] ?? false; // true = habilitar, false = deshabilitar
+
+            if (!$id || !$toggle_module) {
+                json_response(['error' => 'Faltan parámetros: id y toggle_module son requeridos'], 400);
+            }
+
+            // Obtener permisos actuales del usuario
+            $stmt = $pdo->prepare("SELECT permisos FROM usuarios WHERE id = ?");
+            $stmt->execute([$id]);
+            $row = $stmt->fetch();
+            if (!$row) json_response(['error' => 'Usuario no encontrado'], 404);
+
+            $perms = array_filter(
+                array_map('trim', explode(',', $row['permisos'] ?? '')),
+                fn($p) => $p !== ''
+            );
+
+            if ($value) {
+                // Agregar módulo si no existe
+                if (!in_array($toggle_module, $perms)) {
+                    $perms[] = $toggle_module;
+                }
+            } else {
+                // Quitar módulo
+                $perms = array_filter($perms, fn($p) => $p !== $toggle_module);
+            }
+
+            $newPerms = count($perms) > 0 ? implode(',', array_values($perms)) : null;
+            $upd = $pdo->prepare("UPDATE usuarios SET permisos = ? WHERE id = ?");
+            $upd->execute([$newPerms, $id]);
+            json_response(['ok' => true, 'permisos' => $newPerms]);
+            break;
+
         default:
             json_response(['error' => 'Método no soportado'], 405);
     }

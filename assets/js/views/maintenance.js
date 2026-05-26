@@ -9,15 +9,15 @@
     window.Views.maintenance = function(user) {
         return `
             <div class="space-y-6">
-                <div class="flex items-center justify-between">
+            <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
                     <div>
-                        <h2 class="text-2xl font-bold tracking-tight">Soporte y Mantenimiento</h2>
-                        <p class="text-muted-foreground">Control de reparaciones, mantenimiento preventivo y costos asociados.</p>
+                        <h2 class="text-xl md:text-2xl font-bold tracking-tight">Soporte y Mantenimiento</h2>
+                        <p class="text-sm text-muted-foreground">Control de reparaciones, mantenimiento preventivo y costos asociados.</p>
                     </div>
-                    <div class="flex gap-2">
-                        <button class="btn btn-outline text-emerald-600" onclick="exportMaintenanceExcel()"><i data-lucide="file-spreadsheet" class="w-4 h-4 mr-2"></i> Exportar Excel</button>
+                    <div class="flex flex-col gap-2">
+                        <button class="btn btn-outline text-emerald-600" onclick="exportMaintenanceExcel()"><i data-lucide="file-spreadsheet" class="w-4 h-4"></i> Exportar Excel</button>
                         <button class="btn btn-primary" onclick="openNewMaintenanceModal()">
-                            <i data-lucide="wrench" class="w-4 h-4 mr-2"></i> Registrar Reparación
+                            <i data-lucide="wrench" class="w-4 h-4"></i> Registrar Mantenimiento
                         </button>
                     </div>
                 </div>

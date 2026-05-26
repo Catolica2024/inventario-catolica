@@ -42,7 +42,7 @@ function renderPending() {
 
     return `
     <div class="card p-5 hover:border-primary transition-colors cursor-pointer" id="oc-card-${p.id}" onclick="viewOrderDetails(${p.id})">
-      <div class="flex items-start justify-between gap-4">
+      <div class="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
         <div class="flex-1">
           <div class="flex items-center gap-2 flex-wrap">
             <span class="font-bold text-base font-mono">${p.numero_oc}</span>
@@ -64,12 +64,12 @@ function renderPending() {
           </div>
           ${p.observaciones ? `<div class="mt-2 p-2 rounded bg-muted text-[11px] italic text-muted-foreground line-clamp-2">"${p.observaciones}"</div>` : ''}
         </div>
-        <div class="flex flex-col gap-2 shrink-0" onclick="event.stopPropagation()">
+        <div class="flex sm:flex-col gap-2 shrink-0 w-full sm:w-auto" onclick="event.stopPropagation()">
           ${canApprove ? `
-          <button class="btn btn-primary btn-sm" onclick="approveOrder(${p.id})">
+          <button class="btn btn-primary btn-sm flex-1 sm:flex-initial" onclick="approveOrder(${p.id})">
             <i data-lucide="check" class="w-3.5 h-3.5"></i>Aprobar
           </button>` : ''}
-          <button class="btn btn-danger btn-sm" onclick="rejectOrder(${p.id})">
+          <button class="btn btn-danger btn-sm flex-1 sm:flex-initial" onclick="rejectOrder(${p.id})">
             <i data-lucide="x" class="w-3.5 h-3.5"></i>Rechazar
           </button>
         </div>

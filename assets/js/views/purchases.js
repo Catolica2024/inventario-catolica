@@ -1528,7 +1528,7 @@ async function loadPurchases() {
 window.Views.purchases = function () {
   return `
     ${UI.pageHeader('Órdenes de Compra y Servicio', 'Gestión de adquisiciones institucionales', `
-      <div class="flex gap-2">
+      <div class="flex flex-col sm:flex-row gap-2">
         <button class="btn btn-outline text-emerald-600" onclick="exportPurchasesExcel()"><i data-lucide="file-spreadsheet" class="w-4 h-4 mr-2"></i>Exportar Excel</button>
         <button class="btn btn-primary" onclick="Router.go('new-purchase')"><i data-lucide="plus" class="w-4 h-4 mr-2"></i>Nueva Orden</button>
       </div>
