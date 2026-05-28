@@ -74,11 +74,20 @@ body { min-height: 100%; overflow-x: hidden; background: var(--background); colo
 }
 .btn-outline:hover { background:var(--card); border-color:var(--primary); color:var(--primary); }
 
-/* Inputs Modernos */
 .input, .select, .textarea {
-  width:100%; height:2.75rem; padding-top:.5rem; padding-bottom:.5rem; padding-left:1rem; padding-right:1rem; 
+  width:100%; padding-top:.5rem; padding-bottom:.5rem; padding-left:1rem; padding-right:1rem; 
   border:1.5px solid var(--border); border-radius:.75rem;
   background:var(--card); color:var(--foreground); font-size:.875rem; outline:none; transition: all 0.2s;
+}
+.input, .select {
+  height: 2.75rem;
+}
+.textarea {
+  min-height: 2.75rem;
+  height: auto;
+}
+textarea.input {
+  height: auto;
 }
 /* Forzar espacio para iconos si se usan clases de utilidad */
 .pl-10 { padding-left: 2.5rem !important; }

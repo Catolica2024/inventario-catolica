@@ -899,13 +899,14 @@ window.Views.dispatch = function () {
                             <th>Fecha</th>
                             <th>Insumo</th>
                             <th>Entregado a</th>
+                            <th>Destino</th>
                             <th class="text-center">Cant.</th>
                             <th>Entregado por</th>
                             <th class="text-right">Acciones</th>
                         </tr>
                     </thead>
                     <tbody id="dispatch-table-body">
-                        <tr><td colspan="6" class="text-center py-10">Cargando historial de despachos...</td></tr>
+                        <tr><td colspan="7" class="text-center py-10">Cargando historial de despachos...</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -927,7 +928,7 @@ async function loadDispatches() {
     const data = (resp.movements || []).filter(m => m.tipo === 'Salida' && m.categoria_tipo === 'insumo');
 
     if (data.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="6" class="text-center py-10 text-muted-foreground">No hay registros de despachos.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7" class="text-center py-10 text-muted-foreground">No hay registros de despachos.</td></tr>';
         return;
     }
 
@@ -936,6 +937,7 @@ async function loadDispatches() {
             <td class="text-xs">${m.fecha}</td>
             <td class="font-bold">${m.item_nombre}</td>
             <td class="font-medium text-primary">${m.destinatario_nombre || '—'}</td>
+            <td class="text-xs font-semibold uppercase text-amber-700">${m.ubicacion_nombre || '—'}</td>
             <td class="text-center font-bold">${m.cantidad}</td>
             <td class="text-xs italic">${m.despachado_por_nombre || 'Admin'}</td>
             <td class="text-right whitespace-nowrap">
@@ -950,6 +952,7 @@ async function loadDispatches() {
 
 window.openDispatchModal = function (preselectedId = null) {
     let selectedItem = preselectedId ? _traceResources.items.find(i => i.id == preselectedId) : null;
+    const currentUser = window.Auth ? window.Auth.getUser() : null;
 
     UI.modal({
         title: 'Registrar Despacho de Insumos',
@@ -984,7 +987,7 @@ window.openDispatchModal = function (preselectedId = null) {
                     <div id="disp-found-info" class="mt-2 p-3 rounded-lg border border-dashed border-border bg-muted/20 text-xs transition-all">
                         ${selectedItem ?
                 `<div class="font-bold text-primary">${selectedItem.nombre}</div>
-                             <div class="text-muted-foreground">Stock Actual: <span class="font-bold">${selectedItem.stock_actual}</span> ${selectedItem.unidad_medida || 'unid.'}</div>` :
+                              <div class="text-muted-foreground">Stock Actual: <span class="font-bold">${selectedItem.stock_actual}</span> ${selectedItem.unidad_medida || 'unid.'}</div>` :
                 '<span class="italic text-muted-foreground">Escanee o busque el insumo a despachar...</span>'
             }
                     </div>
@@ -997,6 +1000,13 @@ window.openDispatchModal = function (preselectedId = null) {
                         ${_traceResources.staff.map(p => `<option value="${p.id}">${p.nombre} (${p.area})</option>`).join('')}
                     </select>
                 </div>
+                <div>
+                    <label class="text-xs font-bold mb-1 block uppercase text-muted-foreground">Destino (Aula / Espacio) <span class="text-destructive">*</span></label>
+                    <select id="disp-dest-loc" class="select w-full">
+                        <option value="">Seleccione destino...</option>
+                        ${_traceResources.locations.filter(l => l.estado !== 'inactivo').map(l => `<option value="${l.id}">${l.nombre} ${l.tipo ? `(${l.tipo})` : ''}</option>`).join('')}
+                    </select>
+                </div>
                 <div class="grid grid-cols-2 gap-3">
                     <div>
                         <label class="text-xs font-bold mb-1 block uppercase text-muted-foreground">Cantidad a Despachar (<span class="font-bold text-primary" id="disp-unit-label">${selectedItem ? selectedItem.unidad_medida || 'unid.' : 'unid.'}</span>) <span class="text-destructive">*</span></label>
@@ -1004,15 +1014,14 @@ window.openDispatchModal = function (preselectedId = null) {
                     </div>
                     <div>
                         <label class="text-xs font-bold mb-1 block uppercase text-muted-foreground">Entregado por</label>
-                        <select id="disp-admin" class="select w-full">
-                            <option value="">Admin / Encargado</option>
-                            ${_traceResources.staff.filter(p => p.cargo && (p.cargo.toLowerCase().includes('admin') || p.cargo.toLowerCase().includes('almacén'))).map(p => `<option value="${p.id}">${p.nombre}</option>`).join('')}
-                        </select>
+                        <input type="text" class="input w-full bg-muted text-muted-foreground cursor-not-allowed" value="${currentUser ? currentUser.name : 'Administrador'}" readonly disabled>
+                        <input type="hidden" id="disp-admin" value="${currentUser ? (currentUser.personal_id || '') : ''}">
                     </div>
                 </div>
+                <div id="disp-error-container" class="hidden p-3 rounded-lg border border-red-200 bg-red-50 text-xs text-red-600 font-semibold transition-all"></div>
                 <div>
                     <label class="text-xs font-bold mb-1 block uppercase text-muted-foreground">Observaciones</label>
-                    <textarea id="disp-obs" class="input w-full h-20" placeholder="Ej: Entrega semanal para limpieza..."></textarea>
+                    <textarea id="disp-obs" class="input w-full h-20 resize-none py-2 px-3" placeholder="Ej: Entrega semanal para limpieza..."></textarea>
                 </div>
             </div>
         `,
@@ -1024,29 +1033,73 @@ window.openDispatchModal = function (preselectedId = null) {
                 despachado_por_id: document.getElementById('disp-admin').value,
                 cantidad: document.getElementById('disp-qty').value,
                 tipo: 'Salida',
-                ubicacion_id: 13, // Almacén Principal
+                ubicacion_id: document.getElementById('disp-dest-loc').value,
                 observacion: document.getElementById('disp-obs').value
             };
-            if (!data.item_id || !data.personal_destinatario_id || !data.cantidad) { UI.toast('Complete los campos obligatorios y asegúrese de que el stock sea suficiente', 'error'); return false; }
+
+            const errContainer = document.getElementById('disp-error-container');
+            errContainer.classList.add('hidden');
+            document.getElementById('disp-qty').classList.remove('border-red-500', 'ring-red-400', 'ring-2');
+
+            if (!data.item_id || !data.personal_destinatario_id || !data.cantidad || !data.ubicacion_id) { 
+                errContainer.innerHTML = '⚠️ Complete todos los campos obligatorios (Insumo, Personal, Destino y Cantidad).';
+                errContainer.classList.remove('hidden');
+                return false; 
+            }
 
             // Validar stock antes de enviar
             const item = _traceResources.items.find(i => i.id == data.item_id);
-            if (item && parseInt(data.cantidad) > parseInt(item.stock_actual)) {
-                UI.toast(`Error: Stock insuficiente. Solo hay ${item.stock_actual} unidades.`, 'error');
-                return;
+            if (item) {
+                const stock = parseInt(item.stock_actual);
+                const qty = parseInt(data.cantidad);
+                if (qty > stock) {
+                    errContainer.innerHTML = `⚠️ <strong>Error: Stock insuficiente.</strong> No se puede registrar porque la cantidad ingresada (${qty}) supera el stock disponible (${stock}). Sería información engañosa.`;
+                    errContainer.classList.remove('hidden');
+                    document.getElementById('disp-qty').classList.add('border-red-500', 'ring-red-400', 'ring-2');
+                    return false;
+                }
             }
 
             UI.loading('Registrando despacho...');
             const r = await fetch('api/movements.php', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }).then(x => x.json());
             UI.stopLoading();
             if (r.ok) { UI.toast('Despacho registrado correctamente', 'success'); loadDispatches(); }
-            else UI.toast(r.error, 'error');
+            else { 
+                errContainer.innerHTML = `⚠️ <strong>Error de servidor:</strong> ${r.error}`;
+                errContainer.classList.remove('hidden');
+                return false; 
+            }
         }
     });
 
     const searchInput = document.getElementById('disp-search');
     const infoDiv = document.getElementById('disp-found-info');
     const idInput = document.getElementById('disp-item');
+    const qtyInput = document.getElementById('disp-qty');
+    const errDiv = document.getElementById('disp-error-container');
+
+    const checkStockLimit = () => {
+        const itemId = idInput.value;
+        const qtyVal = parseInt(qtyInput.value) || 0;
+        
+        errDiv.classList.add('hidden');
+        qtyInput.classList.remove('border-red-500', 'ring-red-400', 'ring-2');
+
+        if (!itemId) return true;
+        const item = _traceResources.items.find(i => i.id == itemId);
+        if (item) {
+            const stock = parseInt(item.stock_actual);
+            if (qtyVal > stock) {
+                errDiv.innerHTML = `⚠️ <strong>Error: Stock insuficiente.</strong> No se puede despachar la cantidad ingresada (${qtyVal}) porque supera el stock disponible (${stock} ${item.unidad_medida || 'unid.'}). Sería información engañosa.`;
+                errDiv.classList.remove('hidden');
+                qtyInput.classList.add('border-red-500', 'ring-red-400', 'ring-2');
+                return false;
+            }
+        }
+        return true;
+    };
+
+    qtyInput.addEventListener('input', checkStockLimit);
 
     // Contenedor para resultados de búsqueda predictiva
     const resultsDiv = document.createElement('div');
@@ -1061,6 +1114,7 @@ window.openDispatchModal = function (preselectedId = null) {
                 infoDiv.innerHTML = '<span class="italic text-muted-foreground">Escanee o busque el insumo a despachar...</span>';
                 idInput.value = '';
                 infoDiv.className = 'mt-2 p-3 rounded-lg border border-dashed border-border bg-muted/20 text-xs';
+                checkStockLimit();
             }
             return;
         }
@@ -1078,6 +1132,7 @@ window.openDispatchModal = function (preselectedId = null) {
             infoDiv.innerHTML = '<span class="text-destructive font-medium">Insumo no encontrado</span>';
             idInput.value = '';
             infoDiv.className = 'mt-2 p-3 rounded-lg border border-red-200 bg-red-50 text-xs';
+            checkStockLimit();
             return;
         }
 
@@ -1105,6 +1160,8 @@ window.openDispatchModal = function (preselectedId = null) {
 
         const label = document.getElementById('disp-unit-label');
         if (label) label.textContent = unidad;
+
+        checkStockLimit();
     };
 
     lucide.createIcons();
@@ -1491,6 +1548,7 @@ window.exportDispatchesExcel = async function() {
             'Fecha': m.fecha,
             'Insumo': m.item_nombre,
             'Entregado a': m.destinatario_nombre || '—',
+            'Destino': m.ubicacion_nombre || '—',
             'Cantidad': m.cantidad,
             'Entregado por': m.despachado_por_nombre || 'Admin',
             'Observaciones': m.observacion || ''

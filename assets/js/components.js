@@ -337,5 +337,203 @@ window.UI = {
         this.toast('Error al iniciar cámara: ' + err, 'error');
         if (scannerWrap) scannerWrap.remove();
     });
+  },
+  makeSearchable(select) {
+    if (select.dataset.searchableInitialized) return;
+    select.dataset.searchableInitialized = 'true';
+
+    // Hide original select
+    select.style.display = 'none';
+
+    // Create wrapper div
+    const wrapper = document.createElement('div');
+    wrapper.className = 'relative w-full';
+    select.parentNode.insertBefore(wrapper, select);
+    wrapper.appendChild(select); 
+
+    // Create search input
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = select.className.replace(/\bselect\b/g, 'input') + ' pr-10'; 
+    
+    // Set initial text or empty
+    const updateInputFromSelect = () => {
+        const selectedOpt = select.options[select.selectedIndex];
+        if (selectedOpt && selectedOpt.value) {
+            input.value = selectedOpt.textContent.trim();
+        } else {
+            input.value = '';
+        }
+        input.placeholder = select.options[0] ? select.options[0].textContent : 'Buscar...';
+    };
+    updateInputFromSelect();
+    
+    wrapper.appendChild(input);
+
+    // Create chevron icon absolute container
+    const iconDiv = document.createElement('div');
+    iconDiv.className = 'absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400 z-10';
+    iconDiv.innerHTML = '<i data-lucide="chevron-down" class="w-4 h-4"></i>';
+    wrapper.appendChild(iconDiv);
+    lucide.createIcons();
+
+    // ── PORTAL PATTERN ─────────────────────────────────────────────────────────
+    // Render the menu in document.body with position:fixed so it is never
+    // clipped by an ancestor's overflow:auto/hidden (e.g. the modal body).
+    const menu = document.createElement('div');
+    menu.className = 'bg-white border border-slate-200 rounded-xl shadow-2xl py-1 hidden';
+    menu.style.cssText = 'position:fixed; z-index:99999; max-height:220px; overflow-y:auto; min-width:200px;';
+    document.body.appendChild(menu);
+
+    const positionMenu = () => {
+        const rect = input.getBoundingClientRect();
+        const menuH = Math.min(220, menu.scrollHeight || 220);
+        const spaceBelow = window.innerHeight - rect.bottom;
+        const spaceAbove = rect.top;
+
+        menu.style.width = rect.width + 'px';
+        menu.style.left = rect.left + 'px';
+
+        // Open upward if not enough room below but enough above
+        if (spaceBelow < menuH + 8 && spaceAbove > spaceBelow) {
+            menu.style.top = 'auto';
+            menu.style.bottom = (window.innerHeight - rect.top + 2) + 'px';
+        } else {
+            menu.style.top = (rect.bottom + 2) + 'px';
+            menu.style.bottom = 'auto';
+        }
+    };
+
+    const renderOptions = (filterText = '') => {
+        const query = filterText.toLowerCase().trim();
+        const options = Array.from(select.options);
+        
+        let html = '';
+        let count = 0;
+        options.forEach((opt, idx) => {
+            if (idx === 0 && !opt.value) return; // skip placeholder
+
+            const text = opt.textContent.trim();
+            if (!query || text.toLowerCase().includes(query)) {
+                html += `<div class="px-4 py-2 hover:bg-primary/5 cursor-pointer text-sm text-slate-700 font-medium leading-snug"
+                              data-value="${opt.value}" data-index="${idx}">${text}</div>`;
+                count++;
+            }
+        });
+
+        menu.innerHTML = count === 0
+            ? '<div class="px-4 py-3 text-xs text-slate-400 italic text-center">Sin resultados</div>'
+            : html;
+
+        // Use mousedown (fires before blur) so the selection is registered
+        menu.querySelectorAll('[data-value]').forEach(el => {
+            el.onmousedown = (e) => {
+                e.preventDefault(); // keep focus on input until after we set the value
+                const idx = parseInt(el.dataset.index);
+                select.selectedIndex = idx;
+                input.value = select.options[idx].textContent.trim();
+                closeMenu();
+                select.dispatchEvent(new Event('change', { bubbles: true }));
+                select.dispatchEvent(new Event('input',  { bubbles: true }));
+            };
+        });
+
+        positionMenu();
+    };
+
+    const openMenu = () => {
+        renderOptions(input.value);
+        menu.classList.remove('hidden');
+        positionMenu();
+    };
+
+    const closeMenu = () => {
+        menu.classList.add('hidden');
+    };
+
+    // ── Events ─────────────────────────────────────────────────────────────────
+    input.addEventListener('focus', openMenu);
+
+    input.addEventListener('input', () => {
+        renderOptions(input.value);
+        menu.classList.remove('hidden');
+        positionMenu();
+    });
+
+    // Delay close so mousedown on an option fires first
+    input.addEventListener('blur', () => {
+        setTimeout(() => {
+            closeMenu();
+            updateInputFromSelect();
+        }, 160);
+    });
+
+    // Reposition while the dropdown is open (modal scroll, window resize)
+    const reposition = () => { if (!menu.classList.contains('hidden')) positionMenu(); };
+    window.addEventListener('scroll', reposition, true);
+    window.addEventListener('resize', reposition);
+
+    // ── Cleanup ──────────────────────────────────────────────────────────────
+    // Remove the portal menu from body when the select's wrapper leaves the DOM
+    const cleanupObserver = new MutationObserver(() => {
+        if (!document.body.contains(wrapper)) {
+            menu.remove();
+            cleanupObserver.disconnect();
+            window.removeEventListener('scroll', reposition, true);
+            window.removeEventListener('resize', reposition);
+        }
+    });
+    cleanupObserver.observe(document.body, { childList: true, subtree: true });
+
+    // Sync visible text when options are dynamically added/removed
+    const selectObserver = new MutationObserver(updateInputFromSelect);
+    selectObserver.observe(select, { childList: true });
+
+    // Sync on external 'change' events
+    select.addEventListener('change', updateInputFromSelect);
+
+    // ── Property intercepts ───────────────────────────────────────────────────
+    // Override .value and .selectedIndex so programmatic assignments keep the
+    // visible input text in sync with the hidden <select>.
+    const descriptorVal = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value');
+    Object.defineProperty(select, 'value', {
+        get() { return descriptorVal.get.call(select); },
+        set(val) { descriptorVal.set.call(select, val); updateInputFromSelect(); },
+        configurable: true
+    });
+
+    const descriptorIdx = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'selectedIndex');
+    Object.defineProperty(select, 'selectedIndex', {
+        get() { return descriptorIdx.get.call(select); },
+        set(idx) { descriptorIdx.set.call(select, idx); updateInputFromSelect(); },
+        configurable: true
+    });
   }
 };
+
+// MutationObserver global to automatically convert any select.select into searchable select
+const searchableSelectObserver = new MutationObserver((mutations) => {
+    mutations.forEach((mutation) => {
+        mutation.addedNodes.forEach((node) => {
+            if (node.nodeType === Node.ELEMENT_NODE) {
+                if (node.matches && node.matches('select.select')) {
+                    window.UI.makeSearchable(node);
+                }
+                if (node.querySelectorAll) {
+                    node.querySelectorAll('select.select').forEach(sel => {
+                        window.UI.makeSearchable(sel);
+                    });
+                }
+            }
+        });
+    });
+});
+searchableSelectObserver.observe(document.body, { childList: true, subtree: true });
+
+// Run once on load to convert any existing selects
+document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('select.select').forEach(sel => {
+        window.UI.makeSearchable(sel);
+    });
+});
+
