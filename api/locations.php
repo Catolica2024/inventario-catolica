@@ -188,10 +188,14 @@ try {
 
             // Verificar dependencias
             $deps = [];
-            $c = $pdo->query("SELECT COUNT(*) FROM activos WHERE ubicacion_id = $id")->fetchColumn();
+            $stmtActivos = $pdo->prepare("SELECT COUNT(*) FROM activos WHERE ubicacion_id = ?");
+            $stmtActivos->execute([$id]);
+            $c = $stmtActivos->fetchColumn();
             if ($c > 0) $deps[] = "$c equipo(s) asignado(s)";
 
-            $c = $pdo->query("SELECT COUNT(*) FROM stock_ubicaciones WHERE ubicacion_id = $id")->fetchColumn();
+            $stmtStock = $pdo->prepare("SELECT COUNT(*) FROM stock_ubicaciones WHERE ubicacion_id = ?");
+            $stmtStock->execute([$id]);
+            $c = $stmtStock->fetchColumn();
             if ($c > 0) $deps[] = "$c lote(s) de mobiliario asignado(s)";
 
             if (!empty($deps)) {

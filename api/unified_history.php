@@ -85,7 +85,7 @@ try {
     } elseif ($type === 'staff') {
         // 1. Asignaciones (Equipos)
         $stmt = $pdo->prepare("
-            SELECT 'asignacion' as event_type, a.fecha_asignacion as fecha, 1 as cantidad, i.nombre as item_name,
+            SELECT 'asignacion' as event_type, a.id, a.fecha_asignacion as fecha, 1 as cantidad, i.nombre as item_name,
                    a.estado as tipo, '' as origen, '' as destino, '' as motivo
             FROM asignaciones a
             JOIN activos act ON a.activo_id = act.id
@@ -97,7 +97,7 @@ try {
 
         // 2. Traslados donde fue responsable
         $stmt = $pdo->prepare("
-            SELECT 'traslado_resp' as event_type, t.fecha, t.cantidad, i.nombre as item_name,
+            SELECT 'traslado_resp' as event_type, t.id, t.fecha, t.cantidad, i.nombre as item_name,
                    u1.nombre as origen, u2.nombre as destino, t.tipo, t.motivo
             FROM traslados t
             JOIN items i ON t.item_id = i.id
@@ -110,7 +110,7 @@ try {
 
         // 3. Mantenimientos de equipos que tiene asignados
         $stmt = $pdo->prepare("
-            SELECT 'mantenimiento' as event_type, m.fecha_inicio as fecha, 1 as cantidad, i.nombre as item_name,
+            SELECT 'mantenimiento' as event_type, m.id, m.fecha_inicio as fecha, 1 as cantidad, i.nombre as item_name,
                    m.tipo, m.estado, m.descripcion_problema as motivo, '' as tecnico
             FROM mantenimientos m
             JOIN activos act ON m.activo_id = act.id

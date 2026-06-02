@@ -134,16 +134,24 @@ try {
             // Modo normal: verificar dependencias específicas para dar un error detallado
             $deps = [];
             
-            $c = $pdo->query("SELECT COUNT(*) FROM movimientos WHERE item_id = $id")->fetchColumn();
+            $stmtMovs = $pdo->prepare("SELECT COUNT(*) FROM movimientos WHERE item_id = ?");
+            $stmtMovs->execute([$id]);
+            $c = $stmtMovs->fetchColumn();
             if ($c > 0) $deps[] = "$c movimiento(s) de stock";
 
-            $c = $pdo->query("SELECT COUNT(*) FROM activos WHERE item_id = $id")->fetchColumn();
+            $stmtActivos = $pdo->prepare("SELECT COUNT(*) FROM activos WHERE item_id = ?");
+            $stmtActivos->execute([$id]);
+            $c = $stmtActivos->fetchColumn();
             if ($c > 0) $deps[] = "$c unidad(es) en Equipos";
 
-            $c = $pdo->query("SELECT COUNT(*) FROM stock_ubicaciones WHERE item_id = $id")->fetchColumn();
+            $stmtStock = $pdo->prepare("SELECT COUNT(*) FROM stock_ubicaciones WHERE item_id = ?");
+            $stmtStock->execute([$id]);
+            $c = $stmtStock->fetchColumn();
             if ($c > 0) $deps[] = "$c asignación(es) a Aulas/Mobiliario";
 
-            $c = $pdo->query("SELECT COUNT(*) FROM ordenes_compra_items WHERE item_id = $id")->fetchColumn();
+            $stmtOc = $pdo->prepare("SELECT COUNT(*) FROM ordenes_compra_items WHERE item_id = ?");
+            $stmtOc->execute([$id]);
+            $c = $stmtOc->fetchColumn();
             if ($c > 0) $deps[] = "$c registro(s) en Órdenes de Compra";
 
             if (!empty($deps)) {

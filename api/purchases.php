@@ -226,10 +226,7 @@ try {
                 }
             }
 
-            $pdo->commit();
-
             // Generar tokens de aprobación remota
-            require_once __DIR__ . '/../includes/mailer.php';
             $token_gerente = bin2hex(random_bytes(32));
             $token_finanzas = bin2hex(random_bytes(32));
             $exp = date('Y-m-d H:i:s', strtotime('+48 hours'));
@@ -238,7 +235,10 @@ try {
             $st->execute([$orden_id, $token_gerente, 'gerente_general', $exp]);
             $st->execute([$orden_id, $token_finanzas, 'jefe_finanzas', $exp]);
 
+            $pdo->commit();
+
             // Enviar correos
+            require_once __DIR__ . '/../includes/mailer.php';
             try {
                 Mailer::sendNewOCNotification($orden_id, [
                     'gerente' => $token_gerente,

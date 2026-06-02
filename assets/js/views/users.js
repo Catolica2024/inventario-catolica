@@ -1,5 +1,58 @@
 window.Views = window.Views || {};
 
+window.togglePassVisibility = function() {
+  const passInput = document.getElementById('usr-pass');
+  const icon = document.getElementById('toggle-pass-icon');
+  if (passInput) {
+    if (passInput.type === 'password') {
+      passInput.type = 'text';
+      if (icon) {
+        icon.setAttribute('data-lucide', 'eye-off');
+        lucide.createIcons();
+      }
+    } else {
+      passInput.type = 'password';
+      if (icon) {
+        icon.setAttribute('data-lucide', 'eye');
+        lucide.createIcons();
+      }
+    }
+  }
+};
+
+window.generateUserPass = function() {
+  const passInput = document.getElementById('usr-pass');
+  if (passInput) {
+    const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%&*?";
+    const lowers = "abcdefghijklmnopqrstuvwxyz";
+    const uppers = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    const nums = "0123456789";
+    const specs = "!@#$%&*?";
+    
+    let pass = "";
+    pass += lowers.charAt(Math.floor(Math.random() * lowers.length));
+    pass += uppers.charAt(Math.floor(Math.random() * uppers.length));
+    pass += nums.charAt(Math.floor(Math.random() * nums.length));
+    pass += specs.charAt(Math.floor(Math.random() * specs.length));
+    
+    for (let i = 0; i < 10; i++) {
+      pass += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    
+    pass = pass.split('').sort(() => 0.5 - Math.random()).join('');
+    passInput.value = pass;
+    passInput.type = 'text';
+    
+    const icon = document.getElementById('toggle-pass-icon');
+    if (icon) {
+      icon.setAttribute('data-lucide', 'eye-off');
+      lucide.createIcons();
+    }
+    
+    UI.toast('Contraseña segura generada', 'success');
+  }
+};
+
 // Parsear permisos del usuario como array
 function parsePerms(permisos) {
   if (!permisos) return [];
@@ -145,10 +198,26 @@ function userFormHTML(u, roles, staff, isNew) {
         <h3 class="text-xs font-bold text-primary uppercase border-b pb-1">Información de Acceso</h3>
         <div><label class="text-sm font-medium">Nombre completo <span class="text-destructive">*</span></label>
           <input id="usr-nombre" class="input mt-1 w-full" placeholder="Juan Pérez" value="${u ? u.nombre : ''}"></div>
-        <div><label class="text-sm font-medium">Email <span class="text-destructive">*</span></label>
-          <input id="usr-email" type="email" class="input mt-1 w-full" placeholder="usuario@catolica.edu" value="${u ? u.email : ''}"></div>
-        <div><label class="text-sm font-medium">${isNew ? 'Contraseña <span class="text-destructive">*</span>' : 'Nueva contraseña <span class="text-xs text-muted-foreground">(vacío = no cambiar)</span>'}</label>
-          <input id="usr-pass" type="password" class="input mt-1 w-full" placeholder="••••••••"></div>
+        <div><label class="text-sm font-medium">Usuario / Email <span class="text-destructive">*</span></label>
+          <input id="usr-email" type="text" class="input mt-1 w-full" placeholder="ej. jperez o correo@catolica.edu" value="${u ? u.email : ''}"></div>
+        <div>
+          <label class="text-sm font-medium">${isNew ? 'Contraseña <span class="text-destructive">*</span>' : 'Nueva contraseña <span class="text-xs text-muted-foreground">(vacío = no cambiar)</span>'}</label>
+          <div class="relative mt-1">
+            <input id="usr-pass" type="password" class="input w-full pr-10" placeholder="••••••••">
+            ${window.Auth.getUser() && window.Auth.getUser().role === 'admin' ? `
+              <button type="button" class="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-primary transition-colors" style="background:none;border:none;cursor:pointer;z-10;" onclick="togglePassVisibility()" title="Mostrar/Ocultar">
+                <i data-lucide="eye" id="toggle-pass-icon" class="w-4 h-4"></i>
+              </button>
+            ` : ''}
+          </div>
+          ${window.Auth.getUser() && window.Auth.getUser().role === 'admin' ? `
+            <div class="mt-2 flex justify-end">
+              <button type="button" class="btn btn-outline btn-sm btn-sm-auto text-[11px] font-bold uppercase tracking-wider flex items-center gap-1.5" onclick="generateUserPass()" title="Generar contraseña segura">
+                <i data-lucide="key" class="w-3.5 h-3.5"></i> Generar contraseña
+              </button>
+            </div>
+          ` : ''}
+        </div>
         <div><label class="text-sm font-medium">Vincular con Personal <span class="text-xs text-muted-foreground">(Opcional)</span></label>
           <select id="usr-personal" class="select mt-1 w-full">
             <option value="">Ninguno</option>
@@ -261,7 +330,7 @@ window.Views.users = function() {
           <thead>
             <tr>
               <th>Nombre</th>
-              <th>Email</th>
+              <th>Usuario / Email</th>
               <th>Rol</th>
               <th>Estado</th>
               <th class="text-center">Dashboard</th>

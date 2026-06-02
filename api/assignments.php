@@ -70,6 +70,9 @@ try {
                 $stmtUpd = $pdo->prepare("UPDATE activos SET personal_id = ? WHERE id = ?");
                 $stmtUpd->execute([$personal_id, $b['activo_id']]);
 
+                // Guardar el ID de la asignación antes de insertar el movimiento
+                $asignacion_id = $pdo->lastInsertId();
+
                 // 3. REGISTRAR MOVIMIENTO DE SALIDA (Para disminuir stock disponible)
                 // Primero obtener el item_id del activo
                 $stmtItem = $pdo->prepare("SELECT item_id FROM activos WHERE id = ?");
@@ -97,7 +100,7 @@ try {
                 ]);
 
                 $pdo->commit();
-                json_response(['ok' => true, 'id' => $pdo->lastInsertId()]);
+                json_response(['ok' => true, 'id' => $asignacion_id]);
             } catch (Exception $e) {
                 $pdo->rollBack();
                 json_response(['error' => 'Error al registrar: ' . $e->getMessage()], 400);

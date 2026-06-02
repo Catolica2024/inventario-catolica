@@ -442,7 +442,10 @@ window.UI = {
     };
 
     const openMenu = () => {
-        renderOptions(input.value);
+        const selectedOpt = select.options[select.selectedIndex];
+        const selectedText = selectedOpt ? selectedOpt.textContent.trim() : '';
+        const filterVal = (input.value.trim() === selectedText) ? '' : input.value;
+        renderOptions(filterVal);
         menu.classList.remove('hidden');
         positionMenu();
     };
@@ -453,6 +456,7 @@ window.UI = {
 
     // ── Events ─────────────────────────────────────────────────────────────────
     input.addEventListener('focus', openMenu);
+    input.addEventListener('click', openMenu);
 
     input.addEventListener('input', () => {
         renderOptions(input.value);

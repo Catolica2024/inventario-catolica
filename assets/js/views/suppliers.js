@@ -51,7 +51,7 @@ window.newSupplier = async function() {
                     <input id="sup-name" class="input mt-1 w-full" placeholder="Ej: Corporación SAC">
                 </div>
                 <div>
-                    <label class="text-sm font-medium">RUC / DNI</label>
+                    <label class="text-sm font-medium">RUC / DNI <span class="text-destructive">*</span></label>
                     <input id="sup-ruc" class="input mt-1 w-full" maxlength="11" placeholder="20555555555">
                 </div>
                 <div>
@@ -69,26 +69,57 @@ window.newSupplier = async function() {
                     <label class="text-sm font-medium">Teléfono / WhatsApp</label>
                     <input id="sup-phone" class="input mt-1 w-full" placeholder="987654321">
                 </div>
+                <div>
+                    <label class="text-sm font-medium">Email del Proveedor</label>
+                    <input id="sup-email" type="text" class="input mt-1 w-full" placeholder="proveedor@empresa.com">
+                </div>
                 <div class="md:col-span-2">
                     <label class="text-sm font-medium">Dirección Fiscal</label>
                     <input id="sup-address" class="input mt-1 w-full" placeholder="Av. Los Pinos 123">
+                </div>
+                
+                <div class="md:col-span-2 border-t pt-2 mt-2">
+                    <h3 class="text-xs font-bold text-primary uppercase tracking-wider">Información Bancaria</h3>
+                </div>
+                <div>
+                    <label class="text-sm font-medium">Banco</label>
+                    <input id="sup-banco" class="input mt-1 w-full" placeholder="Ej: BCP, BBVA, Interbank">
+                </div>
+                <div>
+                    <label class="text-sm font-medium">Nro. de Cuenta Bancaria</label>
+                    <input id="sup-cuenta" class="input mt-1 w-full" placeholder="191-xxxxxxxx-x-xx">
+                </div>
+                <div>
+                    <label class="text-sm font-medium">CCI (Código Interbancario)</label>
+                    <input id="sup-cci" class="input mt-1 w-full" placeholder="002-xxxxxxxxxxxxxxxx-xx">
+                </div>
+                <div>
+                    <label class="text-sm font-medium">Cuenta de Detracción</label>
+                    <input id="sup-detraccion" class="input mt-1 w-full" placeholder="Ej: 00-xxx-xxxxxx">
                 </div>
             </div>
         `,
         confirmText: 'Guardar Proveedor',
         onConfirm: async () => {
             const name = document.getElementById('sup-name').value.trim();
+            const ruc = document.getElementById('sup-ruc').value.trim();
             if (!name) { UI.toast('La Razón Social es obligatoria', 'error'); return false; }
+            if (!ruc) { UI.toast('El RUC / DNI es obligatorio', 'error'); return false; }
             
             const body = {
                 razon_social: name,
-                ruc: document.getElementById('sup-ruc').value,
+                ruc: ruc,
                 rubro_id: document.getElementById('sup-rubro').value || null,
-                contacto: document.getElementById('sup-contact').value,
-                telefono: document.getElementById('sup-phone').value,
-                direccion: document.getElementById('sup-address').value
+                contacto: document.getElementById('sup-contact').value.trim(),
+                telefono: document.getElementById('sup-phone').value.trim(),
+                email: document.getElementById('sup-email').value.trim() || null,
+                direccion: document.getElementById('sup-address').value.trim(),
+                banco: document.getElementById('sup-banco').value.trim() || null,
+                numero_cuenta: document.getElementById('sup-cuenta').value.trim() || null,
+                cci: document.getElementById('sup-cci').value.trim() || null,
+                cuenta_detraccion: document.getElementById('sup-detraccion').value.trim() || null
             };
-
+ 
             const res = await fetch('api/suppliers.php', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then(r => r.json());
             if (res.ok) { UI.toast('Proveedor guardado', 'success'); loadSuppliers(); }
             else UI.toast('Error: ' + res.error, 'error');
@@ -168,7 +199,7 @@ window.editSupplier = async function(id) {
                     <input id="sup-name" class="input mt-1 w-full" value="${s.razon_social || ''}">
                 </div>
                 <div>
-                    <label class="text-sm font-medium">RUC / DNI</label>
+                    <label class="text-sm font-medium">RUC / DNI <span class="text-destructive">*</span></label>
                     <input id="sup-ruc" class="input mt-1 w-full" maxlength="11" value="${s.ruc || ''}">
                 </div>
                 <div>
@@ -193,23 +224,57 @@ window.editSupplier = async function(id) {
                     <label class="text-sm font-medium">Teléfono / WhatsApp</label>
                     <input id="sup-phone" class="input mt-1 w-full" value="${s.telefono || ''}">
                 </div>
+                <div>
+                    <label class="text-sm font-medium">Email del Proveedor</label>
+                    <input id="sup-email" type="text" class="input mt-1 w-full" value="${s.email || ''}">
+                </div>
                 <div class="md:col-span-2">
                     <label class="text-sm font-medium">Dirección Fiscal</label>
                     <input id="sup-address" class="input mt-1 w-full" value="${s.direccion || ''}">
+                </div>
+                
+                <div class="md:col-span-2 border-t pt-2 mt-2">
+                    <h3 class="text-xs font-bold text-primary uppercase tracking-wider">Información Bancaria</h3>
+                </div>
+                <div>
+                    <label class="text-sm font-medium">Banco</label>
+                    <input id="sup-banco" class="input mt-1 w-full" value="${s.banco || ''}" placeholder="Ej: BCP, BBVA, Interbank">
+                </div>
+                <div>
+                    <label class="text-sm font-medium">Nro. de Cuenta Bancaria</label>
+                    <input id="sup-cuenta" class="input mt-1 w-full" value="${s.numero_cuenta || ''}" placeholder="191-xxxxxxxx-x-xx">
+                </div>
+                <div>
+                    <label class="text-sm font-medium">CCI (Código Interbancario)</label>
+                    <input id="sup-cci" class="input mt-1 w-full" value="${s.cci || ''}" placeholder="002-xxxxxxxxxxxxxxxx-xx">
+                </div>
+                <div>
+                    <label class="text-sm font-medium">Cuenta de Detracción</label>
+                    <input id="sup-detraccion" class="input mt-1 w-full" value="${s.cuenta_detraccion || ''}" placeholder="Ej: 00-xxx-xxxxxx">
                 </div>
             </div>
         `,
         confirmText: 'Guardar Cambios',
         onConfirm: async () => {
+            const name = document.getElementById('sup-name').value.trim();
+            const ruc  = document.getElementById('sup-ruc').value.trim();
+            if (!name) { UI.toast('La Razón Social es obligatoria', 'error'); return false; }
+            if (!ruc) { UI.toast('El RUC / DNI es obligatorio', 'error'); return false; }
+
             const body = {
                 id: s.id,
-                razon_social: document.getElementById('sup-name').value.trim(),
-                ruc: document.getElementById('sup-ruc').value.trim(),
+                razon_social: name,
+                ruc: ruc,
                 rubro_id: document.getElementById('sup-cat').value || null,
                 contacto: document.getElementById('sup-contact').value.trim(),
                 telefono: document.getElementById('sup-phone').value.trim(),
+                email: document.getElementById('sup-email').value.trim() || null,
                 direccion: document.getElementById('sup-address').value.trim(),
-                estado: document.getElementById('sup-estado').value
+                estado: document.getElementById('sup-estado').value,
+                banco: document.getElementById('sup-banco').value.trim() || null,
+                numero_cuenta: document.getElementById('sup-cuenta').value.trim() || null,
+                cci: document.getElementById('sup-cci').value.trim() || null,
+                cuenta_detraccion: document.getElementById('sup-detraccion').value.trim() || null
             };
 
             const res = await fetch('api/suppliers.php', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then(r => r.json());

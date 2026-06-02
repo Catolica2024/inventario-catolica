@@ -154,6 +154,9 @@ class Mailer {
     }
 
     private static function sendHTML($to, $subject, $html) {
+        // Envío de correos desactivado por solicitud del usuario (Gerente, Jefe de Finanzas, Tesorería)
+        return true;
+
         $mail = new PHPMailer(true);
 
         try {
@@ -334,6 +337,9 @@ class Mailer {
         </div>";
     }
     public static function sendPaymentVoucherToSupplier($data) {
+        // Envío de correos a proveedores desactivado por solicitud del usuario
+        return true;
+
         $mail = new PHPMailer(true);
         try {
             // Use native mail() function for sending

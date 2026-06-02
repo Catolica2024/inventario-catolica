@@ -94,8 +94,51 @@ try {
         case 'DELETE':
             $id = $_GET['id'] ?? null;
             if (!$id) json_response(['error' => 'ID requerido'], 400);
-            $pdo->prepare("DELETE FROM traslados WHERE id = ?")->execute([$id]);
-            json_response(['ok' => true]);
+
+            $pdo->beginTransaction();
+            try {
+                $stmtCheck = $pdo->prepare("SELECT * FROM traslados WHERE id = ?");
+                $stmtCheck->execute([$id]);
+                $transfer = $stmtCheck->fetch();
+
+                if ($transfer) {
+                    $item_id = $transfer['item_id'];
+                    $cantidad = $transfer['cantidad'];
+                    $tipo_transfer = $transfer['tipo'] ?? 'Salida';
+                    $origen_id = $transfer['ubicacion_origen_id'];
+                    $destino_id = $transfer['ubicacion_destino_id'];
+
+                    $stmtDep = $pdo->query("SELECT id FROM ubicaciones WHERE tipo = 'Depósito'");
+                    $depositoIds = $stmtDep->fetchAll(PDO::FETCH_COLUMN);
+
+                    $ALMACEN_DEFECTO_ID = 13;
+                    $orig = !empty($origen_id) ? (int)$origen_id : $ALMACEN_DEFECTO_ID;
+                    $dest = !empty($destino_id) ? (int)$destino_id : ($tipo_transfer === 'Baja' ? null : $ALMACEN_DEFECTO_ID);
+
+                    $origenEsDeposito = in_array($orig, $depositoIds);
+                    $destinoEsDeposito = $dest !== null && in_array($dest, $depositoIds);
+
+                    if ($tipo_transfer === 'Baja') {
+                        if ($origenEsDeposito) {
+                            $stmtMov = $pdo->prepare("INSERT INTO movimientos (item_id, tipo, cantidad, ubicacion_id, observacion) VALUES (?, 'Entrada', ?, ?, ?)");
+                            $stmtMov->execute([$item_id, $cantidad, $orig, "Reversa de Baja por eliminación de traslado #" . $id]);
+                        }
+                    } elseif ($origenEsDeposito && !$destinoEsDeposito) {
+                        $stmtMov = $pdo->prepare("INSERT INTO movimientos (item_id, tipo, cantidad, ubicacion_id, observacion) VALUES (?, 'Entrada', ?, ?, ?)");
+                        $stmtMov->execute([$item_id, $cantidad, $orig, "Reversa de Salida por eliminación de traslado #" . $id]);
+                    } elseif (!$origenEsDeposito && $destinoEsDeposito) {
+                        $stmtMov = $pdo->prepare("INSERT INTO movimientos (item_id, tipo, cantidad, ubicacion_id, observacion) VALUES (?, 'Salida', ?, ?, ?)");
+                        $stmtMov->execute([$item_id, $cantidad, $dest, "Reversa de Entrada por eliminación de traslado #" . $id]);
+                    }
+
+                    $pdo->prepare("DELETE FROM traslados WHERE id = ?")->execute([$id]);
+                }
+                $pdo->commit();
+                json_response(['ok' => true]);
+            } catch (Exception $e) {
+                $pdo->rollBack();
+                throw $e;
+            }
             break;
 
         default:

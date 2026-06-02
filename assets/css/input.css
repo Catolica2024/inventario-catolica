@@ -74,6 +74,18 @@ body { min-height: 100%; overflow-x: hidden; background: var(--background); colo
 }
 .btn-outline:hover { background:var(--card); border-color:var(--primary); color:var(--primary); }
 
+.btn-amber-outline {
+  background: rgba(245, 158, 11, 0.04);
+  border: 1.5px solid #f59e0b;
+  color: #d97706;
+}
+.btn-amber-outline:hover {
+  background: rgba(245, 158, 11, 0.1);
+  border-color: #d97706;
+  color: #b45309;
+}
+
+
 .input, .select, .textarea {
   width:100%; padding-top:.5rem; padding-bottom:.5rem; padding-left:1rem; padding-right:1rem; 
   border:1.5px solid var(--border); border-radius:.75rem;
@@ -320,6 +332,52 @@ table.data tr:last-child td { border-bottom: none; }
 }
 .scrollbar-none::-webkit-scrollbar {
   display: none; /* Chrome, Safari and Opera */
+}
+
+/* Pestañas Premium Compartidas (Tesoreria & Recepcion) */
+.treasury-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.875rem 1.5rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #64748b;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  cursor: pointer;
+  background: transparent;
+  border-top: none;
+  border-left: none;
+  border-right: none;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  flex-shrink: 0;
+}
+.treasury-tab:hover {
+  color: var(--primary);
+  background: rgba(27, 92, 255, 0.02);
+}
+.treasury-tab.active-tab {
+  color: var(--primary);
+  border-bottom-color: var(--primary);
+}
+.tab-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.25rem;
+  height: 1.25rem;
+  padding: 0 0.375rem;
+  border-radius: 9999px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  background: #e2e8f0;
+  color: #64748b;
+  transition: all 0.2s;
+}
+.treasury-tab.active-tab .tab-count {
+  background: rgba(27, 92, 255, 0.1);
+  color: var(--primary);
 }
 
 

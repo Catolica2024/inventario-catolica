@@ -33,34 +33,36 @@ window.Views.treasury = function () {
 
       <!-- Filtros (solo visibles en Historial) -->
       <div id="history-filters" class="hidden">
-        <div class="card p-3 bg-muted/30">
-          <div class="grid grid-cols-1 sm:flex sm:flex-wrap gap-3 items-end">
-            <div class="sm:flex-1 min-w-[180px] w-full">
+        <div class="card p-4 bg-muted/30">
+          <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-12 gap-3 items-end">
+            <div class="col-span-1 sm:col-span-2 md:col-span-4">
               <label class="text-[10px] font-bold uppercase text-muted-foreground mb-1 block">Buscar documento / proveedor</label>
               <div class="relative">
                 <i data-lucide="search" class="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground"></i>
                 <input type="text" id="filter-search" class="input w-full h-9 pl-8 text-sm" placeholder="Ej: OC-2024-001 o Nombre proveedor..." oninput="applyHistoryFilters()">
               </div>
             </div>
-            <div class="w-full sm:w-auto">
+            <div class="col-span-1 md:col-span-2">
               <label class="text-[10px] font-bold uppercase text-muted-foreground mb-1 block">Desde</label>
-              <input type="date" id="filter-from" class="input w-full sm:w-auto h-9 text-sm" onchange="applyHistoryFilters()">
+              <input type="date" id="filter-from" class="input w-full h-9 text-sm" onchange="applyHistoryFilters()">
             </div>
-            <div class="w-full sm:w-auto">
+            <div class="col-span-1 md:col-span-2">
               <label class="text-[10px] font-bold uppercase text-muted-foreground mb-1 block">Hasta</label>
-              <input type="date" id="filter-to" class="input w-full sm:w-auto h-9 text-sm" onchange="applyHistoryFilters()">
+              <input type="date" id="filter-to" class="input w-full h-9 text-sm" onchange="applyHistoryFilters()">
             </div>
-            <div class="w-full sm:w-auto">
+            <div class="col-span-1 md:col-span-2">
               <label class="text-[10px] font-bold uppercase text-muted-foreground mb-1 block">Tipo</label>
-              <select id="filter-type" class="select w-full sm:w-auto h-9 text-sm" onchange="applyHistoryFilters()">
+              <select id="filter-type" class="select w-full h-9 text-sm" onchange="applyHistoryFilters()">
                 <option value="">Todos</option>
                 <option value="compra">Órdenes de Compra</option>
                 <option value="servicio">Órdenes de Servicio</option>
               </select>
             </div>
-            <button class="btn btn-ghost h-9 text-xs text-muted-foreground w-full sm:w-auto flex justify-center" onclick="clearHistoryFilters()">
-              <i data-lucide="x" class="w-3.5 h-3.5"></i> Limpiar
-            </button>
+            <div class="col-span-1 md:col-span-2">
+              <button class="btn btn-ghost h-9 text-xs text-muted-foreground w-full flex justify-center items-center gap-1 border border-dashed border-border hover:border-primary/40 rounded-lg" onclick="clearHistoryFilters()">
+                <i data-lucide="x" class="w-3.5 h-3.5"></i> Limpiar
+              </button>
+            </div>
           </div>
         </div>
       </div>

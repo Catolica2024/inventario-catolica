@@ -115,8 +115,33 @@ try {
         case 'DELETE':
             $id = $_GET['id'] ?? null;
             if (!$id) json_response(['error' => 'ID requerido'], 400);
-            $pdo->prepare("DELETE FROM mantenimientos WHERE id = ?")->execute([$id]);
-            json_response(['ok' => true]);
+
+            $pdo->beginTransaction();
+            try {
+                $stmtCheck = $pdo->prepare("SELECT * FROM mantenimientos WHERE id = ?");
+                $stmtCheck->execute([$id]);
+                $maint = $stmtCheck->fetch();
+
+                if ($maint) {
+                    if ($maint['estado'] === 'En Proceso') {
+                        if (!empty($maint['activo_id'])) {
+                            $pdo->prepare("UPDATE activos SET estado = 'Operativo' WHERE id = ?")->execute([$maint['activo_id']]);
+                        }
+
+                        $ALMACEN_ID = 13;
+                        $stmtMov = $pdo->prepare("INSERT INTO movimientos (item_id, tipo, cantidad, ubicacion_id, observacion) VALUES (?, 'Entrada', ?, ?, ?)");
+                        $obs = "Reversa por eliminación de mantenimiento #" . $id;
+                        $stmtMov->execute([$maint['item_id'], $maint['cantidad'], $ALMACEN_ID, $obs]);
+                    }
+                    
+                    $pdo->prepare("DELETE FROM mantenimientos WHERE id = ?")->execute([$id]);
+                }
+                $pdo->commit();
+                json_response(['ok' => true]);
+            } catch (Exception $e) {
+                $pdo->rollBack();
+                throw $e;
+            }
             break;
 
         default:

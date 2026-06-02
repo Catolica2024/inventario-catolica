@@ -5,6 +5,45 @@ require_once __DIR__ . '/../includes/db.php';
 
 $method = $_SERVER['REQUEST_METHOD'];
 
+// ── PATCH: subir comprobante (factura) a una orden ya recibida ─────────────
+if ($method === 'PATCH') {
+    try {
+        $pdo = db();
+        $b = get_body();
+        $purchase_id     = $b['purchase_id']     ?? null;
+        $comprobante_url = $b['comprobante_url']  ?? null;
+
+        if (!$purchase_id || !$comprobante_url) {
+            json_response(['error' => 'purchase_id y comprobante_url son requeridos'], 400);
+        }
+
+        // Obtener el estado actual de los documentos
+        $stmt = $pdo->prepare("SELECT conformidad_url, comprobante_url FROM ordenes_compra WHERE id = ?");
+        $stmt->execute([$purchase_id]);
+        $row = $stmt->fetch();
+        if (!$row) json_response(['error' => 'Orden no encontrada'], 404);
+
+        // Guardar la URL del comprobante
+        $pdo->prepare("UPDATE ordenes_compra SET comprobante_url = ? WHERE id = ?")
+            ->execute([$comprobante_url, $purchase_id]);
+
+        // Si ya tiene conformidad, marcar como Completada (ciclo documental cerrado)
+        $ahora_completa = false;
+        if (!empty($row['conformidad_url'])) {
+            $pdo->prepare("UPDATE ordenes_compra SET estado = 'Completada' WHERE id = ? AND estado != 'Completada'")
+                ->execute([$purchase_id]);
+            $ahora_completa = true;
+        }
+
+        ob_clean();
+        json_response(['ok' => true, 'completada' => $ahora_completa]);
+    } catch (Throwable $e) {
+        ob_clean();
+        json_response(['error' => $e->getMessage()], 500);
+    }
+    exit;
+}
+
 if ($method !== 'POST') {
     json_response(['error' => 'Método no permitido'], 405);
 }
@@ -97,6 +136,7 @@ try {
 
                 // ARQUITECTURA EXPERTA: Solo registramos movimiento de stock directo para 'insumo' o 'mobiliario'.
                 // Los 'equipo' requieren un alta individualizada (serie, qr, etc) que se maneja en el asistente de alta.
+                $cantidadConvertida = $item['cantidad']; // Inicializar con cantidad base (sobreescrito si hay factor)
                 if ($actualType !== 'equipo') {
                     $factor = !empty($item['factor_conversion']) ? floatval($item['factor_conversion']) : 1.00;
                     $cantidadConvertida = intval(round($item['cantidad'] * $factor));
@@ -153,13 +193,23 @@ try {
         }
     }
 
-    // 3. Marcar la orden como Completada y guardar documento
-    $conformidad = $b['conformidad_url'] ?? null;
-    $sqlUpd = "UPDATE ordenes_compra SET estado = 'Completada', fecha_recepcion = NOW()";
-    $paramsUpd = [];
+    // 3. Marcar la orden como Recibida/Completada y guardar documentos
+    $conformidad    = $b['conformidad_url']  ?? null;
+    $comprobante    = $b['comprobante_url']  ?? null;
+
+    // Si se suben ambos documentos → Completada; si solo la conformidad → Recibida (pendiente factura)
+    $nuevoEstado = ($conformidad && $comprobante) ? 'Completada' : 'Recibida';
+
+    $sqlUpd = "UPDATE ordenes_compra SET estado = ?, fecha_recepcion = NOW()";
+    $paramsUpd = [$nuevoEstado];
+
     if ($conformidad) {
         $sqlUpd .= ", conformidad_url = ?";
         $paramsUpd[] = $conformidad;
+    }
+    if ($comprobante) {
+        $sqlUpd .= ", comprobante_url = ?";
+        $paramsUpd[] = $comprobante;
     }
     $sqlUpd .= " WHERE id = ?";
     $paramsUpd[] = $purchase_id;
@@ -169,7 +219,7 @@ try {
     $pdo->commit();
     
     ob_clean(); // Garantizar JSON puro
-    json_response(['ok' => true, 'received_items' => $receivedItems]);
+    json_response(['ok' => true, 'received_items' => $receivedItems, 'estado' => $nuevoEstado]);
 
 } catch (Exception $e) {
     if ($pdo->inTransaction()) $pdo->rollBack();

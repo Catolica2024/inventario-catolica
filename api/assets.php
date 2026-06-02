@@ -108,9 +108,10 @@ try {
                 ]);
                 $assetId = $pdo->lastInsertId();
 
-                // Crear movimiento de entrada automático
-                $stmtMov = $pdo->prepare("INSERT INTO movimientos (item_id, tipo, cantidad, observacion) VALUES (?, 'Entrada', 1, ?)");
-                $stmtMov->execute([$b['item_id'], "Registro de activo: Serie " . $serie]);
+                // Crear movimiento de entrada automático con ubicacion_id
+                $ubicacion_id_mov = !empty($b['ubicacion_id']) ? $b['ubicacion_id'] : null;
+                $stmtMov = $pdo->prepare("INSERT INTO movimientos (item_id, tipo, cantidad, ubicacion_id, observacion) VALUES (?, 'Entrada', 1, ?, ?)");
+                $stmtMov->execute([$b['item_id'], $ubicacion_id_mov, "Registro de activo: Serie " . $serie]);
 
                 // LÓGICA EXPERTA: Actualizar metadatos del Ítem Maestro (Marca/Modelo)
                 if (!empty($b['marca']) || !empty($b['modelo'])) {

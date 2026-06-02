@@ -32,10 +32,10 @@ window.Views.login = function() {
 
           <form id="login-form" class="space-y-5">
             <div>
-              <label class="text-sm font-medium">Correo Electrónico</label>
+              <label class="text-sm font-medium">Usuario / Correo Electrónico</label>
               <div class="relative mt-1">
-                <i data-lucide="mail" class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground"></i>
-                <input id="email" type="email" required placeholder="usuario@catolica.edu" class="input pl-10" />
+                <i data-lucide="user" class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground"></i>
+                <input id="email" type="text" required placeholder="ej. jperez o correo@catolica.edu" class="input pl-10" />
               </div>
             </div>
             <div>
