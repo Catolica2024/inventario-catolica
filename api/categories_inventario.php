@@ -102,31 +102,52 @@ try {
     json_response(['error' => 'Error: ' . $e->getMessage()], 500);
 }
 
+function removeAccents($str) {
+    $map = [
+        'á'=>'a', 'é'=>'e', 'í'=>'i', 'ó'=>'o', 'ú'=>'u', 'ñ'=>'n',
+        'Á'=>'A', 'É'=>'E', 'Í'=>'I', 'Ó'=>'O', 'Ú'=>'U', 'Ñ'=>'N',
+        'ä'=>'a', 'ë'=>'e', 'ï'=>'i', 'ö'=>'o', 'ü'=>'u',
+        'Ä'=>'A', 'Ë'=>'E', 'Ï'=>'I', 'Ö'=>'O', 'Ü'=>'U'
+    ];
+    return strtr($str, $map);
+}
+
 function generateUniquePrefix($pdo, $name, $excludeId = null) {
-    // Normalizar: quitar acentos, caracteres especiales, pasar a mayúsculas
-    $clean = strtoupper(preg_replace('/[^a-zA-Z]/', '', iconv('UTF-8', 'ASCII//TRANSLIT', $name)));
-    if (strlen($clean) < 2) $clean .= "CAT";
+    $clean = removeAccents($name);
+    $clean = strtoupper($clean);
+    $clean = preg_replace('/[^A-Z0-9]/', '', $clean);
     
-    $base = substr($clean, 0, 3);
+    if (strlen($clean) < 5) {
+        $clean = str_pad($clean, 5, 'X', STR_PAD_RIGHT);
+    }
+    
+    $base = substr($clean, 0, 5);
     $prefix = $base;
     
     $sql = "SELECT COUNT(*) FROM categorias_inventario WHERE prefijo = ?";
-    if ($excludeId) $sql .= " AND id != " . intval($excludeId);
+    if ($excludeId) {
+        $sql .= " AND id != " . intval($excludeId);
+    }
     $stmt = $pdo->prepare($sql);
     
-    $attempt = 1;
+    $attempt = 0;
     while (true) {
         $stmt->execute([$prefix]);
-        if ($stmt->fetchColumn() == 0) return $prefix;
-        
-        // Si hay colisión, intentamos variaciones
-        if ($attempt < strlen($clean) - 2) {
-            $prefix = substr($clean, 0, 3 + $attempt);
-        } else {
-            // Si ya no hay letras, usamos las 2 primeras + un número
-            $prefix = substr($base, 0, 2) . ($attempt - (strlen($clean) - 3));
+        if ($stmt->fetchColumn() == 0) {
+            return $prefix;
         }
+        
         $attempt++;
-        if ($attempt > 99) return $base . rand(10,99); // Último recurso
+        if (5 + $attempt <= strlen($clean) && 5 + $attempt <= 10) {
+            $prefix = substr($clean, 0, 5 + $attempt);
+        } else {
+            $suffix = (string)$attempt;
+            $baseLen = max(4, 5 - strlen($suffix));
+            $prefix = substr($base, 0, $baseLen) . $suffix;
+        }
+        
+        if ($attempt > 999) {
+            return substr($base, 0, 4) . rand(1000, 9999);
+        }
     }
 }

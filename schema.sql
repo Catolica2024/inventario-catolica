@@ -65,7 +65,7 @@ INSERT INTO usuarios (nombre, email, password_hash, rol_id) VALUES
 -- 4. Categorías e Ítems
 CREATE TABLE IF NOT EXISTS categorias_inventario (
     id INT AUTO_INCREMENT PRIMARY KEY,
-    prefijo VARCHAR(5) UNIQUE,
+    prefijo VARCHAR(10) UNIQUE,
     nombre VARCHAR(100) NOT NULL,
     tipo ENUM('equipo', 'mobiliario', 'insumo') DEFAULT 'insumo',
     stock_minimo INT DEFAULT 5,

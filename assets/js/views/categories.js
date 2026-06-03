@@ -1,15 +1,16 @@
 // assets/js/views/categories.js — Gestión de Categorías y Prefijos
 
-async function loadInventoryCategories() {
+let _allCategories = [];
+
+function renderCategoriesTable(list) {
   const tbody = document.getElementById('categories-inv-table-body');
   if (!tbody) return;
-  try {
-    const data = await fetch('api/categories_inventario.php').then(r => r.json());
-    if (!data.categories || data.categories.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="5" class="text-center py-10 text-muted-foreground">No hay categorías registradas.</td></tr>';
-      return;
-    }
-    tbody.innerHTML = data.categories.map(c => `
+  if (!list || list.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="6" class="text-center py-10 text-muted-foreground">No se encontraron categorías.</td></tr>';
+    lucide.createIcons();
+    return;
+  }
+  tbody.innerHTML = list.map(c => `
       <tr>
         <td class="font-mono text-xs font-bold text-primary">${c.prefijo || '—'}</td>
         <td class="font-medium">${c.nombre}</td>
@@ -27,7 +28,34 @@ async function loadInventoryCategories() {
         </td>
       </tr>`).join('');
     lucide.createIcons();
-  } catch { tbody.innerHTML = '<tr><td colspan="5" class="text-center py-10 text-destructive">Error al cargar categorías.</td></tr>'; }
+}
+
+window.filterCategories = function() {
+  const q = (document.getElementById('cat-search')?.value || '').toLowerCase().trim();
+  if (!q) {
+    renderCategoriesTable(_allCategories);
+    return;
+  }
+  const filtered = _allCategories.filter(c =>
+    (c.nombre || '').toLowerCase().includes(q) ||
+    (c.prefijo || '').toLowerCase().includes(q) ||
+    (c.tipo || '').toLowerCase().includes(q)
+  );
+  renderCategoriesTable(filtered);
+};
+
+async function loadInventoryCategories() {
+  const tbody = document.getElementById('categories-inv-table-body');
+  if (!tbody) return;
+  try {
+    const data = await fetch('api/categories_inventario.php').then(r => r.json());
+    _allCategories = data.categories || [];
+    if (_allCategories.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="6" class="text-center py-10 text-muted-foreground">No hay categorías registradas.</td></tr>';
+      return;
+    }
+    renderCategoriesTable(_allCategories);
+  } catch { tbody.innerHTML = '<tr><td colspan="6" class="text-center py-10 text-destructive">Error al cargar categorías.</td></tr>'; }
 }
 
 window.newInvCategory = function() {
@@ -39,12 +67,13 @@ window.newInvCategory = function() {
           <input id="cat-nombre" class="input mt-1 w-full" placeholder="Ej: Laptops, Sillas, Útiles" oninput="autoGeneratePrefix(this.value)"></div>
         <div class="grid grid-cols-2 gap-4">
           <div><label class="text-sm font-medium">Prefijo Institucional <span class="text-xs text-muted-foreground">(Bloqueado)</span></label>
-            <input id="cat-prefijo" class="input mt-1 w-full font-mono uppercase bg-muted cursor-not-allowed" readonly maxlength="3" placeholder="---"></div>
+            <input id="cat-prefijo" class="input mt-1 w-full font-mono uppercase bg-muted cursor-not-allowed" readonly maxlength="10" placeholder="-----"></div>
           <div><label class="text-sm font-medium">Tipo de Bien <span class="text-destructive">*</span></label>
             <select id="cat-tipo" class="select mt-1 w-full">
               <option value="equipo">Equipo (Activo)</option>
               <option value="mobiliario">Mobiliario</option>
               <option value="insumo">Insumo / Consumible</option>
+              <option value="servicio">Servicio</option>
             </select></div>
           <div><label class="text-sm font-medium">Stock Mínimo <span class="text-xs text-muted-foreground">(Alerta)</span></label>
             <input type="number" id="cat-stock-min" class="input mt-1 w-full" value="5" min="0"></div>
@@ -81,6 +110,19 @@ window.Views['categories-inv'] = function() {
       <button class="btn btn-primary" onclick="newInvCategory()"><i data-lucide="plus"></i>Nueva Categoría</button>
     `)}
     <div class="card">
+      <div class="p-4 border-b border-border">
+        <div class="relative max-w-sm">
+          <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none"></i>
+          <input
+            id="cat-search"
+            type="text"
+            class="input w-full"
+            style="padding-left: 2.5rem;"
+            placeholder="Buscar por nombre, prefijo o tipo..."
+            oninput="filterCategories()"
+          >
+        </div>
+      </div>
       <div class="table-container">
         <table class="data">
           <thead><tr><th>Prefijo</th><th>Nombre</th><th>Tipo</th><th class="text-center">Stock Mín.</th><th>Descripción</th><th class="text-right">Acciones</th></tr></thead>
@@ -92,27 +134,30 @@ window.Views['categories-inv'] = function() {
 
 window.Views['categories-inv'].afterMount = loadInventoryCategories;
 
-window.autoGeneratePrefix = function(name) {
+let autoGeneratePrefixTimeout = null;
+window.autoGeneratePrefix = function(name, excludeId = null) {
     const input = document.getElementById('cat-prefijo');
     if (!input) return;
     
-    // Limpiar nombre: quitar acentos y caracteres raros
-    const clean = name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z\s]/g, "").trim().toUpperCase();
-    if (!clean) { input.value = ''; return; }
-
-    const words = clean.split(/\s+/).filter(w => w.length > 2 || words.length === 1); // Ignorar palabras cortas como "de", "la"
-    let prefix = '';
-
-    if (words.length === 1) {
-        prefix = words[0].substring(0, 3);
-    } else if (words.length === 2) {
-        prefix = words[0].substring(0, 2) + words[1].substring(0, 1);
-    } else {
-        prefix = words[0].substring(0, 1) + words[1].substring(0, 1) + words[2].substring(0, 1);
+    if (!name.trim()) {
+        input.value = '';
+        return;
     }
-
-    // Asegurar 3 caracteres rellenando con X si es necesario
-    input.value = prefix.padEnd(3, 'X').substring(0, 3).toUpperCase();
+    
+    if (autoGeneratePrefixTimeout) clearTimeout(autoGeneratePrefixTimeout);
+    
+    autoGeneratePrefixTimeout = setTimeout(async () => {
+        try {
+            let url = `api/categories_inventario.php?action=generate_prefix&name=${encodeURIComponent(name)}`;
+            if (excludeId) url += `&exclude_id=${excludeId}`;
+            const res = await fetch(url).then(r => r.json());
+            if (res.prefix) {
+                input.value = res.prefix;
+            }
+        } catch (e) {
+            console.error("Error generating prefix:", e);
+        }
+    }, 300);
 };
 
 window.editInvCategory = async function(id) {
@@ -125,15 +170,16 @@ window.editInvCategory = async function(id) {
         body: `
           <div class="grid grid-cols-1 gap-4">
             <div><label class="text-sm font-medium">Nombre de la Categoría <span class="text-destructive">*</span></label>
-              <input id="cat-nombre" class="input mt-1 w-full" value="${c.nombre}" oninput="autoGeneratePrefix(this.value)"></div>
+              <input id="cat-nombre" class="input mt-1 w-full" value="${c.nombre}" oninput="autoGeneratePrefix(this.value, ${c.id})"></div>
             <div class="grid grid-cols-2 gap-4">
               <div><label class="text-sm font-medium">Prefijo Institucional <span class="text-xs text-muted-foreground">(Bloqueado)</span></label>
-                <input id="cat-prefijo" class="input mt-1 w-full font-mono uppercase bg-muted cursor-not-allowed" readonly value="${c.prefijo || '---'}"></div>
+                <input id="cat-prefijo" class="input mt-1 w-full font-mono uppercase bg-muted cursor-not-allowed" readonly value="${c.prefijo || '-----'}"></div>
               <div><label class="text-sm font-medium">Tipo de Bien <span class="text-destructive">*</span></label>
                 <select id="cat-tipo" class="select mt-1 w-full">
                   <option value="equipo" ${c.tipo === 'equipo' ? 'selected' : ''}>Equipo (Activo)</option>
                   <option value="mobiliario" ${c.tipo === 'mobiliario' ? 'selected' : ''}>Mobiliario</option>
                   <option value="insumo" ${c.tipo === 'insumo' ? 'selected' : ''}>Insumo / Consumible</option>
+                  <option value="servicio" ${c.tipo === 'servicio' ? 'selected' : ''}>Servicio</option>
                 </select></div>
               <div><label class="text-sm font-medium">Stock Mínimo</label>
                 <input type="number" id="cat-stock-min" class="input mt-1 w-full" value="${c.stock_minimo || 0}" min="0"></div>

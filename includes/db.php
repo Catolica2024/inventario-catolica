@@ -2,7 +2,7 @@
 // includes/db.php — Configuración HÍBRIDA INTELIGENTE (Local/Producción)
 // Corregido: Credenciales de hosting con prefijo truncado por el servidor.
 
-$is_local = ($_SERVER['SERVER_NAME'] === 'localhost' || $_SERVER['SERVER_NAME'] === '127.0.0.1');
+$is_local = (!isset($_SERVER['SERVER_NAME']) || $_SERVER['SERVER_NAME'] === 'localhost' || $_SERVER['SERVER_NAME'] === '127.0.0.1');
 
 if ($is_local) {
     define('DB_HOST', '127.0.0.1');

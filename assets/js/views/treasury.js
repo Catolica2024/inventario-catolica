@@ -201,7 +201,7 @@ function _updateTabCounts() {
         const movilidadPagada = tieneMovilidad ? (p.mobility_pagado == 1) : true;
         const esCompletada = p.estado === 'Completada';
         const esHistorial = (p.pagado == 1 && movilidadPagada) || esCompletada;
-        const esCreditoCuotas = p.condicion_pago === 'Credito' && parseInt(p.total_cuotas_reg || 0) > 0;
+        const esCreditoCuotas = (p.condicion_pago === 'Credito' || p.condicion_pago === 'Alquiler') && parseInt(p.total_cuotas_reg || 0) > 0;
         const esParcialCuotas = esCreditoCuotas && !esHistorial;
 
         if (esHistorial) history++;
@@ -256,7 +256,7 @@ function renderTreasuryTable() {
             const tieneMovilidad = parseFloat(p.monto_movilidad || 0) > 0;
             const movilidadPagada = tieneMovilidad ? (p.mobility_pagado == 1) : true;
             const esHistorial = (p.pagado == 1 && movilidadPagada) || p.estado === 'Completada';
-            const esCreditoCuotas = p.condicion_pago === 'Credito' && parseInt(p.total_cuotas_reg || 0) > 0;
+            const esCreditoCuotas = (p.condicion_pago === 'Credito' || p.condicion_pago === 'Alquiler') && parseInt(p.total_cuotas_reg || 0) > 0;
             const esParcialCuotas = esCreditoCuotas && !esHistorial;
 
             if (_treasuryCurrentTab === 'partial') return esParcialCuotas;
@@ -285,6 +285,8 @@ function renderTreasuryTable() {
             } else {
                 condBadge = `<span class="badge badge-yellow text-[10px]">Crédito ${p.condicion_detalle ? '(' + p.condicion_detalle + ')' : ''}</span>`;
             }
+        } else if (p.condicion_pago === 'Alquiler') {
+            condBadge = `<span class="badge badge-indigo text-[10px] flex items-center gap-1"><i data-lucide="repeat" class="w-3 h-3 animate-spin-slow"></i> Alquiler</span>`;
         } else if (p.condicion_pago === 'Adelanto + Saldo') {
             const aPorc = parseFloat(p.adelanto_porcentaje || 0);
             const sPorc = 100 - aPorc;
@@ -304,6 +306,13 @@ function renderTreasuryTable() {
         const esCompletadaSinPagar = p.estado === 'Completada' && p.pagado != 1;
         if (p.pagado == 1) {
             estadoBadge = '<span class="badge badge-green"><i data-lucide="check-circle" class="w-3 h-3"></i> Pagado</span>';
+        } else if (p.condicion_pago === 'Alquiler') {
+            estadoBadge = `<div class="flex flex-col gap-1">
+                <span class="badge badge-indigo text-[10px]">${cuotasPag}/${cuotasTot} meses</span>
+                <div class="w-full bg-muted rounded-full h-1.5 overflow-hidden">
+                  <div class="bg-indigo-600 h-1.5 rounded-full" style="width:${(cuotasTot > 0 ? (cuotasPag / cuotasTot * 100).toFixed(0) : 0)}%"></div>
+                </div>
+            </div>`;
         } else if (esCompletadaSinPagar) {
             // OC completada operativamente (recepción hecha) pero el pago aún está registrado
             estadoBadge = `<div class="flex flex-col gap-0.5">
@@ -399,13 +408,14 @@ window.openPaymentDetails = async function (id) {
 
     // --- Sección de condición de pago ---
     let condPagoSection = '';
-    if (p.condicion_pago === 'Credito') {
+    if (p.condicion_pago === 'Credito' || p.condicion_pago === 'Alquiler') {
         if (esCuotas) {
             // Vista de cuotas
             const cuotasHTML = cuotas.map(c => {
                 const isPagada = c.pagado == 1;
                 const venc = c.fecha_vencimiento ? new Date(c.fecha_vencimiento).toLocaleDateString('es-PE') : '—';
                 const fechaPago = c.fecha_pago ? new Date(c.fecha_pago).toLocaleDateString('es-PE') : null;
+                const descText = c.descripcion ? `<span class="badge badge-gray text-[9px] font-bold">${c.descripcion}</span>` : '';
                 return `
                 <div class="flex items-center justify-between p-2.5 rounded-lg border ${isPagada ? 'bg-green-50 border-green-200' : 'bg-white border-border'}">
                     <div class="flex items-center gap-3">
@@ -413,7 +423,10 @@ window.openPaymentDetails = async function (id) {
                             ${isPagada ? '✓' : c.numero_cuota}
                         </div>
                         <div>
-                            <div class="text-xs font-bold">Cuota ${c.numero_cuota} de ${c.total_cuotas}</div>
+                            <div class="text-xs font-bold flex items-center gap-1.5">
+                                Cuota ${c.numero_cuota} de ${c.total_cuotas}
+                                ${descText}
+                            </div>
                             <div class="text-[10px] text-muted-foreground">Vence: ${venc} ${isPagada ? '· Pagado: ' + fechaPago : ''}</div>
                         </div>
                     </div>
@@ -430,14 +443,30 @@ window.openPaymentDetails = async function (id) {
                 </div>`;
             }).join('');
 
+            const isAlquiler = p.es_alquiler == 1 || p.condicion_pago === 'Alquiler';
+            const titleHtml = isAlquiler ? `
+                <div class="flex flex-col gap-0.5">
+                    <h4 class="font-bold text-sm flex items-center gap-2 text-primary">
+                        <i data-lucide="repeat" class="w-4 h-4 text-primary animate-spin-slow"></i>
+                        Cronograma de Alquiler Recurrente
+                    </h4>
+                    <div class="text-[10px] text-muted-foreground font-semibold flex items-center gap-1">
+                        <span class="badge badge-indigo text-[9px] py-0.5">🔄 Alquiler Recurrente</span>
+                        <span>· Día de pago: ${p.dia_pago || '30'} de cada mes</span>
+                    </div>
+                </div>
+            ` : `
+                <h4 class="font-bold text-sm flex items-center gap-2 text-primary">
+                    <i data-lucide="layers" class="w-4 h-4"></i>
+                    Cronograma de Cuotas — ${cuotasPag}/${cuotas.length} pagadas
+                </h4>
+            `;
+
             condPagoSection = `
                 <div class="space-y-3">
                     <div class="flex items-center justify-between">
-                        <h4 class="font-bold text-sm flex items-center gap-2 text-primary">
-                            <i data-lucide="layers" class="w-4 h-4"></i>
-                            Cronograma de Cuotas — ${cuotasPag}/${cuotas.length} pagadas
-                        </h4>
-                        <div class="flex items-center gap-2 text-xs text-muted-foreground">
+                        ${titleHtml}
+                        <div class="flex items-center gap-2 text-xs text-muted-foreground shrink-0">
                             <div class="w-24 bg-muted rounded-full h-2">
                                 <div class="bg-primary h-2 rounded-full transition-all" style="width:${(cuotasPag / cuotas.length * 100).toFixed(0)}%"></div>
                             </div>

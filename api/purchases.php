@@ -110,8 +110,8 @@ try {
             $pdo->beginTransaction();
             $stmt = $pdo->prepare("
                 INSERT INTO ordenes_compra
-                  (creado_por, numero_oc, tipo, proveedor_id, activo_id, fecha, area_id, moneda, condicion_pago, condicion_detalle, adelanto_porcentaje, adelanto_monto, saldo_monto, fecha_requerida, subtotal, igv, igv_porcentaje, precios_con_igv, total, monto, estado, observaciones, incluye_movilidad, monto_movilidad, dentro_presupuesto)
-                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                  (creado_por, numero_oc, tipo, proveedor_id, activo_id, fecha, area_id, moneda, condicion_pago, condicion_detalle, adelanto_porcentaje, adelanto_monto, saldo_monto, fecha_requerida, subtotal, igv, igv_porcentaje, precios_con_igv, total, monto, estado, observaciones, incluye_movilidad, monto_movilidad, dentro_presupuesto, es_alquiler, dia_pago)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             ");
             $stmt->execute([
                 $b['usuario_id'] ?? null,
@@ -138,7 +138,9 @@ try {
                 $b['observaciones'] ?? null,
                 $b['incluye_movilidad'] ?? 1,
                 $b['monto_movilidad'] ?? 0,
-                isset($b['dentro_presupuesto']) ? (int)$b['dentro_presupuesto'] : 1
+                isset($b['dentro_presupuesto']) ? (int)$b['dentro_presupuesto'] : 1,
+                ($b['condicion_pago'] ?? '') === 'Alquiler' ? 1 : 0,
+                isset($b['dia_pago']) ? (int)$b['dia_pago'] : null
             ]);
             $orden_id = $pdo->lastInsertId();
 
@@ -212,17 +214,51 @@ try {
                     ->execute([$fechaVencimiento, $orden_id]);
             }
 
-            // Crear cuotas automáticamente si es pago en cuotas
+            // Crear cuotas automáticamente si es pago en cuotas (Crédito N cuotas)
             if ($condPago === 'Credito' && $condDetalle && stripos($condDetalle, 'cuotas') !== false) {
                 $numCuotas = intval($condDetalle);
                 if ($numCuotas > 1) {
                     $montoCuota = round($total / $numCuotas, 2);
                     $scuota = $pdo->prepare("INSERT INTO ordenes_cuotas (orden_id, numero_cuota, total_cuotas, monto_cuota, fecha_vencimiento) VALUES (?,?,?,?,?)");
                     for ($c = 1; $c <= $numCuotas; $c++) {
-                        // Vencimiento de cada cuota: cada 30 días a partir de hoy
                         $fVenc = date('Y-m-d', strtotime('+' . ($c * 30) . ' days', strtotime($b['fecha'] ?? 'now')));
                         $scuota->execute([$orden_id, $c, $numCuotas, $montoCuota, $fVenc]);
                     }
+                }
+            }
+
+            // ── Generar cuotas de ALQUILER mensual ──
+            if ($condPago === 'Alquiler') {
+                $diaPago       = isset($b['dia_pago']) ? (int)$b['dia_pago'] : 1;
+                $mesesTotal    = isset($b['meses_alquiler']) ? max(1, (int)$b['meses_alquiler']) : 24;
+                $montoCuota    = round($total / $mesesTotal, 2);
+                $fechaInicio   = $b['fecha_primera_cuota'] ?? null;
+
+                if (!$fechaInicio) {
+                    // Por defecto: próximo día_pago después de hoy
+                    $hoy = new DateTime();
+                    $anio = (int)$hoy->format('Y');
+                    $mes  = (int)$hoy->format('n');
+                    if ((int)$hoy->format('j') >= $diaPago) { $mes++; }
+                    if ($mes > 12) { $mes = 1; $anio++; }
+                    $diaCap = min($diaPago, (int)(new DateTime("$anio-$mes-01"))->format('t'));
+                    $fechaInicio = sprintf('%04d-%02d-%02d', $anio, $mes, $diaCap);
+                }
+
+                $scuota = $pdo->prepare("INSERT INTO ordenes_cuotas (orden_id, numero_cuota, total_cuotas, monto_cuota, fecha_vencimiento, descripcion) VALUES (?,?,?,?,?,?)");
+                $dt = new DateTime($fechaInicio);
+                for ($c = 1; $c <= $mesesTotal; $c++) {
+                    $fVenc = $dt->format('Y-m-d');
+                    $label = 'Alquiler - ' . strftime('%B %Y', $dt->getTimestamp());
+                    // strftime no está disponible en todos los sistemas, usar alternativa
+                    $meses_es = ['', 'Enero','Febrero','Marzo','Abril','Mayo','Junio',
+                                 'Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+                    $label = 'Alquiler - ' . $meses_es[(int)$dt->format('n')] . ' ' . $dt->format('Y');
+                    $scuota->execute([$orden_id, $c, $mesesTotal, $montoCuota, $fVenc, $label]);
+                    // Avanzar al siguiente mes manteniendo el día de pago
+                    $dt->modify('first day of next month');
+                    $diaCap = min($diaPago, (int)$dt->format('t'));
+                    $dt->setDate((int)$dt->format('Y'), (int)$dt->format('n'), $diaCap);
                 }
             }
 
@@ -268,6 +304,57 @@ try {
                 $pdo->prepare("UPDATE ordenes_compra SET " . implode(', ', $fields) . " WHERE id = ?")
                     ->execute($vals);
                 json_response(['ok' => true]);
+                break;
+            }
+
+            // ── Configurar / regenerar calendario de alquiler (post-aprobación) ──
+            if (($b['action'] ?? '') === 'setup_rental_schedule') {
+                $diaPago     = max(1, min(31, (int)($b['dia_pago'] ?? 1)));
+                $mesesTotal  = max(1, (int)($b['meses_alquiler'] ?? 24));
+                $fechaInicio = $b['fecha_primera_cuota'] ?? null;
+
+                // Obtener monto mensual de la OS
+                $ocR = $pdo->prepare("SELECT total FROM ordenes_compra WHERE id = ?");
+                $ocR->execute([$id]);
+                $ocRow = $ocR->fetch();
+                if (!$ocRow) json_response(['error' => 'OS no encontrada'], 404);
+
+                if (!$fechaInicio) {
+                    $hoy = new DateTime();
+                    $anio = (int)$hoy->format('Y');
+                    $mes  = (int)$hoy->format('n');
+                    if ((int)$hoy->format('j') >= $diaPago) { $mes++; }
+                    if ($mes > 12) { $mes = 1; $anio++; }
+                    $diaCap = min($diaPago, (int)(new DateTime("$anio-$mes-01"))->format('t'));
+                    $fechaInicio = sprintf('%04d-%02d-%02d', $anio, $mes, $diaCap);
+                }
+
+                // Borrar solo cuotas NO pagadas y regenerar
+                $pdo->prepare("DELETE FROM ordenes_cuotas WHERE orden_id = ? AND pagado = 0")->execute([$id]);
+
+                // Renumerar desde la última cuota pagada
+                $lastPaid = $pdo->prepare("SELECT MAX(numero_cuota) FROM ordenes_cuotas WHERE orden_id = ? AND pagado = 1");
+                $lastPaid->execute([$id]);
+                $startNum = (int)($lastPaid->fetchColumn() ?? 0) + 1;
+                $totalNuevo = ($startNum - 1) + $mesesTotal;
+                $montoCuota = round(floatval($ocRow['total']) / $totalNuevo, 2);
+
+                // Actualizar dia_pago en la OC
+                $pdo->prepare("UPDATE ordenes_compra SET dia_pago = ? WHERE id = ?")->execute([$diaPago, $id]);
+
+                $scuota = $pdo->prepare("INSERT INTO ordenes_cuotas (orden_id, numero_cuota, total_cuotas, monto_cuota, fecha_vencimiento, descripcion) VALUES (?,?,?,?,?,?)");
+                $meses_es = ['','Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+                $dt = new DateTime($fechaInicio);
+                for ($c = $startNum; $c <= $totalNuevo; $c++) {
+                    $fVenc = $dt->format('Y-m-d');
+                    $label = 'Alquiler - ' . $meses_es[(int)$dt->format('n')] . ' ' . $dt->format('Y');
+                    $scuota->execute([$id, $c, $totalNuevo, $montoCuota, $fVenc, $label]);
+                    $dt->modify('first day of next month');
+                    $diaCap = min($diaPago, (int)$dt->format('t'));
+                    $dt->setDate((int)$dt->format('Y'), (int)$dt->format('n'), $diaCap);
+                }
+
+                json_response(['ok' => true, 'cuotas_generadas' => $mesesTotal]);
                 break;
             }
 

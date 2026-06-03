@@ -96,6 +96,7 @@ window.Views['new-purchase'] = function () {
                 <option value="Transferencia">Transferencia</option>
                 <option value="Credito">Crédito</option>
                 <option value="Adelanto + Saldo">Adelanto + Saldo</option>
+                <option value="Alquiler">Alquiler</option>
               </select>
             </div>
             <div id="oc-adelanto-container" class="hidden">
@@ -113,6 +114,20 @@ window.Views['new-purchase'] = function () {
               <div>
                 <label class="text-sm font-medium" id="oc-credito-label">Cantidad</label>
                 <input type="number" id="oc-condicion-val" class="input mt-1 w-full" placeholder="30" oninput="recalcOCTotals()">
+              </div>
+            </div>
+            <div id="oc-alquiler-container" class="hidden grid grid-cols-1 sm:grid-cols-3 gap-3 col-span-1 md:col-span-2">
+              <div>
+                <label class="text-sm font-medium">Día de Pago</label>
+                <input type="number" id="oc-alquiler-dia" class="input mt-1 w-full" placeholder="30" min="1" max="31" value="30" oninput="updateAlquilerPreview()">
+              </div>
+              <div>
+                <label class="text-sm font-medium">1ra Cuota (Fecha)</label>
+                <input type="date" id="oc-alquiler-primera-fecha" class="input mt-1 w-full" onchange="updateAlquilerPreview()">
+              </div>
+              <div>
+                <label class="text-sm font-medium">Meses (Cant.)</label>
+                <input type="number" id="oc-alquiler-meses" class="input mt-1 w-full" placeholder="24" min="1" value="24" oninput="updateAlquilerPreview()">
               </div>
             </div>
             <div>
@@ -349,22 +364,40 @@ window.onOSTargetChange = function() {
 window.toggleCreditDetails = function () {
   const cond = document.getElementById('oc-condicion').value;
   const container = document.getElementById('oc-credito-container');
+  const alquilerContainer = document.getElementById('oc-alquiler-container');
   const tipo = document.getElementById('oc-credito-tipo').value;
   const label = document.getElementById('oc-credito-label');
 
   if (cond === 'Credito') {
     container.classList.remove('hidden');
     document.getElementById('oc-adelanto-container').classList.add('hidden');
+    if (alquilerContainer) alquilerContainer.classList.add('hidden');
     label.textContent = tipo === 'Dias' ? 'Cantidad de Días' : 'N° de Cuotas';
   } else if (cond === 'Adelanto + Saldo') {
     container.classList.add('hidden');
     document.getElementById('oc-adelanto-container').classList.remove('hidden');
+    if (alquilerContainer) alquilerContainer.classList.add('hidden');
+  } else if (cond === 'Alquiler') {
+    container.classList.add('hidden');
+    document.getElementById('oc-adelanto-container').classList.add('hidden');
+    if (alquilerContainer) {
+      alquilerContainer.classList.remove('hidden');
+      const f1 = document.getElementById('oc-alquiler-primera-fecha');
+      if (f1 && !f1.value) {
+        f1.value = new Date().toISOString().split('T')[0];
+      }
+    }
   } else {
     container.classList.add('hidden');
     document.getElementById('oc-adelanto-container').classList.add('hidden');
+    if (alquilerContainer) alquilerContainer.classList.add('hidden');
     document.getElementById('oc-condicion-val').value = '';
     document.getElementById('oc-adelanto-porc').value = '';
   }
+  recalcOCTotals();
+};
+
+window.updateAlquilerPreview = function () {
   recalcOCTotals();
 };
 
@@ -638,6 +671,30 @@ function recalcOCTotals() {
     const cuotaMonto = total / val;
     cuotasDiv.textContent = `Se cancelará en ${val} cuotas de ${moneda} ${cuotaMonto.toFixed(2)} c/u.`;
     cuotasDiv.classList.remove('hidden');
+  } else if (cond === 'Alquiler') {
+    const diaPago = parseInt(document.getElementById('oc-alquiler-dia').value || 30);
+    const meses = parseInt(document.getElementById('oc-alquiler-meses').value || 24);
+    const fechaInicioVal = document.getElementById('oc-alquiler-primera-fecha').value;
+    const cuotaMonto = meses > 0 ? total / meses : total; // Total ÷ meses = cuota mensual
+
+    let previewMsg = `Total ${moneda} ${total.toFixed(2)} ÷ ${meses} meses = ${moneda} ${cuotaMonto.toFixed(2)}/mes.`;
+    if (fechaInicioVal) {
+      let dates = [];
+      let dt = new Date(fechaInicioVal + 'T00:00:00');
+      for (let c = 1; c <= Math.min(3, meses); c++) {
+        dates.push(dt.toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' }));
+        // Advance month
+        dt.setMonth(dt.getMonth() + 1);
+        let maxDays = new Date(dt.getFullYear(), dt.getMonth() + 1, 0).getDate();
+        dt.setDate(Math.min(diaPago, maxDays));
+      }
+      previewMsg += ` Se generarán ${meses} cuotas. Primeros vencimientos: ${dates.join(', ')}` + (meses > 3 ? '...' : '');
+    } else {
+      previewMsg += ` (Seleccione la fecha de la primera cuota para ver los vencimientos).`;
+    }
+
+    cuotasDiv.textContent = previewMsg;
+    cuotasDiv.classList.remove('hidden');
   } else {
     cuotasDiv.classList.add('hidden');
   }
@@ -751,6 +808,11 @@ window.generateOC = async function () {
       condDetalle = cTipo === 'Dias' ? `${cVal} días` : `${cVal} cuotas`;
     }
 
+    const isAlquiler = (cond === 'Alquiler');
+    const diaPago = isAlquiler ? parseInt(document.getElementById('oc-alquiler-dia').value || 30) : null;
+    const mesesAlquiler = isAlquiler ? parseInt(document.getElementById('oc-alquiler-meses').value || 24) : null;
+    const fecha1raCuota = isAlquiler ? document.getElementById('oc-alquiler-primera-fecha').value : null;
+
     const adelantoPorc = cond === 'Adelanto + Saldo' ? (parseFloat(document.getElementById('oc-adelanto-porc').value) || 0) : null;
     const adelantoMonto = adelantoPorc !== null ? (totalCalculado * (adelantoPorc / 100)) : null;
     const saldoMonto = adelantoPorc !== null ? (totalCalculado - adelantoMonto) : null;
@@ -771,6 +833,9 @@ window.generateOC = async function () {
       moneda: document.getElementById('oc-moneda').value,
       condicion_pago: cond,
       condicion_detalle: condDetalle,
+      dia_pago: diaPago,
+      meses_alquiler: mesesAlquiler,
+      fecha_primera_cuota: fecha1raCuota,
       adelanto_porcentaje: adelantoPorc,
       adelanto_monto: adelantoMonto ? adelantoMonto.toFixed(2) : null,
       saldo_monto: saldoMonto ? saldoMonto.toFixed(2) : null,
@@ -1655,4 +1720,73 @@ window.exportPurchasesExcel = async function() {
         UI.exportToExcel(exportData, 'Historial_Compras_Servicios.xlsx');
     } catch(e) { UI.toast('Error al exportar', 'error'); }
     finally { UI.stopLoading(); }
+};
+
+window.showRentalSetupModal = function (id, currentDia, currentFecha, currentMeses) {
+  UI.modal({
+    title: 'Configurar Calendario de Alquiler',
+    body: `
+      <div class="space-y-4">
+        <p class="text-xs text-muted-foreground">Establezca el día de pago de cada mes y la fecha de la primera cuota para regenerar el cronograma de vencimientos de alquiler.</p>
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="text-sm font-medium">Día de Pago (Mensual)</label>
+            <input type="number" id="setup-rental-dia" class="input mt-1 w-full" min="1" max="31" value="${currentDia || 30}">
+          </div>
+          <div>
+            <label class="text-sm font-medium">Fecha 1ra Cuota</label>
+            <input type="date" id="setup-rental-fecha" class="input mt-1 w-full" value="${currentFecha || new Date().toISOString().split('T')[0]}">
+          </div>
+        </div>
+        <div>
+          <label class="text-sm font-medium">Cantidad de Meses a Generar</label>
+          <input type="number" id="setup-rental-meses" class="input mt-1 w-full" min="1" value="${currentMeses || 24}">
+        </div>
+      </div>
+    `,
+    confirmText: 'Guardar y Regenerar',
+    onConfirm: async () => {
+      const dia_pago = parseInt(document.getElementById('setup-rental-dia').value || 30);
+      const fecha_primera_cuota = document.getElementById('setup-rental-fecha').value;
+      const meses_alquiler = parseInt(document.getElementById('setup-rental-meses').value || 24);
+
+      if (!fecha_primera_cuota) {
+        UI.toast('Seleccione la fecha de la primera cuota', 'error');
+        return false;
+      }
+
+      UI.loading('Regenerando calendario...');
+      try {
+        const resp = await fetch('api/purchases.php', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'setup_rental_schedule',
+            id,
+            dia_pago,
+            fecha_primera_cuota,
+            meses_alquiler
+          })
+        });
+        const res = await resp.json();
+        UI.stopLoading();
+        if (res.ok) {
+          UI.toast('Calendario de pagos actualizado correctamente', 'success');
+          // Re-load detail modal
+          if (typeof viewOrderDetails === 'function') {
+            viewOrderDetails(id);
+          }
+          // Re-load lists if they exist
+          if (typeof loadPurchases === 'function') loadPurchases();
+          if (typeof loadApprovals === 'function') loadApprovals();
+          if (typeof loadTreasuryData === 'function') loadTreasuryData();
+        } else {
+          UI.toast('Error: ' + res.error, 'error');
+        }
+      } catch (e) {
+        UI.stopLoading();
+        UI.toast('Error de red al actualizar calendario', 'error');
+      }
+    }
+  });
 };
