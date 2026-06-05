@@ -1,42 +1,67 @@
 // assets/js/views/suppliers.js — Gestión de Proveedores
 
+let _allSuppliers = [];
+
 async function loadSuppliers() {
   const tbody = document.getElementById('suppliers-table-body');
   if (!tbody) return;
   try {
     const data = await fetch('api/suppliers.php').then(r => r.json());
-    if (!data.suppliers || data.suppliers.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="7" class="text-center py-10 text-muted-foreground">No hay proveedores registrados.</td></tr>';
-      return;
-    }
-    tbody.innerHTML = data.suppliers.map(s => `
-      <tr class="${s.estado === 'inactivo' ? 'bg-muted/30' : ''}">
-        <td class="${s.estado === 'inactivo' ? 'opacity-50 grayscale' : ''}">
-          <div class="font-bold text-sm">${s.razon_social}</div>
-          <div class="text-[10px] text-muted-foreground font-mono uppercase">${s.ruc || 'Sin RUC'}</div>
-        </td>
-        <td class="text-xs uppercase font-semibold ${s.estado === 'inactivo' ? 'opacity-50 grayscale' : ''}">${s.categoria_nombre || 'General'}</td>
-        <td class="text-xs font-medium ${s.estado === 'inactivo' ? 'opacity-50 grayscale' : ''}">${s.contacto || '—'}</td>
-        <td class="text-xs ${s.estado === 'inactivo' ? 'opacity-50 grayscale' : ''}">${s.telefono || '—'}</td>
-        <td class="${s.estado === 'inactivo' ? 'opacity-50 grayscale' : ''}"><span class="badge ${s.estado === 'activo' ? 'badge-green' : 'badge-red'}">${s.estado}</span></td>
-        <td class="text-right">
-          <div class="flex justify-end gap-1">
-            <button class="btn btn-ghost p-1.5 ${s.estado === 'activo' ? 'text-destructive' : 'text-green-500'}" 
-                    title="${s.estado === 'activo' ? 'Dar de baja' : 'Activar'}" 
-                    onclick="toggleSupplierStatus(${s.id}, '${s.estado}', '${s.razon_social.replace(/'/g, "\\'")}')">
-              <i data-lucide="${s.estado === 'activo' ? 'user-x' : 'user-check'}" class="w-4 h-4"></i>
-            </button>
-            <button class="btn btn-ghost p-1.5 ${s.estado === 'inactivo' ? 'opacity-50 grayscale' : ''}" title="Editar" onclick="editSupplier(${s.id})"><i data-lucide="pencil" class="w-4 h-4"></i></button>
-            ${window.canDelete(window.Auth.getUser()) ? 
-              `<button class="btn btn-ghost p-1.5 text-destructive ${s.estado === 'inactivo' ? 'opacity-50 grayscale' : ''}" title="Eliminar" onclick="deleteSupplier(${s.id}, '${s.razon_social.replace(/'/g, "\\'")}')"><i data-lucide="trash-2" class="w-4 h-4"></i></button>` : 
-              ''
-            }
-          </div>
-        </td>
-      </tr>`).join('');
-    lucide.createIcons();
+    _allSuppliers = data.suppliers || [];
+    renderSuppliers(_allSuppliers);
   } catch { tbody.innerHTML = '<tr><td colspan="7" class="text-center py-10 text-destructive">Error al cargar proveedores.</td></tr>'; }
 }
+
+function renderSuppliers(list) {
+  const tbody = document.getElementById('suppliers-table-body');
+  if (!tbody) return;
+  if (!list || list.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="7" class="text-center py-10 text-muted-foreground">No hay proveedores que coincidan.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = list.map(s => `
+    <tr class="${s.estado === 'inactivo' ? 'bg-muted/30' : ''}">
+      <td class="${s.estado === 'inactivo' ? 'opacity-50 grayscale' : ''}">
+        <div class="font-bold text-sm">${s.razon_social}</div>
+        <div class="text-[10px] text-muted-foreground font-mono uppercase">${s.ruc || 'Sin RUC'}</div>
+      </td>
+      <td class="text-xs uppercase font-semibold ${s.estado === 'inactivo' ? 'opacity-50 grayscale' : ''}">${s.categoria_nombre || 'General'}</td>
+      <td class="text-xs font-medium ${s.estado === 'inactivo' ? 'opacity-50 grayscale' : ''}">${s.contacto || '—'}</td>
+      <td class="text-xs ${s.estado === 'inactivo' ? 'opacity-50 grayscale' : ''}">${s.telefono || '—'}</td>
+      <td class="${s.estado === 'inactivo' ? 'opacity-50 grayscale' : ''}"><span class="badge ${s.estado === 'activo' ? 'badge-green' : 'badge-red'}">${s.estado}</span></td>
+      <td class="text-right">
+        <div class="flex justify-end gap-1">
+          <button class="btn btn-ghost p-1.5 ${s.estado === 'activo' ? 'text-destructive' : 'text-green-500'}" 
+                  title="${s.estado === 'activo' ? 'Dar de baja' : 'Activar'}" 
+                  onclick="toggleSupplierStatus(${s.id}, '${s.estado}', '${s.razon_social.replace(/'/g, "\\'")}')"> 
+            <i data-lucide="${s.estado === 'activo' ? 'user-x' : 'user-check'}" class="w-4 h-4"></i>
+          </button>
+          <button class="btn btn-ghost p-1.5 ${s.estado === 'inactivo' ? 'opacity-50 grayscale' : ''}" title="Editar" onclick="editSupplier(${s.id})"><i data-lucide="pencil" class="w-4 h-4"></i></button>
+          ${window.canDelete(window.Auth.getUser()) ? 
+            `<button class="btn btn-ghost p-1.5 text-destructive ${s.estado === 'inactivo' ? 'opacity-50 grayscale' : ''}" title="Eliminar" onclick="deleteSupplier(${s.id}, '${s.razon_social.replace(/'/g, "\\'")}')"><i data-lucide="trash-2" class="w-4 h-4"></i></button>` : 
+            ''
+          }
+        </div>
+      </td>
+    </tr>`).join('');
+  lucide.createIcons();
+}
+
+window.filterSuppliers = function () {
+  const q = (document.getElementById('suppliers-search')?.value || '').toLowerCase().trim();
+  if (!q) {
+    renderSuppliers(_allSuppliers);
+    return;
+  }
+  const filtered = _allSuppliers.filter(s =>
+    (s.razon_social || '').toLowerCase().includes(q) ||
+    (s.ruc || '').toLowerCase().includes(q) ||
+    (s.contacto || '').toLowerCase().includes(q) ||
+    (s.categoria_nombre || '').toLowerCase().includes(q) ||
+    (s.telefono || '').toLowerCase().includes(q)
+  );
+  renderSuppliers(filtered);
+};
 
 window.newSupplier = async function() {
     const resp = await fetch('api/rubros.php').then(r => r.json());
@@ -133,6 +158,12 @@ window.Views.suppliers = function() {
       <button class="btn btn-primary" onclick="newSupplier()"><i data-lucide="plus"></i>Nuevo Proveedor</button>
     `)}
     <div class="card">
+      <div class="p-4 border-b border-border">
+        <div class="relative max-w-sm">
+          <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none"></i>
+          <input id="suppliers-search" type="text" class="input pl-9 w-full" placeholder="Buscar por nombre, RUC, contacto, rubro..." oninput="filterSuppliers()">
+        </div>
+      </div>
       <div class="table-container">
         <table class="data">
           <thead><tr><th>Proveedor / RUC</th><th>Rubro</th><th>Contacto</th><th>Teléfono</th><th>Estado</th><th class="text-right">Acciones</th></tr></thead>
@@ -145,12 +176,26 @@ window.Views.suppliers = function() {
 window.toggleSupplierStatus = async function(id, currentStatus, name) {
     const newStatus = currentStatus === 'activo' ? 'inactivo' : 'activo';
     const action = newStatus === 'activo' ? 'activar' : 'dar de baja';
+    const isDarDeBaja = newStatus === 'inactivo';
     
     UI.modal({
         title: `${newStatus === 'activo' ? 'Activar' : 'Dar de baja'} Proveedor`,
-        body: `<p>¿Está seguro de que desea <strong>${action}</strong> al proveedor <strong>${name}</strong>?</p>`,
+        body: `
+          <p class="mb-3">¿Está seguro de que desea <strong>${action}</strong> al proveedor <strong>${name}</strong>?</p>
+          ${isDarDeBaja ? `
+            <div class="mt-3">
+              <label class="text-sm font-medium">Motivo de baja <span class="text-destructive">*</span></label>
+              <textarea id="supplier-baja-motivo" class="input mt-1 w-full h-20 resize-none" placeholder="Indique el motivo por el cual se da de baja a este proveedor..."></textarea>
+            </div>
+          ` : ''}
+        `,
         confirmText: `Sí, ${action}`,
         onConfirm: async () => {
+            if (isDarDeBaja) {
+              const motivoEl = document.getElementById('supplier-baja-motivo');
+              const motivo = motivoEl ? motivoEl.value.trim() : '';
+              if (!motivo) { UI.toast('Debe ingresar el motivo de baja', 'error'); return false; }
+            }
             UI.loading('Actualizando estado...');
             try {
                 // Obtenemos los datos actuales primero
@@ -158,7 +203,14 @@ window.toggleSupplierStatus = async function(id, currentStatus, name) {
                 const s = data.suppliers.find(x => x.id == id);
                 if (!s) throw new Error('Proveedor no encontrado');
 
-                const body = { ...s, estado: newStatus };
+                const motivoEl = isDarDeBaja ? document.getElementById('supplier-baja-motivo') : null;
+                const motivo = motivoEl ? motivoEl.value.trim() : '';
+
+                const body = { 
+                    ...s, 
+                    estado: newStatus,
+                    motivo_baja: isDarDeBaja ? motivo : null
+                };
                 const res = await fetch('api/suppliers.php', { 
                     method: 'PUT', 
                     headers: { 'Content-Type': 'application/json' }, 

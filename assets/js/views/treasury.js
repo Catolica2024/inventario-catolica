@@ -220,6 +220,9 @@ function renderTreasuryTable() {
     const tbody = document.getElementById('treasury-table-body');
     if (!tbody) return;
 
+    const user = window.Auth.getUser();
+    const esContabilidad = user?.role === 'contabilidad';
+
     // --- LÓGICA DE FILTRADO UNIFICADA ---
     // Siempre calculamos desde _treasuryData fresco. Sin variables intermedias.
     let list;
@@ -381,8 +384,8 @@ function renderTreasuryTable() {
             <td>${docStatusBadge}</td>
             <td class="text-right">
                 <button class="btn btn-primary btn-sm" onclick="openPaymentDetails(${p.id})">
-                    <i data-lucide="${(p.pagado == 1 || p.estado === 'Completada') ? 'eye' : 'credit-card'}" class="w-3.5 h-3.5"></i>
-                    ${p.pagado == 1 ? 'Ver Detalle' : p.estado === 'Completada' ? 'Ver Detalle' : esCuotas ? 'Gestionar Cuotas' : 'Procesar Pago'}
+                    <i data-lucide="${(p.pagado == 1 || p.estado === 'Completada' || esContabilidad) ? 'eye' : 'credit-card'}" class="w-3.5 h-3.5"></i>
+                    ${(p.pagado == 1 || p.estado === 'Completada' || esContabilidad) ? 'Ver Detalle' : esCuotas ? 'Gestionar Cuotas' : 'Procesar Pago'}
                 </button>
             </td>
         </tr>`;
@@ -393,6 +396,9 @@ function renderTreasuryTable() {
 window.openPaymentDetails = async function (id) {
     const p = _treasuryData.find(x => x.id == id);
     if (!p) return;
+
+    const user = window.Auth.getUser();
+    const esContabilidad = user?.role === 'contabilidad';
 
     // Obtener datos extendidos (incluye cuotas)
     const [detResp, supResp] = await Promise.all([
@@ -432,10 +438,12 @@ window.openPaymentDetails = async function (id) {
                     </div>
                     <div class="flex items-center gap-2">
                         <span class="font-bold text-sm ${isPagada ? 'text-green-700' : 'text-primary'}">${monSym} ${parseFloat(c.monto_cuota).toFixed(2)}</span>
-                        ${!isPagada ? `
+                        ${!isPagada && !esContabilidad ? `
                             <button class="btn btn-primary btn-sm text-xs px-2 py-1" onclick="pagarCuota(${p.id}, ${c.id}, '${p.numero_oc}-C${c.numero_cuota}')">
                                 <i data-lucide="credit-card" class="w-3 h-3"></i> Pagar
                             </button>
+                        ` : !isPagada ? `
+                            <span class="badge badge-yellow text-[10px]">Pendiente</span>
                         ` : `
                             ${c.voucher_url ? `<a href="${c.voucher_url}" target="_blank" class="btn btn-ghost btn-sm text-xs px-1.5"><i data-lucide="external-link" class="w-3 h-3"></i></a>` : ''}
                         `}
@@ -512,10 +520,12 @@ window.openPaymentDetails = async function (id) {
                         </div>
                         <div class="flex items-center gap-2">
                             <span class="font-bold text-sm ${isAdelantoPagado ? 'text-green-700' : 'text-primary'}">${monSym} ${parseFloat(p.adelanto_monto).toFixed(2)}</span>
-                            ${!isAdelantoPagado ? `
+                            ${!isAdelantoPagado && !esContabilidad ? `
                                 <button class="btn btn-primary btn-sm text-xs px-2 py-1" onclick="pagarAdelanto(${p.id}, '${p.numero_oc}-ADELANTO')">
                                     <i data-lucide="credit-card" class="w-3 h-3"></i> Pagar Adelanto
                                 </button>
+                            ` : !isAdelantoPagado ? `
+                                <span class="badge badge-yellow text-[10px]">Pendiente</span>
                             ` : `
                                 ${p.adelanto_voucher ? `<a href="${p.adelanto_voucher}" target="_blank" class="btn btn-ghost btn-sm text-xs px-1.5"><i data-lucide="external-link" class="w-3 h-3"></i></a>` : ''}
                             `}
@@ -529,10 +539,12 @@ window.openPaymentDetails = async function (id) {
                         </div>
                         <div class="flex items-center gap-2">
                             <span class="font-bold text-sm ${p.pagado == 1 ? 'text-green-700' : 'text-primary'}">${monSym} ${parseFloat(p.saldo_monto).toFixed(2)}</span>
-                            ${p.pagado == 0 && isAdelantoPagado ? `
+                            ${p.pagado == 0 && isAdelantoPagado && !esContabilidad ? `
                                 <button class="btn btn-primary btn-sm text-xs px-2 py-1" onclick="openFinalPayment(${p.id}, '${p.numero_oc}-SALDO', '${p.conformidad_url || ''}', ${p.sin_conformidad})">
                                     <i data-lucide="credit-card" class="w-3 h-3"></i> Pagar Saldo
                                 </button>
+                            ` : p.pagado == 0 && isAdelantoPagado ? `
+                                <span class="badge badge-yellow text-[10px]">Pendiente</span>
                             ` : ''}
                         </div>
                     </div>
@@ -569,7 +581,7 @@ window.openPaymentDetails = async function (id) {
 
     // --- Sección de pago (solo si no es cuotas ni adelanto o si no está pagado) ---
     const isAdelantoSaldo = p.condicion_pago === 'Adelanto + Saldo';
-    const showPayForm = !esCuotas && !isAdelantoSaldo && p.pagado == 0;
+    const showPayForm = !esCuotas && !isAdelantoSaldo && p.pagado == 0 && !esContabilidad;
     const showPaidInfo = p.pagado == 1;
 
     const body = `
@@ -673,6 +685,7 @@ window.openPaymentDetails = async function (id) {
                 </div>
 
                 ${fullOC.mobility.pagado == 0 ? `
+                    ${!esContabilidad ? `
                     <div class="space-y-2 border-t border-orange-200 pt-3">
                         <p class="text-[10px] text-orange-800 font-bold uppercase mb-1">Procesar Pago de Movilidad</p>
                         <div class="flex gap-2">
@@ -686,6 +699,11 @@ window.openPaymentDetails = async function (id) {
                             </button>
                         </div>
                     </div>
+                    ` : `
+                    <div class="border-t border-orange-200 pt-2">
+                        <span class="text-[10px] text-orange-700 font-medium italic">Pendiente de pago</span>
+                    </div>
+                    `}
                 ` : `
                     <div class="border-t border-orange-200 pt-2 flex justify-between items-center">
                         <span class="text-[10px] text-green-700 font-medium italic">Pagado el ${new Date(fullOC.mobility.fecha_pago).toLocaleDateString('es-PE')}</span>
@@ -693,6 +711,13 @@ window.openPaymentDetails = async function (id) {
                     </div>
                 `}
             </div>` : ''}
+
+            ${p.pagado == 0 && !esCuotas && !isAdelantoSaldo && esContabilidad ? `
+                <div class="p-4 border border-yellow-200 bg-yellow-50 rounded-lg">
+                    <h4 class="font-bold text-yellow-800 flex items-center gap-2 mb-2 text-sm"><i data-lucide="clock" class="w-4 h-4"></i>Pago Pendiente</h4>
+                    <p class="text-xs text-yellow-700">Esta orden de compra aún no ha sido pagada.</p>
+                </div>
+            ` : ''}
 
             ${showPayForm ? `
                 <!-- Formulario pago total -->

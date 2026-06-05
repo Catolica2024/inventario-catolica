@@ -19,7 +19,8 @@ INSERT INTO roles (nombre, descripcion, can_delete) VALUES
 ('almacenero', 'Gestión física de almacenes y stock', 0),
 ('comprador', 'Gestión de adquisiciones y proveedores', 0),
 ('personal', 'Consulta y recepción de activos', 0),
-('tesoreria', 'Procesamiento de pagos y vouchers', 0);
+('tesoreria', 'Procesamiento de pagos y vouchers', 0),
+('contabilidad', 'Consulta de pagos y estado financiero', 0);
 
 -- 2. Sedes y Áreas
 CREATE TABLE IF NOT EXISTS sedes (

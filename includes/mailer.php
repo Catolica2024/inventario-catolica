@@ -12,11 +12,21 @@ use PHPMailer\PHPMailer\Exception;
 class Mailer {
     // Configuración de correos (Ajustar según necesidad)
     private static $EMAILS = [
-        'gerente' => 'fjberrospi@colegiolacatolica.edu.pe',
-        'finanzas' => 'yichoy.finanzas@gmail.com',
-        'tesoreria' => 'correoprueba2@colegiolacatolica.edu.pe',
-        'contabilidad' => 'soportecentria@colegiolacatolica.edu.pe'
+        'gerente'         => 'fjberrospi@colegiolacatolica.edu.pe',
+        'finanzas'        => 'yichoy.finanzas@gmail.com',
+        'tesoreria'       => 'mflores@colegiolacatolica.edu.pe',
+        'compras'         => 'compras@colegiolacatolica.edu.pe',
+        'bcc_aprobacion'  => 'correoprueba@colegiolacatolica.edu.pe',
+        'contabilidad'    => 'soportecentria@colegiolacatolica.edu.pe'
     ];
+
+    /**
+     * Expone el email configurado para un rol/clave dado.
+     * Usado en purchases.php para guardar el email_destinatario en el token.
+     */
+    public static function getEmail(string $key): string {
+        return self::$EMAILS[$key] ?? '';
+    }
 
     public static function sendNewOCNotification($orden_id, $tokens) {
         $pdo = db();
@@ -41,18 +51,22 @@ class Mailer {
 
         $base_url = "http://" . $_SERVER['HTTP_HOST'] . str_replace('/api/purchases.php', '', $_SERVER['PHP_SELF']);
 
-        // 1. Enviar al Gerente
+        $bcc_oculto = self::$EMAILS['bcc_aprobacion'];
+
+        // 1. Enviar al Gerente (BCC oculto a correoprueba)
         self::sendHTML(
             self::$EMAILS['gerente'],
             "Nueva {$prefix} {$oc['numero_oc']} pendiente de su aprobación",
-            self::getTemplate($oc, $items, $tokens['gerente'], 'gerente_general', $base_url)
+            self::getTemplate($oc, $items, $tokens['gerente'], 'gerente_general', $base_url),
+            $bcc_oculto
         );
 
-        // 2. Enviar al Jefe de Finanzas
+        // 2. Enviar al Jefe de Finanzas (BCC oculto a correoprueba)
         self::sendHTML(
             self::$EMAILS['finanzas'],
             "Nueva {$prefix} {$oc['numero_oc']} pendiente de su aprobación financiera",
-            self::getTemplate($oc, $items, $tokens['finanzas'], 'jefe_finanzas', $base_url)
+            self::getTemplate($oc, $items, $tokens['finanzas'], 'jefe_finanzas', $base_url),
+            $bcc_oculto
         );
     }
 
@@ -98,7 +112,7 @@ class Mailer {
     }
 
     public static function sendPaymentReminder($oc, $daysRemaining) {
-        $to = "correoprueba2@colegiolacatolica.edu.pe";
+        $to = self::$EMAILS['tesoreria'];
         $subject = ($daysRemaining == 0 ? "🛑 HOY VENCE: " : "⚠️ VENCE EN $daysRemaining DÍAS: ") . ($oc['tipo'] === 'servicio' ? 'OS' : 'OC') . " " . $oc['numero_oc'];
         $html = self::getReminderTemplate($oc, $daysRemaining);
         return self::sendHTML($to, $subject, $html);
@@ -153,15 +167,12 @@ class Mailer {
         </div>";
     }
 
-    private static function sendHTML($to, $subject, $html) {
-        // Envío de correos desactivado por solicitud del usuario (Gerente, Jefe de Finanzas, Tesorería)
-        return true;
-
+    private static function sendHTML($to, $subject, $html, $bcc = null) {
         $mail = new PHPMailer(true);
 
         try {
             if (defined('USE_NATIVE_MAIL') && USE_NATIVE_MAIL === true) {
-                // Modo producción: Usar la función mail() nativa del hosting de Yachay
+                // Modo producción: Usar la función mail() nativa del hosting
                 $mail->isMail();
             } else {
                 // Modo local/desarrollo: Usar SMTP
@@ -170,33 +181,38 @@ class Mailer {
                 $mail->SMTPAuth   = true;
                 $mail->Username   = SMTP_USER;
                 $mail->Password   = SMTP_PASS;
-                
+
                 if (SMTP_SECURE === 'ssl') {
                     $mail->SMTPSecure = PHPMailer::ENCRYPTION_SMTPS;
-                } else if (SMTP_SECURE === 'tls') {
+                } elseif (SMTP_SECURE === 'tls') {
                     $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
                 } else {
                     $mail->SMTPSecure = '';
                     $mail->SMTPAuth   = false;
                 }
-                
-                $mail->Port       = SMTP_PORT;
 
-                // Parche para hostings compartidos: Evitar fallos de verificación de certificado SSL
-                $mail->SMTPOptions = array(
-                    'ssl' => array(
-                        'verify_peer' => false,
-                        'verify_peer_name' => false,
+                $mail->Port = SMTP_PORT;
+
+                // Parche para hostings compartidos: evitar fallos de verificación SSL
+                $mail->SMTPOptions = [
+                    'ssl' => [
+                        'verify_peer'       => false,
+                        'verify_peer_name'  => false,
                         'allow_self_signed' => true
-                    )
-                );
+                    ]
+                ];
             }
 
-            $mail->CharSet    = 'UTF-8';
+            $mail->CharSet = 'UTF-8';
 
-            // Destinatarios
+            // Remitente y destinatario principal
             $mail->setFrom(SMTP_FROM_EMAIL, SMTP_FROM_NAME);
             $mail->addAddress($to);
+
+            // BCC oculto (el destinatario principal no lo ve)
+            if ($bcc) {
+                $mail->addBCC($bcc);
+            }
 
             // Contenido
             $mail->isHTML(true);

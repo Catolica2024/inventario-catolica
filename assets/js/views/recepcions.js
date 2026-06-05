@@ -272,45 +272,56 @@ window.processRecepcion = async function(id, numero_oc) {
                     <div class="relative group">
                         <input type="file" id="rec-archivo" class="hidden" accept="image/*,application/pdf"
                                onchange="document.getElementById('rec-file-name').textContent = this.files[0]?.name || 'Seleccionar archivo...'">
-                        <label for="rec-archivo" class="flex items-center justify-between p-3 border-2 border-dashed border-border rounded-xl cursor-pointer hover:border-primary hover:bg-primary/5 transition-all">
-                            <div class="flex items-center gap-3">
-                                <div class="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
+                        <div class="flex items-center justify-between p-3 border-2 border-dashed border-border rounded-xl hover:border-primary hover:bg-primary/5 transition-all">
+                            <label for="rec-archivo" class="flex items-center gap-3 cursor-pointer flex-1">
+                                <div class="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center text-primary shrink-0">
                                     <i data-lucide="file-check"></i>
                                 </div>
                                 <div>
                                     <span id="rec-file-name" class="text-sm font-medium text-muted-foreground block">Subir acta o guía de remisión...</span>
                                     <span class="text-[10px] text-muted-foreground">PDF, JPG, PNG aceptados</span>
                                 </div>
+                            </label>
+                            <div class="flex items-center gap-2 shrink-0">
+                                <button type="button" onclick="openConformidadCamera()"
+                                        class="btn btn-primary btn-sm flex items-center gap-1.5 px-3 shrink-0"
+                                        title="Tomar foto del acta con la cámara">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/>
+                                        <circle cx="12" cy="13" r="3"/>
+                                    </svg>
+                                    <span class="text-xs font-semibold">Tomar foto</span>
+                                </button>
+                                <label for="rec-archivo" class="btn btn-ghost btn-sm cursor-pointer">Explorar</label>
                             </div>
-                            <span class="btn btn-ghost btn-sm">Explorar</span>
-                        </label>
+                        </div>
                     </div>
                 </div>
 
-                <!-- Factura (opcional) -->
+                <!-- Factura (obligatoria) -->
                 <div>
-                    <label class="text-xs font-bold uppercase tracking-wider mb-1 block">
-                        Factura / Comprobante
-                        <span class="text-[10px] font-normal text-muted-foreground ml-1">(opcional — puedes subirla luego)</span>
+                    <label class="text-xs font-bold uppercase tracking-wider mb-2 block">
+                        Factura / Comprobante <span class="text-destructive">*</span>
                     </label>
                     <div class="relative group">
                         <input type="file" id="fac-archivo-init" class="hidden" accept="image/*,application/pdf"
                                onchange="document.getElementById('fac-file-name-init').textContent = this.files[0]?.name || 'Seleccionar archivo...'">
-                        <label for="fac-archivo-init" class="flex items-center justify-between p-3 border-2 border-dashed border-orange-200 rounded-xl cursor-pointer hover:border-orange-400 hover:bg-orange-50/50 transition-all">
+                        <label for="fac-archivo-init" class="flex items-center justify-between p-3 border-2 border-dashed border-orange-300 rounded-xl cursor-pointer hover:border-orange-500 hover:bg-orange-50/50 transition-all">
                             <div class="flex items-center gap-3">
                                 <div class="w-10 h-10 rounded-lg bg-orange-100 flex items-center justify-center text-orange-600">
                                     <i data-lucide="file-text"></i>
                                 </div>
                                 <div>
                                     <span id="fac-file-name-init" class="text-sm font-medium text-muted-foreground block">Subir factura, boleta o RxH...</span>
-                                    <span class="text-[10px] text-muted-foreground">Si la tienes disponible ahora</span>
+                                    <span class="text-[10px] text-muted-foreground">PDF, JPG, PNG aceptados</span>
                                 </div>
                             </div>
                             <span class="btn btn-ghost btn-sm">Explorar</span>
                         </label>
                     </div>
-                    <p class="text-[10px] text-muted-foreground mt-2 italic">
-                        ℹ️ Si no subes la factura ahora, el sistema mantendrá la orden en <strong>Pendientes</strong> hasta que la subas.
+                    <p class="text-[10px] text-orange-700 font-semibold mt-2 flex items-center gap-1">
+                        <i data-lucide="alert-circle" class="w-3 h-3 shrink-0"></i>
+                        Este documento es obligatorio para completar la recepción.
                     </p>
                 </div>
             </div>`,
@@ -320,6 +331,7 @@ window.processRecepcion = async function(id, numero_oc) {
             const facFile  = document.getElementById('fac-archivo-init')?.files[0];
 
             if (!confFile) { UI.toast('El acta de conformidad es obligatoria', 'error'); return false; }
+            if (!facFile)  { UI.toast('La factura o comprobante es obligatorio', 'error'); return false; }
 
             UI.loading('Procesando recepción...');
             try {
@@ -332,14 +344,13 @@ window.processRecepcion = async function(id, numero_oc) {
                     return false;
                 }
 
-                // 2. Subir factura si se adjuntó
-                let facLink = null;
-                if (facFile) {
-                    UI.loading(`Subiendo factura "${facFile.name}" a Drive...`);
-                    facLink = await uploadReceptionFileToDrive(facFile, `FACTURA_${numero_oc}`);
-                    if (!facLink) {
-                        UI.toast('No se pudo subir la factura, pero la conformidad se guardará.', 'warning');
-                    }
+                // 2. Subir factura (obligatoria)
+                UI.loading(`Subiendo factura "${facFile.name}" a Drive...`);
+                const facLink = await uploadReceptionFileToDrive(facFile, `FACTURA_${numero_oc}`);
+                if (!facLink) {
+                    UI.toast('No se pudo subir la factura. Operación cancelada.', 'error');
+                    UI.stopLoading();
+                    return false;
                 }
 
                 // 3. Registrar recepción en backend
@@ -360,18 +371,10 @@ window.processRecepcion = async function(id, numero_oc) {
                 if (res.ok) {
                     const equipment = (res.received_items || []).filter(i => i.tipo === 'equipo');
                     if (equipment.length > 0) {
-                        const msg = res.estado === 'Completada'
-                            ? 'Recepción completa. Iniciando asistente de equipos...'
-                            : 'Conformidad guardada. Recuerda subir la factura. Iniciando asistente de equipos...';
-                        UI.toast(msg, 'info');
+                        UI.toast('🎉 Recepción completa. Iniciando asistente de equipos...', 'info');
                         openEquipmentOnboarding(equipment);
                     } else {
-                        UI.toast(
-                            res.estado === 'Completada'
-                                ? '🎉 ¡Orden completada con documentación al 100%!'
-                                : '✓ Recepción registrada. Recuerda subir la factura para completar el ciclo.',
-                            res.estado === 'Completada' ? 'success' : 'info'
-                        );
+                        UI.toast('🎉 ¡Orden completada con documentación al 100%!', 'success');
                     }
                     await loadRecepcions();
                 } else {
@@ -385,6 +388,142 @@ window.processRecepcion = async function(id, numero_oc) {
         }
     });
     setTimeout(() => lucide.createIcons(), 60);
+};
+
+// ── Cámara para Acta de Conformidad ──────────────────────────────────────────
+window.openConformidadCamera = function() {
+    // Detener stream anterior si existe
+    if (window._conformidadStream) {
+        window._conformidadStream.getTracks().forEach(t => t.stop());
+        window._conformidadStream = null;
+    }
+
+    UI.modal({
+        title: '📷 Fotografiar Acta de Conformidad',
+        body: `
+            <div class="space-y-3">
+                <div class="relative w-full rounded-xl overflow-hidden bg-slate-950" style="aspect-ratio:3/4;">
+                    <video id="conf-cam-video"
+                           class="absolute inset-0 w-full h-full object-cover"
+                           autoplay playsinline muted></video>
+                    <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+                        <div class="relative" style="width:78%;height:84%;">
+                            <div class="absolute inset-0 rounded-lg" style="box-shadow:0 0 0 9999px rgba(0,0,0,0.45);"></div>
+                            <div class="absolute inset-0 border-2 border-white/80 rounded-lg"></div>
+                            <div class="absolute top-0 left-0 w-5 h-5 border-t-[3px] border-l-[3px] border-white rounded-tl-lg"></div>
+                            <div class="absolute top-0 right-0 w-5 h-5 border-t-[3px] border-r-[3px] border-white rounded-tr-lg"></div>
+                            <div class="absolute bottom-0 left-0 w-5 h-5 border-b-[3px] border-l-[3px] border-white rounded-bl-lg"></div>
+                            <div class="absolute bottom-0 right-0 w-5 h-5 border-b-[3px] border-r-[3px] border-white rounded-br-lg"></div>
+                            <div class="absolute -top-6 left-0 right-0 flex justify-center">
+                                <span class="text-[10px] font-bold text-white bg-black/60 px-2 py-0.5 rounded-full tracking-wide">Coloca el acta dentro del marco</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="absolute top-2 right-2 flex items-center gap-1.5 bg-black/60 rounded-full px-2 py-1">
+                        <span class="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
+                        <span class="text-white text-[10px] font-bold">EN VIVO</span>
+                    </div>
+                </div>
+                <canvas id="conf-cam-canvas" class="hidden"></canvas>
+                <div id="conf-cam-preview" class="hidden space-y-2">
+                    <div class="relative w-full rounded-xl overflow-hidden border-2 border-emerald-400" style="aspect-ratio:3/4;">
+                        <img id="conf-cam-img" class="w-full h-full object-contain bg-slate-100" alt="Foto capturada">
+                    </div>
+                    <p class="text-xs text-center text-emerald-600 font-bold flex items-center justify-center gap-1">
+                        ✅ Foto capturada — revisa que el acta sea legible
+                    </p>
+                </div>
+                <div class="flex gap-2 justify-center">
+                    <button type="button" id="conf-cam-capture-btn" onclick="_captureConformidadPhoto()" class="btn btn-primary gap-2">
+                        📷 Capturar foto
+                    </button>
+                    <button type="button" id="conf-cam-retake-btn" onclick="_retakeConformidadPhoto()" class="btn btn-outline gap-2 hidden">
+                        🔄 Volver a tomar
+                    </button>
+                </div>
+                <p class="text-[10px] text-muted-foreground text-center italic">
+                    Asegúrate que el texto del acta sea legible antes de confirmar.
+                </p>
+            </div>`,
+        confirmText: '✓ Usar esta foto',
+        onConfirm: () => {
+            const canvas = document.getElementById('conf-cam-canvas');
+            if (!canvas || canvas.width === 0) {
+                UI.toast('Primero debes capturar una foto', 'error');
+                return false;
+            }
+            canvas.toBlob(blob => {
+                const fileName = `conformidad_foto_${Date.now()}.jpg`;
+                const file = new File([blob], fileName, { type: 'image/jpeg' });
+                const dt = new DataTransfer();
+                dt.items.add(file);
+                const input = document.getElementById('rec-archivo');
+                if (input) {
+                    input.files = dt.files;
+                    const lbl = document.getElementById('rec-file-name');
+                    if (lbl) lbl.textContent = '📷 ' + fileName;
+                }
+            }, 'image/jpeg', 0.95);
+            if (window._conformidadStream) {
+                window._conformidadStream.getTracks().forEach(t => t.stop());
+                window._conformidadStream = null;
+            }
+            return true;
+        }
+    });
+
+    setTimeout(async () => {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({
+                video: { facingMode: { ideal: 'environment' }, width: { ideal: 1944 }, height: { ideal: 2592 }, aspectRatio: { ideal: 3/4 } }
+            });
+            window._conformidadStream = stream;
+            const video = document.getElementById('conf-cam-video');
+            if (video) { video.srcObject = stream; }
+        } catch(e) {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } } });
+                window._conformidadStream = stream;
+                const video = document.getElementById('conf-cam-video');
+                if (video) { video.srcObject = stream; }
+            } catch(e2) {
+                const video = document.getElementById('conf-cam-video');
+                if (video) video.innerHTML =
+                    `<div class="flex flex-col items-center justify-center h-full gap-2 text-white p-6 text-center">
+                        <span class="text-4xl">📷</span>
+                        <p class="text-sm font-medium">No se pudo acceder a la cámara</p>
+                        <p class="text-[10px] text-white/60">${e2.message}</p>
+                    </div>`;
+            }
+        }
+    }, 400);
+};
+
+window._captureConformidadPhoto = function() {
+    const video   = document.getElementById('conf-cam-video');
+    const canvas  = document.getElementById('conf-cam-canvas');
+    const img     = document.getElementById('conf-cam-img');
+    const preview = document.getElementById('conf-cam-preview');
+    if (!video || !canvas) return;
+    canvas.width  = video.videoWidth  || 1280;
+    canvas.height = video.videoHeight || 720;
+    canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+    if (img)     img.src = canvas.toDataURL('image/jpeg', 0.92);
+    if (preview) preview.classList.remove('hidden');
+    video.classList.add('hidden');
+    document.getElementById('conf-cam-capture-btn')?.classList.add('hidden');
+    document.getElementById('conf-cam-retake-btn')?.classList.remove('hidden');
+};
+
+window._retakeConformidadPhoto = function() {
+    const video   = document.getElementById('conf-cam-video');
+    const preview = document.getElementById('conf-cam-preview');
+    const canvas  = document.getElementById('conf-cam-canvas');
+    if (video)   video.classList.remove('hidden');
+    if (preview) preview.classList.add('hidden');
+    document.getElementById('conf-cam-capture-btn')?.classList.remove('hidden');
+    document.getElementById('conf-cam-retake-btn')?.classList.add('hidden');
+    if (canvas) { canvas.width = 0; canvas.height = 0; }
 };
 
 // ── Google Drive upload helper ────────────────────────────────────────────────

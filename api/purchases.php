@@ -203,8 +203,12 @@ try {
             $condPago = $b['condicion_pago'] ?? 'Al contado';
             $condDetalle = $b['condicion_detalle'] ?? null;
             $fechaVencimiento = null;
-            if ($condPago === 'Credito' && $condDetalle) {
-                $dias = intval($condDetalle); // "30 días" → 30
+            if ($condPago === 'Credito' && isset($b['fecha_vencimiento_credito']) && $b['fecha_vencimiento_credito']) {
+                // Fecha límite directamente desde el front-end
+                $fechaVencimiento = $b['fecha_vencimiento_credito'];
+            } elseif ($condPago === 'Credito' && $condDetalle && stripos($condDetalle, 'cuotas') === false) {
+                // Fallback: calcular desde días
+                $dias = intval($condDetalle);
                 if ($dias > 0) {
                     $fechaVencimiento = date('Y-m-d', strtotime('+' . $dias . ' days', strtotime($b['fecha'] ?? 'now')));
                 }
@@ -219,10 +223,38 @@ try {
                 $numCuotas = intval($condDetalle);
                 if ($numCuotas > 1) {
                     $montoCuota = round($total / $numCuotas, 2);
-                    $scuota = $pdo->prepare("INSERT INTO ordenes_cuotas (orden_id, numero_cuota, total_cuotas, monto_cuota, fecha_vencimiento) VALUES (?,?,?,?,?)");
-                    for ($c = 1; $c <= $numCuotas; $c++) {
-                        $fVenc = date('Y-m-d', strtotime('+' . ($c * 30) . ' days', strtotime($b['fecha'] ?? 'now')));
-                        $scuota->execute([$orden_id, $c, $numCuotas, $montoCuota, $fVenc]);
+                    $scuota = $pdo->prepare("INSERT INTO ordenes_cuotas (orden_id, numero_cuota, total_cuotas, monto_cuota, fecha_vencimiento, descripcion) VALUES (?,?,?,?,?,?)");
+                    
+                    // Usar dia del mes y fecha de inicio si se proporcionaron
+                    $diaMesCuotas = isset($b['cuotas_dia_mes']) && $b['cuotas_dia_mes'] > 0 ? (int)$b['cuotas_dia_mes'] : null;
+                    $fechaInicioCuotas = !empty($b['cuotas_fecha_inicio']) ? $b['cuotas_fecha_inicio'] : null;
+                    
+                    if ($fechaInicioCuotas) {
+                        $dt = new DateTime($fechaInicioCuotas);
+                        $meses_es = ['','Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+                        for ($c = 1; $c <= $numCuotas; $c++) {
+                            // Ajustar al día del mes de pago si se especificó
+                            if ($diaMesCuotas && $c > 1) {
+                                $maxDia = (int)(new DateTime($dt->format('Y-m-01')))->format('t');
+                                $dt->setDate((int)$dt->format('Y'), (int)$dt->format('n'), min($diaMesCuotas, $maxDia));
+                            }
+                            $fVenc = $dt->format('Y-m-d');
+                            $label = 'Cuota ' . $c . ' de ' . $numCuotas . ' - ' . $meses_es[(int)$dt->format('n')] . ' ' . $dt->format('Y');
+                            $scuota->execute([$orden_id, $c, $numCuotas, $montoCuota, $fVenc, $label]);
+                            // Avanzar al siguiente mes
+                            $dt->modify('first day of next month');
+                            if ($diaMesCuotas) {
+                                $maxDia = (int)$dt->format('t');
+                                $dt->setDate((int)$dt->format('Y'), (int)$dt->format('n'), min($diaMesCuotas, $maxDia));
+                            }
+                        }
+                    } else {
+                        // Sin fecha de inicio: cuotas cada 30 días desde hoy
+                        $scuota2 = $pdo->prepare("INSERT INTO ordenes_cuotas (orden_id, numero_cuota, total_cuotas, monto_cuota, fecha_vencimiento) VALUES (?,?,?,?,?)");
+                        for ($c = 1; $c <= $numCuotas; $c++) {
+                            $fVenc = date('Y-m-d', strtotime('+' . ($c * 30) . ' days', strtotime($b['fecha'] ?? 'now')));
+                            $scuota2->execute([$orden_id, $c, $numCuotas, $montoCuota, $fVenc]);
+                        }
                     }
                 }
             }
@@ -262,22 +294,27 @@ try {
                 }
             }
 
-            // Generar tokens de aprobación remota
-            $token_gerente = bin2hex(random_bytes(32));
-            $token_finanzas = bin2hex(random_bytes(32));
-            $exp = date('Y-m-d H:i:s', strtotime('+48 hours'));
+            // Cargar Mailer antes de los tokens para acceder a los emails configurados
+            require_once __DIR__ . '/../includes/mailer.php';
 
-            $st = $pdo->prepare("INSERT INTO ordenes_compra_tokens (orden_id, token, rol, expiracion) VALUES (?,?,?,?)");
-            $st->execute([$orden_id, $token_gerente, 'gerente_general', $exp]);
-            $st->execute([$orden_id, $token_finanzas, 'jefe_finanzas', $exp]);
+            // Generar tokens de aprobación remota (se guarda el email destinatario para tracking)
+            $token_gerente  = bin2hex(random_bytes(32));
+            $token_finanzas = bin2hex(random_bytes(32));
+            $exp = date('Y-m-d H:i:s', strtotime('+96 hours')); // 4 días para aprobar/rechazar
+
+            $email_gerente  = Mailer::getEmail('gerente');
+            $email_finanzas = Mailer::getEmail('finanzas');
+
+            $st = $pdo->prepare("INSERT INTO ordenes_compra_tokens (orden_id, token, rol, expiracion, email_destinatario) VALUES (?,?,?,?,?)");
+            $st->execute([$orden_id, $token_gerente,  'gerente_general', $exp, $email_gerente]);
+            $st->execute([$orden_id, $token_finanzas, 'jefe_finanzas',   $exp, $email_finanzas]);
 
             $pdo->commit();
 
             // Enviar correos
-            require_once __DIR__ . '/../includes/mailer.php';
             try {
                 Mailer::sendNewOCNotification($orden_id, [
-                    'gerente' => $token_gerente,
+                    'gerente'  => $token_gerente,
                     'finanzas' => $token_finanzas
                 ]);
             } catch (Exception $e) {

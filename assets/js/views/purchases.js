@@ -103,17 +103,39 @@ window.Views['new-purchase'] = function () {
               <label class="text-sm font-medium">% Adelanto</label>
               <input type="number" id="oc-adelanto-porc" class="input mt-1 w-full" placeholder="50" min="1" max="99" oninput="recalcOCTotals()">
             </div>
-            <div id="oc-credito-container" class="hidden grid grid-cols-2 gap-2">
+            <div id="oc-credito-container" class="hidden grid grid-cols-1 gap-2">
               <div>
                 <label class="text-sm font-medium">Tipo de Crédito</label>
-                <select id="oc-credito-tipo" class="select mt-1 w-full" onchange="toggleCreditDetails()">
+                <select id="oc-credito-tipo" class="select mt-1 w-full" onchange="toggleCreditSubFields()">
                   <option value="Dias">Días</option>
                   <option value="Cuotas">Cuotas</option>
                 </select>
               </div>
-              <div>
-                <label class="text-sm font-medium" id="oc-credito-label">Cantidad</label>
-                <input type="number" id="oc-condicion-val" class="input mt-1 w-full" placeholder="30" oninput="recalcOCTotals()">
+              <!-- Sub-campos para DÍAS -->
+              <div id="oc-credito-dias-fields" class="grid grid-cols-2 gap-2">
+                <div>
+                  <label class="text-sm font-medium">Fecha Límite de Pago <span class="text-destructive">*</span></label>
+                  <input type="date" id="oc-credito-fecha-limite" class="input mt-1 w-full" onchange="calcularDiasDesdefecha(); recalcOCTotals()">
+                </div>
+                <div>
+                  <label class="text-sm font-medium text-muted-foreground">Días calculados</label>
+                  <input type="text" id="oc-dias-calculados" class="input mt-1 w-full bg-muted cursor-not-allowed font-mono text-center" readonly placeholder="Auto">
+                </div>
+              </div>
+              <!-- Sub-campos para CUOTAS -->
+              <div id="oc-credito-cuotas-fields" class="hidden grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <div>
+                  <label class="text-sm font-medium">N° de Cuotas <span class="text-destructive">*</span></label>
+                  <input type="number" id="oc-condicion-val" class="input mt-1 w-full" placeholder="Ej: 3" min="2" oninput="recalcOCTotals()">
+                </div>
+                <div>
+                  <label class="text-sm font-medium">Día de Pago (mensual)</label>
+                  <input type="number" id="oc-cuotas-dia-mes" class="input mt-1 w-full" placeholder="Ej: 15" min="1" max="31" value="" oninput="recalcOCTotals()">
+                </div>
+                <div>
+                  <label class="text-sm font-medium">Inicio 1ra Cuota</label>
+                  <input type="date" id="oc-cuotas-fecha-inicio" class="input mt-1 w-full" onchange="recalcOCTotals()">
+                </div>
               </div>
             </div>
             <div id="oc-alquiler-container" class="hidden grid grid-cols-1 sm:grid-cols-3 gap-3 col-span-1 md:col-span-2">
@@ -214,8 +236,8 @@ window.Views['new-purchase'] = function () {
           </div>
 
           <div class="mt-5 space-y-2">
-            <button class="btn btn-primary w-full" onclick="generateOC()">
-              <i data-lucide="file-check" class="w-4 h-4"></i>Generar OC + PDF
+            <button class="btn btn-primary w-full" onclick="showOCPreview()">
+              <i data-lucide="eye" class="w-4 h-4"></i>Previsualizar y Generar
             </button>
             <div id="oc-drive-btn" class="hidden">
               <button class="btn btn-outline w-full" onclick="exportToDrive()">
@@ -365,14 +387,12 @@ window.toggleCreditDetails = function () {
   const cond = document.getElementById('oc-condicion').value;
   const container = document.getElementById('oc-credito-container');
   const alquilerContainer = document.getElementById('oc-alquiler-container');
-  const tipo = document.getElementById('oc-credito-tipo').value;
-  const label = document.getElementById('oc-credito-label');
 
   if (cond === 'Credito') {
     container.classList.remove('hidden');
     document.getElementById('oc-adelanto-container').classList.add('hidden');
     if (alquilerContainer) alquilerContainer.classList.add('hidden');
-    label.textContent = tipo === 'Dias' ? 'Cantidad de Días' : 'N° de Cuotas';
+    toggleCreditSubFields(); // Mostrar sub-campos correctos
   } else if (cond === 'Adelanto + Saldo') {
     container.classList.add('hidden');
     document.getElementById('oc-adelanto-container').classList.remove('hidden');
@@ -391,10 +411,49 @@ window.toggleCreditDetails = function () {
     container.classList.add('hidden');
     document.getElementById('oc-adelanto-container').classList.add('hidden');
     if (alquilerContainer) alquilerContainer.classList.add('hidden');
-    document.getElementById('oc-condicion-val').value = '';
+    const condVal = document.getElementById('oc-condicion-val');
+    if (condVal) condVal.value = '';
     document.getElementById('oc-adelanto-porc').value = '';
   }
   recalcOCTotals();
+};
+
+// Mostrar/ocultar sub-campos según tipo de crédito
+window.toggleCreditSubFields = function () {
+  const tipo = document.getElementById('oc-credito-tipo').value;
+  const diasFields = document.getElementById('oc-credito-dias-fields');
+  const cuotasFields = document.getElementById('oc-credito-cuotas-fields');
+  if (tipo === 'Dias') {
+    if (diasFields) diasFields.classList.remove('hidden');
+    if (cuotasFields) cuotasFields.classList.add('hidden');
+  } else {
+    if (diasFields) diasFields.classList.add('hidden');
+    if (cuotasFields) cuotasFields.classList.remove('hidden');
+    // Poner fecha de inicio por defecto si está vacía
+    const fi = document.getElementById('oc-cuotas-fecha-inicio');
+    if (fi && !fi.value) fi.value = new Date().toISOString().split('T')[0];
+  }
+  recalcOCTotals();
+};
+
+// Calcula días entre hoy y la fecha límite seleccionada
+window.calcularDiasDesdefecha = function () {
+  const fechaLimEl = document.getElementById('oc-credito-fecha-limite');
+  const diasEl = document.getElementById('oc-dias-calculados');
+  if (!fechaLimEl || !diasEl) return;
+  const fechaLim = fechaLimEl.value;
+  if (!fechaLim) { diasEl.value = ''; return; }
+  const hoy = new Date();
+  hoy.setHours(0, 0, 0, 0);
+  const limite = new Date(fechaLim + 'T00:00:00');
+  const diff = Math.round((limite - hoy) / (1000 * 60 * 60 * 24));
+  if (diff < 0) {
+    diasEl.value = 'Fecha pasada';
+    diasEl.classList.add('text-destructive');
+  } else {
+    diasEl.value = diff + ' días';
+    diasEl.classList.remove('text-destructive');
+  }
 };
 
 window.updateAlquilerPreview = function () {
@@ -663,13 +722,39 @@ function recalcOCTotals() {
   }
 
   const cond = document.getElementById('oc-condicion').value;
-  const tipo = document.getElementById('oc-credito-tipo').value;
-  const val = parseInt(document.getElementById('oc-condicion-val').value || 0);
+  const tipo = document.getElementById('oc-credito-tipo') ? document.getElementById('oc-credito-tipo').value : 'Dias';
+  const condValEl = document.getElementById('oc-condicion-val');
+  const val = condValEl ? parseInt(condValEl.value || 0) : 0;
   const cuotasDiv = document.getElementById('oc-cuotas-resumen');
 
   if (cond === 'Credito' && tipo === 'Cuotas' && val > 1) {
     const cuotaMonto = total / val;
-    cuotasDiv.textContent = `Se cancelará en ${val} cuotas de ${moneda} ${cuotaMonto.toFixed(2)} c/u.`;
+    const diaMes = parseInt(document.getElementById('oc-cuotas-dia-mes')?.value || 0);
+    const fechaInicioVal = document.getElementById('oc-cuotas-fecha-inicio')?.value;
+    
+    let previewMsg = `Se cancelará en ${val} cuotas de ${moneda} ${cuotaMonto.toFixed(2)} c/u.`;
+    
+    if (diaMes > 0 && fechaInicioVal) {
+      let dates = [];
+      let dt = new Date(fechaInicioVal + 'T00:00:00');
+      for (let c = 1; c <= Math.min(3, val); c++) {
+        dates.push(dt.toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' }));
+        dt.setMonth(dt.getMonth() + 1);
+        let maxDays = new Date(dt.getFullYear(), dt.getMonth() + 1, 0).getDate();
+        dt.setDate(Math.min(diaMes, maxDays));
+      }
+      previewMsg += ` Vencimientos: ${dates.join(', ')}` + (val > 3 ? '...' : '.');
+    } else if (fechaInicioVal && !diaMes) {
+      let dates = [];
+      let dt = new Date(fechaInicioVal + 'T00:00:00');
+      for (let c = 1; c <= Math.min(3, val); c++) {
+        dates.push(dt.toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' }));
+        dt.setMonth(dt.getMonth() + 1);
+      }
+      previewMsg += ` Vencimientos: ${dates.join(', ')}` + (val > 3 ? '...' : '.');
+    }
+    
+    cuotasDiv.textContent = previewMsg;
     cuotasDiv.classList.remove('hidden');
   } else if (cond === 'Alquiler') {
     const diaPago = parseInt(document.getElementById('oc-alquiler-dia').value || 30);
@@ -758,6 +843,257 @@ function getOCItems() {
   return { items, invalidRow };
 }
 
+window.showOCPreview = function () {
+  // ── Validaciones previas (mismas que generateOC) ──
+  const proveedor_id = document.getElementById('oc-proveedor').value;
+  const area_id = document.getElementById('oc-area').value;
+  if (!proveedor_id) { UI.toast('Seleccione un proveedor', 'error'); return; }
+  if (!area_id) { UI.toast('Seleccione el área solicitante', 'error'); return; }
+
+  const { items, invalidRow } = getOCItems();
+  if (invalidRow) {
+    UI.toast(`Fila ${invalidRow.row}: La categoría "${invalidRow.nombre}" no existe. Créala primero.`, 'error');
+    return;
+  }
+  if (items.length === 0) { UI.toast('Agregue al menos un ítem con categoría válida', 'error'); return; }
+
+  // ── Recoger todos los datos del formulario ──
+  const tipo = document.getElementById('oc-tipo').value;
+  const docLabel = tipo === 'servicio' ? 'Orden de Servicio (OS)' : 'Orden de Compra (OC)';
+  const sup = _ocSuppliers.find(s => s.id == proveedor_id) || {};
+  const areaNombre = document.getElementById('oc-area').options[document.getElementById('oc-area').selectedIndex]?.text || '';
+  const fechaReq = document.getElementById('oc-fecha-req').value;
+  const moneda = document.getElementById('oc-moneda').value;
+  const monSym = moneda === 'PEN' ? 'S/' : (moneda === 'USD' ? '$' : '€');
+  const cond = document.getElementById('oc-condicion').value;
+  const porcIgv = parseFloat(document.getElementById('oc-igv-porcentaje').value || 18) / 100;
+  const incluido = document.getElementById('oc-precios-con-igv').checked;
+  const observaciones = document.getElementById('oc-observaciones').value.trim();
+  const dentroPresupuesto = document.getElementById('oc-dentro-presupuesto')?.checked;
+  const incluyeMov = document.getElementById('oc-incluye-movilidad').checked;
+
+  // Cálculos de totales
+  const base = items.reduce((a, it) => a + (parseFloat(it.total) || 0), 0);
+  let subtotal, igv, total;
+  if (incluido) { total = base; subtotal = total / (1 + porcIgv); igv = total - subtotal; }
+  else { subtotal = base; igv = subtotal * porcIgv; total = subtotal + igv; }
+
+  // Condición de pago detallada
+  let condPagoHTML = '';
+  const cTipo = document.getElementById('oc-credito-tipo')?.value || 'Dias';
+  if (cond === 'Credito') {
+    if (cTipo === 'Dias') {
+      const fechaLim = document.getElementById('oc-credito-fecha-limite')?.value || '';
+      const diasCalc = document.getElementById('oc-dias-calculados')?.value || '';
+      condPagoHTML = `<span class="font-bold text-yellow-700">Crédito — Días</span><br><span class="text-xs">Fecha límite: <strong>${fechaLim || '—'}</strong> (${diasCalc})</span>`;
+    } else {
+      const numC = document.getElementById('oc-condicion-val')?.value || '?';
+      const diaMes = document.getElementById('oc-cuotas-dia-mes')?.value || '—';
+      const fechaIni = document.getElementById('oc-cuotas-fecha-inicio')?.value || '—';
+      condPagoHTML = `<span class="font-bold text-blue-700">Crédito — ${numC} Cuotas</span><br><span class="text-xs">Día de pago: ${diaMes} de cada mes · Inicio: ${fechaIni}</span>`;
+    }
+  } else if (cond === 'Adelanto + Saldo') {
+    const porc = document.getElementById('oc-adelanto-porc')?.value || '?';
+    condPagoHTML = `<span class="font-bold text-purple-700">Adelanto + Saldo</span><br><span class="text-xs">${porc}% de adelanto</span>`;
+  } else if (cond === 'Alquiler') {
+    const diaPago = document.getElementById('oc-alquiler-dia')?.value || '?';
+    const meses = document.getElementById('oc-alquiler-meses')?.value || '?';
+    condPagoHTML = `<span class="font-bold text-indigo-700">Alquiler Recurrente</span><br><span class="text-xs">Día ${diaPago} de cada mes · ${meses} meses</span>`;
+  } else {
+    condPagoHTML = `<span class="font-bold">${cond}</span>`;
+  }
+
+  // Activo vinculado (OS)
+  const osTarget = tipo === 'servicio' ? (document.getElementById('os-target-code')?.value.trim() || '') : '';
+
+  // ── Construir HTML del preview ──
+  const itemsHTML = items.map((it, i) => `
+    <tr class="${i % 2 === 0 ? 'bg-white' : 'bg-slate-50'}">
+      <td class="px-3 py-2 text-center text-xs text-muted-foreground font-bold">${i+1}</td>
+      <td class="px-3 py-2">
+        <div class="text-xs font-bold">${it.categoria_nombre || '—'}</div>
+        ${it.descripcion && it.descripcion !== it.categoria_nombre ? `<div class="text-[10px] text-muted-foreground">${it.descripcion}</div>` : ''}
+      </td>
+      <td class="px-3 py-2 text-center text-xs font-mono text-primary">${it.prefijo || '—'}</td>
+      <td class="px-3 py-2 text-center text-xs">${it.unidad || 'Unidad'}</td>
+      <td class="px-3 py-2 text-right text-xs font-semibold">${parseFloat(it.cantidad).toLocaleString()}</td>
+      <td class="px-3 py-2 text-right text-xs">${monSym} ${parseFloat(it.precio_unitario).toFixed(2)}</td>
+      <td class="px-3 py-2 text-right text-xs font-bold text-primary">${monSym} ${parseFloat(it.total).toFixed(2)}</td>
+    </tr>`).join('');
+
+  const mobHTML = (!incluyeMov && _ocMobilityData) ? `
+    <div class="flex items-center gap-2 p-2 bg-orange-50 rounded border border-orange-200 text-xs">
+      <i class="lucide-truck w-3 h-3 text-orange-600"></i>
+      <span class="text-orange-700 font-bold">Movilidad separada:</span>
+      <span>${_ocMobilityData.proveedor_nombre}</span>
+      <span class="ml-auto font-bold text-orange-700">${monSym} ${parseFloat(_ocMobilityData.monto).toFixed(2)}</span>
+    </div>` : '';
+
+  const previewHTML = `
+  <div style="font-family:'Inter',system-ui,sans-serif;">
+
+    <!-- BANNER BORRADOR -->
+    <div style="background:linear-gradient(135deg,#f59e0b,#d97706);color:#fff;border-radius:10px;padding:14px 20px;margin-bottom:16px;display:flex;align-items:center;gap:12px;">
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+      <div>
+        <div style="font-size:15px;font-weight:800;letter-spacing:0.5px;">⚠️ PREVISUALIZACIÓN — AÚN NO SE ENVÍA</div>
+        <div style="font-size:11px;opacity:0.9;margin-top:2px;">Revise toda la información antes de confirmar. Si hay algún error use <strong>Seguir Editando</strong>.</div>
+      </div>
+    </div>
+
+    <!-- TIPO DE DOCUMENTO -->
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
+      <span style="background:#1b5cff;color:#fff;padding:4px 14px;border-radius:20px;font-size:12px;font-weight:700;">${tipo === 'servicio' ? '📋 ORDEN DE SERVICIO' : '🛒 ORDEN DE COMPRA'}</span>
+      ${dentroPresupuesto ? '<span style="background:#d1fae5;color:#065f46;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600;">✓ Dentro de Presupuesto</span>' : '<span style="background:#fee2e2;color:#991b1b;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600;">⚠ Fuera de Presupuesto</span>'}
+      ${osTarget ? `<span style="background:#ede9fe;color:#6d28d9;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600;">🔧 Activo: ${osTarget}</span>` : ''}
+    </div>
+
+    <!-- GRID PROVEEDOR + DETALLES -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px;">
+
+      <!-- Proveedor -->
+      <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:14px;">
+        <div style="font-size:10px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">🏢 Datos del Proveedor</div>
+        <div style="font-size:14px;font-weight:800;color:#1e293b;margin-bottom:4px;">${sup.razon_social || '—'}</div>
+        <div style="font-size:11px;color:#64748b;font-family:monospace;">${sup.ruc || 'Sin RUC'}</div>
+        <div style="margin-top:8px;display:flex;flex-direction:column;gap:3px;">
+          ${sup.telefono ? `<div style="font-size:11px;color:#475569;">📞 ${sup.telefono}</div>` : ''}
+          ${sup.contacto ? `<div style="font-size:11px;color:#475569;">👤 ${sup.contacto}</div>` : ''}
+          ${sup.direccion ? `<div style="font-size:11px;color:#475569;">📍 ${sup.direccion}</div>` : ''}
+        </div>
+      </div>
+
+      <!-- Detalles del pedido -->
+      <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:14px;">
+        <div style="font-size:10px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">📋 Detalles del Pedido</div>
+        <div style="display:flex;flex-direction:column;gap:6px;font-size:12px;">
+          <div style="display:flex;justify-content:space-between;"><span style="color:#64748b;">Área / C. Costo:</span><span style="font-weight:600;">${areaNombre}</span></div>
+          <div style="display:flex;justify-content:space-between;"><span style="color:#64748b;">Fecha requerida:</span><span style="font-weight:600;">${fechaReq || '—'}</span></div>
+          <div style="display:flex;justify-content:space-between;"><span style="color:#64748b;">Moneda:</span><span style="font-weight:600;">${moneda === 'PEN' ? 'S/ Soles' : moneda === 'USD' ? '$ Dólares' : '€ Euros'}</span></div>
+          <div style="display:flex;justify-content:space-between;"><span style="color:#64748b;">IGV:</span><span style="font-weight:600;">${(porcIgv*100).toFixed(0)}% ${incluido ? '(incluido)' : '(separado)'}</span></div>
+          <div style="display:flex;justify-content:space-between;"><span style="color:#64748b;">Movilidad:</span><span style="font-weight:600;">${incluyeMov ? 'Incluida en OC' : _ocMobilityData ? 'Separada (ver abajo)' : 'No aplica'}</span></div>
+          <div style="border-top:1px solid #e2e8f0;padding-top:6px;">
+            <div style="font-size:10px;color:#64748b;margin-bottom:3px;">Condición de Pago:</div>
+            <div>${condPagoHTML}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TABLA DE ÍTEMS -->
+    <div style="border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;margin-bottom:14px;">
+      <div style="background:#1b5cff;color:#fff;padding:8px 14px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;">📦 Detalle de Ítems (${items.length} ítem${items.length !== 1 ? 's' : ''})</div>
+      <table style="width:100%;border-collapse:collapse;font-size:12px;">
+        <thead>
+          <tr style="background:#f1f5f9;">
+            <th style="padding:6px 12px;text-align:center;color:#64748b;font-weight:600;font-size:10px;">#</th>
+            <th style="padding:6px 12px;text-align:left;color:#64748b;font-weight:600;font-size:10px;">Categoría / Descripción</th>
+            <th style="padding:6px 12px;text-align:center;color:#64748b;font-weight:600;font-size:10px;">Prefijo</th>
+            <th style="padding:6px 12px;text-align:center;color:#64748b;font-weight:600;font-size:10px;">Unidad</th>
+            <th style="padding:6px 12px;text-align:right;color:#64748b;font-weight:600;font-size:10px;">Cant.</th>
+            <th style="padding:6px 12px;text-align:right;color:#64748b;font-weight:600;font-size:10px;">P. Unit.</th>
+            <th style="padding:6px 12px;text-align:right;color:#64748b;font-weight:600;font-size:10px;">Total</th>
+          </tr>
+        </thead>
+        <tbody>${itemsHTML}</tbody>
+      </table>
+    </div>
+
+    <!-- MOVILIDAD SEPARADA -->
+    ${mobHTML}
+
+    <!-- TOTALES -->
+    <div style="display:flex;justify-content:flex-end;margin-bottom:14px;">
+      <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:14px;min-width:240px;">
+        <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:6px;"><span style="color:#64748b;">Subtotal:</span><span style="font-weight:600;">${monSym} ${subtotal.toFixed(2)}</span></div>
+        <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:8px;"><span style="color:#64748b;">IGV (${(porcIgv*100).toFixed(0)}%):</span><span style="font-weight:600;">${monSym} ${igv.toFixed(2)}</span></div>
+        <div style="display:flex;justify-content:space-between;font-size:15px;font-weight:800;color:#1b5cff;border-top:2px solid #e2e8f0;padding-top:8px;"><span>TOTAL:</span><span>${monSym} ${total.toFixed(2)}</span></div>
+        ${(!incluyeMov && _ocMobilityData) ? `<div style="display:flex;justify-content:space-between;font-size:11px;margin-top:6px;color:#d97706;"><span>+ Movilidad:</span><span>${monSym} ${parseFloat(_ocMobilityData.monto).toFixed(2)}</span></div>` : ''}
+      </div>
+    </div>
+
+    <!-- OBSERVACIONES -->
+    ${observaciones ? `
+    <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:12px;margin-bottom:14px;">
+      <div style="font-size:10px;font-weight:700;color:#92400e;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">💬 Observaciones / Sustento</div>
+      <div style="font-size:12px;color:#78350f;white-space:pre-wrap;">${observaciones}</div>
+    </div>` : ''}
+
+    <!-- AVISO FINAL -->
+    <div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:10px;padding:12px;text-align:center;">
+      <div style="font-size:11px;color:#0369a1;font-weight:600;">📌 Esta es una previsualización. Ningún dato ha sido enviado todavía.</div>
+      <div style="font-size:10px;color:#0284c7;margin-top:3px;">Al confirmar se generará la OC/OS, se enviará a aprobación y se descargará el PDF.</div>
+    </div>
+
+  </div>`;
+
+  // ── Mostrar modal de previsualización ──
+  const overlayEl = document.createElement('div');
+  overlayEl.id = 'oc-preview-overlay';
+  overlayEl.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(15,23,42,0.7);display:flex;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(4px);animation:fadeIn .15s ease;';
+
+  overlayEl.innerHTML = `
+    <div style="background:#fff;border-radius:16px;width:100%;max-width:820px;max-height:90vh;display:flex;flex-direction:column;box-shadow:0 25px 60px rgba(0,0,0,0.35);">
+      <!-- Header del modal -->
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:18px 24px;border-bottom:1px solid #e2e8f0;flex-shrink:0;">
+        <div style="display:flex;align-items:center;gap:12px;">
+          <div style="width:36px;height:36px;background:#fff7ed;border:2px solid #f59e0b;border-radius:10px;display:flex;align-items:center;justify-content:center;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2.5"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+          </div>
+          <div>
+            <div style="font-size:15px;font-weight:800;color:#1e293b;">Revisión Previa — ${docLabel}</div>
+            <div style="font-size:11px;color:#64748b;">Confirme que todo está correcto antes de enviar</div>
+          </div>
+        </div>
+        <button id="oc-preview-close-x" style="width:32px;height:32px;border-radius:8px;border:1px solid #e2e8f0;background:transparent;cursor:pointer;display:flex;align-items:center;justify-content:center;color:#64748b;font-size:18px;" title="Cerrar">&times;</button>
+      </div>
+
+      <!-- Cuerpo scrollable -->
+      <div style="overflow-y:auto;padding:20px 24px;flex:1;">
+        ${previewHTML}
+      </div>
+
+      <!-- Footer con botones -->
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 24px;border-top:1px solid #e2e8f0;flex-shrink:0;background:#f8fafc;border-radius:0 0 16px 16px;gap:12px;">
+        <button id="oc-preview-edit-btn" style="display:flex;align-items:center;gap:8px;padding:10px 22px;border-radius:10px;border:1.5px solid #e2e8f0;background:#fff;color:#374151;font-size:13px;font-weight:600;cursor:pointer;transition:all .15s;">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+          Seguir Editando
+        </button>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <div style="font-size:10px;color:#94a3b8;text-align:right;">Al confirmar se genera<br>el documento definitivo</div>
+          <button id="oc-preview-confirm-btn" style="display:flex;align-items:center;gap:8px;padding:10px 24px;border-radius:10px;border:none;background:linear-gradient(135deg,#1b5cff,#2563eb);color:#fff;font-size:13px;font-weight:700;cursor:pointer;box-shadow:0 4px 14px rgba(27,92,255,0.35);transition:all .15s;">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+            Confirmar y Generar ${tipo === 'servicio' ? 'OS' : 'OC'}
+          </button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(overlayEl);
+
+  // Cerrar con X o botón editar
+  const closePreview = () => { overlayEl.remove(); };
+  document.getElementById('oc-preview-close-x').addEventListener('click', closePreview);
+  document.getElementById('oc-preview-edit-btn').addEventListener('click', closePreview);
+  // Cerrar haciendo click fuera del modal
+  overlayEl.addEventListener('click', e => { if (e.target === overlayEl) closePreview(); });
+
+  // Botón confirmar → ejecuta la generación real
+  document.getElementById('oc-preview-confirm-btn').addEventListener('click', () => {
+    closePreview();
+    generateOC();
+  });
+
+  // Hover effects
+  const editBtn = document.getElementById('oc-preview-edit-btn');
+  const confirmBtn = document.getElementById('oc-preview-confirm-btn');
+  editBtn.addEventListener('mouseenter', () => { editBtn.style.background = '#f1f5f9'; editBtn.style.borderColor = '#94a3b8'; });
+  editBtn.addEventListener('mouseleave', () => { editBtn.style.background = '#fff'; editBtn.style.borderColor = '#e2e8f0'; });
+  confirmBtn.addEventListener('mouseenter', () => { confirmBtn.style.background = 'linear-gradient(135deg,#1649e8,#1d4ed8)'; confirmBtn.style.transform = 'translateY(-1px)'; });
+  confirmBtn.addEventListener('mouseleave', () => { confirmBtn.style.background = 'linear-gradient(135deg,#1b5cff,#2563eb)'; confirmBtn.style.transform = ''; });
+};
+
 window.generateOC = async function () {
   const proveedor_id = document.getElementById('oc-proveedor').value;
   const area = document.getElementById('oc-area').value;
@@ -803,15 +1139,32 @@ window.generateOC = async function () {
     const base = items.reduce((a, it) => a + (parseFloat(it.total) || 0), 0);
     let totalCalculado = incluido ? base : base * (1 + porcIgv);
 
+    // Para crédito días: calcular días desde hoy hasta la fecha límite
     let condDetalle = '';
-    if (cond === 'Credito' && cVal) {
-      condDetalle = cTipo === 'Dias' ? `${cVal} días` : `${cVal} cuotas`;
+    let fechaVencimientoCredito = null;
+    if (cond === 'Credito') {
+      if (cTipo === 'Dias') {
+        const fechaLimEl = document.getElementById('oc-credito-fecha-limite');
+        const fechaLim = fechaLimEl ? fechaLimEl.value : '';
+        if (!fechaLim) { UI.toast('Debe seleccionar la fecha límite de pago del crédito', 'error'); UI.stopLoading(); return; }
+        fechaVencimientoCredito = fechaLim;
+        const hoy = new Date(); hoy.setHours(0,0,0,0);
+        const limite = new Date(fechaLim + 'T00:00:00');
+        const diff = Math.round((limite - hoy) / (1000 * 60 * 60 * 24));
+        condDetalle = `${diff} días`;
+      } else if (cVal) {
+        condDetalle = `${cVal} cuotas`;
+      }
     }
 
     const isAlquiler = (cond === 'Alquiler');
     const diaPago = isAlquiler ? parseInt(document.getElementById('oc-alquiler-dia').value || 30) : null;
     const mesesAlquiler = isAlquiler ? parseInt(document.getElementById('oc-alquiler-meses').value || 24) : null;
     const fecha1raCuota = isAlquiler ? document.getElementById('oc-alquiler-primera-fecha').value : null;
+
+    // Campos de crédito por cuotas
+    const cuotasDiaMes = (cond === 'Credito' && cTipo === 'Cuotas') ? parseInt(document.getElementById('oc-cuotas-dia-mes')?.value || 0) : null;
+    const cuotasFechaInicio = (cond === 'Credito' && cTipo === 'Cuotas') ? document.getElementById('oc-cuotas-fecha-inicio')?.value : null;
 
     const adelantoPorc = cond === 'Adelanto + Saldo' ? (parseFloat(document.getElementById('oc-adelanto-porc').value) || 0) : null;
     const adelantoMonto = adelantoPorc !== null ? (totalCalculado * (adelantoPorc / 100)) : null;
@@ -833,9 +1186,12 @@ window.generateOC = async function () {
       moneda: document.getElementById('oc-moneda').value,
       condicion_pago: cond,
       condicion_detalle: condDetalle,
+      fecha_vencimiento_credito: fechaVencimientoCredito,
       dia_pago: diaPago,
       meses_alquiler: mesesAlquiler,
       fecha_primera_cuota: fecha1raCuota,
+      cuotas_dia_mes: cuotasDiaMes,
+      cuotas_fecha_inicio: cuotasFechaInicio,
       adelanto_porcentaje: adelantoPorc,
       adelanto_monto: adelantoMonto ? adelantoMonto.toFixed(2) : null,
       saldo_monto: saldoMonto ? saldoMonto.toFixed(2) : null,
@@ -868,7 +1224,7 @@ window.generateOC = async function () {
 
     if (res.ok) {
       const areaNombre = document.getElementById('oc-area').options[document.getElementById('oc-area').selectedIndex].text;
-      payload.fecha_vencimiento = res.fecha_vencimiento || null;
+      payload.fecha_vencimiento = res.fecha_vencimiento || payload.fecha_vencimiento_credito || null;
 
       // ─── PASO 1: Generar y DESCARGAR PDF de la OC/OS ─────────────────
       UI.loading('Descargando PDF de la OC…');

@@ -44,7 +44,7 @@ try {
 
         case 'PUT':
             $b = get_body();
-            $stmt = $pdo->prepare("UPDATE proveedores SET ruc=?, razon_social=?, banco=?, numero_cuenta=?, cci=?, cuenta_detraccion=?, email=?, contacto=?, telefono=?, direccion=?, rubro_id=?, estado=? WHERE id=?");
+            $stmt = $pdo->prepare("UPDATE proveedores SET ruc=?, razon_social=?, banco=?, numero_cuenta=?, cci=?, cuenta_detraccion=?, email=?, contacto=?, telefono=?, direccion=?, rubro_id=?, estado=?, motivo_baja=? WHERE id=?");
             $stmt->execute([
                 $b['ruc'], 
                 $b['razon_social'], 
@@ -58,6 +58,7 @@ try {
                 $b['direccion'], 
                 $b['rubro_id'], 
                 $b['estado'] ?? 'activo',
+                ($b['estado'] ?? 'activo') === 'inactivo' ? ($b['motivo_baja'] ?? null) : null,
                 $b['id']
             ]);
             json_response(['ok' => true]);

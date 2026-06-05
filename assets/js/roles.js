@@ -5,6 +5,7 @@ window.ROLES = [
   { id: 'almacenero', label: 'Almacenero', description: 'Gestión de almacén e insumos' },
   { id: 'comprador', label: 'Comprador', description: 'Gestión de compras y proveedores' },
   { id: 'tesoreria', label: 'Tesorería', description: 'Gestión de pagos y vouchers' },
+  { id: 'contabilidad', label: 'Contabilidad', description: 'Consulta de pagos y estado financiero' },
   { id: 'personal', label: 'Personal', description: 'Consulta de inventario' },
 ];
 
@@ -19,6 +20,7 @@ window.ROLE_PERMISSIONS = {
   almacenero: ['notifications', 'search', 'inventory', 'assets', 'categories', 'locations', 'areas', 'movements', 'maintenance', 'add-item', 'new-purchase', 'history'],
   comprador: ['notifications', 'search', 'suppliers', 'categories', 'purchases', 'new-purchase', 'recepcions', 'areas', 'history', 'documents'],
   tesoreria: ['notifications', 'search', 'inventory', 'treasury', 'history'],
+  contabilidad: ['notifications', 'search', 'treasury', 'history'],
   personal: ['search', 'inventory', 'notifications'],
 };
 

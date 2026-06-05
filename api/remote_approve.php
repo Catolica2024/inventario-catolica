@@ -8,6 +8,9 @@ if (!$token) {
     die("Token no proporcionado");
 }
 
+// Registrar el momento exacto del clic (el email ya está en email_destinatario del token)
+$usado_en = date('Y-m-d H:i:s');
+
 try {
     $pdo = db();
     
@@ -65,7 +68,8 @@ try {
 
         // Procesar rechazo
         $pdo->beginTransaction();
-        $pdo->prepare("UPDATE ordenes_compra_tokens SET usado = 1 WHERE id = ?")->execute([$t['id']]);
+        $pdo->prepare("UPDATE ordenes_compra_tokens SET usado = 1, usado_en = ? WHERE id = ?")
+            ->execute([$usado_en, $t['id']]);
         
         $quien = ($rol === 'gerente_general' ? 'Gerente General' : 'Jefe de Finanzas');
         $col = ($rol === 'gerente_general' ? 'rechazado_gerente' : 'rechazado_finanzas');
@@ -106,8 +110,9 @@ try {
     // FLUJO DE APROBACIÓN (Acción por defecto)
     $pdo->beginTransaction();
 
-    // 1. Marcar el token como usado
-    $pdo->prepare("UPDATE ordenes_compra_tokens SET usado = 1 WHERE id = ?")->execute([$t['id']]);
+    // 1. Marcar el token como usado (guardando la fecha/hora exacta del clic)
+    $pdo->prepare("UPDATE ordenes_compra_tokens SET usado = 1, usado_en = ? WHERE id = ?")
+        ->execute([$usado_en, $t['id']]);
 
     // 2. Aplicar la firma correspondiente
     if ($rol === 'gerente_general') {
