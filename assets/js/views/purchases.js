@@ -1813,17 +1813,61 @@ window.exportOCById = async function (id) {
   }
 };
 
-// ---- LISTADO DE ÓRDENES DE COMPRA ----
+// Caché de datos para filtrado client-side
+let _allPurchases = [];
+
 async function loadPurchases() {
   const tbody = document.getElementById('purchases-table-body');
   if (!tbody) return;
   try {
     const data = await fetch('api/purchases.php').then(r => r.json());
-    if (!data.purchases || data.purchases.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="7" class="text-center py-10 text-muted-foreground">No hay órdenes de compra registradas.</td></tr>';
-      return;
-    }
-    tbody.innerHTML = data.purchases.map(p => {
+    _allPurchases = data.purchases || [];
+    _populatePurchaseFilterSelects(_allPurchases);
+    _applyPurchaseFilters();
+  } catch { tbody.innerHTML = '<tr><td colspan="7" class="text-center py-10 text-destructive">Error al cargar órdenes.</td></tr>'; }
+}
+
+function _populatePurchaseFilterSelects(list) {
+  // Proveedor select
+  const sel = document.getElementById('pf-proveedor');
+  if (!sel) return;
+  const current = sel.value;
+  const proveedores = [...new Map(list.map(p => [p.proveedor_id, p.proveedor_nombre])).entries()];
+  sel.innerHTML = '<option value="">Todos los proveedores</option>' +
+    proveedores.map(([id, nombre]) => `<option value="${id}" ${current == id ? 'selected' : ''}>${nombre}</option>`).join('');
+}
+
+window._applyPurchaseFilters = function() {
+  const tbody = document.getElementById('purchases-table-body');
+  if (!tbody) return;
+
+  const texto      = (document.getElementById('pf-texto')?.value || '').toLowerCase().trim();
+  const provId     = document.getElementById('pf-proveedor')?.value || '';
+  const tipo       = document.getElementById('pf-tipo')?.value || '';
+  const desde      = document.getElementById('pf-desde')?.value || '';
+  const hasta      = document.getElementById('pf-hasta')?.value || '';
+
+  const filtered = _allPurchases.filter(p => {
+    if (texto && !(
+      p.numero_oc?.toLowerCase().includes(texto) ||
+      p.proveedor_nombre?.toLowerCase().includes(texto) ||
+      p.area_nombre?.toLowerCase().includes(texto) ||
+      p.condicion_pago?.toLowerCase().includes(texto)
+    )) return false;
+    if (provId && String(p.proveedor_id) !== String(provId)) return false;
+    if (tipo && p.tipo !== tipo) return false;
+    if (desde && p.fecha < desde) return false;
+    if (hasta && p.fecha > hasta) return false;
+    return true;
+  });
+
+  if (filtered.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="7" class="text-center py-10 text-muted-foreground">No se encontraron órdenes con esos criterios.</td></tr>';
+    lucide.createIcons();
+    return;
+  }
+
+  tbody.innerHTML = filtered.map(p => {
       // LÓGICA DE ESTADO MAESTRO (PREMIUM)
       const isApproved = p.aprobado_gerente && p.aprobado_finanzas;
       const isRejected = p.rechazado_gerente || p.rechazado_finanzas;
@@ -1853,30 +1897,13 @@ async function loadPurchases() {
           masterStatus = { label: 'Pendiente de Pago', class: 'badge-indigo', icon: 'credit-card' };
       }
 
-      // Iconos dinámicos de aprobación y rechazo
-      let gerIcon = 'user-check';
-      let gerClass = 'text-slate-300';
-      let gerTitle = 'Gerencia: Pendiente';
-      if (p.aprobado_gerente == 1) {
-          gerClass = 'text-green-500';
-          gerTitle = 'Gerencia: Aprobado';
-      } else if (p.rechazado_gerente == 1) {
-          gerIcon = 'user-x';
-          gerClass = 'text-red-500';
-          gerTitle = 'Gerencia: Rechazado';
-      }
+      let gerIcon = 'user-check', gerClass = 'text-slate-300', gerTitle = 'Gerencia: Pendiente';
+      if (p.aprobado_gerente == 1)  { gerClass = 'text-green-500'; gerTitle = 'Gerencia: Aprobado'; }
+      else if (p.rechazado_gerente == 1) { gerIcon = 'user-x'; gerClass = 'text-red-500'; gerTitle = 'Gerencia: Rechazado'; }
 
-      let finIcon = 'shield-check';
-      let finClass = 'text-slate-300';
-      let finTitle = 'Finanzas: Pendiente';
-      if (p.aprobado_finanzas == 1) {
-          finClass = 'text-green-500';
-          finTitle = 'Finanzas: Aprobado';
-      } else if (p.rechazado_finanzas == 1) {
-          finIcon = 'shield-x';
-          finClass = 'text-red-500';
-          finTitle = 'Finanzas: Rechazado';
-      }
+      let finIcon = 'shield-check', finClass = 'text-slate-300', finTitle = 'Finanzas: Pendiente';
+      if (p.aprobado_finanzas == 1)  { finClass = 'text-green-500'; finTitle = 'Finanzas: Aprobado'; }
+      else if (p.rechazado_finanzas == 1) { finIcon = 'shield-x'; finClass = 'text-red-500'; finTitle = 'Finanzas: Rechazado'; }
 
       const budgetBadge = p.dentro_presupuesto == 1 ? 
         `<span class="badge badge-green text-[10px] py-0.5 px-2 flex items-center gap-1 w-fit" title="Dentro de presupuesto"><i data-lucide="check" class="w-3 h-3"></i> En Ppto</span>` : 
@@ -1892,7 +1919,6 @@ async function loadPurchases() {
                 ${budgetBadge}
             </div>
             <div class="flex items-center gap-3 ml-1">
-                <!-- Micro-indicadores de flujo -->
                 <div class="flex gap-1" title="Aprobaciones (Gerencia / Finanzas)">
                     <i data-lucide="${gerIcon}" class="w-3 h-3 ${gerClass}" title="${gerTitle}"></i>
                     <i data-lucide="${finIcon}" class="w-3 h-3 ${finClass}" title="${finTitle}"></i>
@@ -1919,7 +1945,10 @@ async function loadPurchases() {
 
       return `
       <tr>
-        <td class="font-mono text-xs font-bold text-primary">${p.numero_oc}</td>
+        <td>
+          <div class="font-mono text-xs font-bold text-primary">${p.numero_oc}</div>
+          <div class="text-[10px] text-muted-foreground mt-0.5">${p.tipo === 'servicio' ? '<span class="badge badge-indigo text-[9px] py-0 px-1.5">OS</span>' : '<span class="badge badge-blue text-[9px] py-0 px-1.5">OC</span>'}</div>
+        </td>
         <td>
           <div class="font-bold text-sm">${p.proveedor_nombre}</div>
           <div class="text-[10px] text-muted-foreground uppercase">${p.area_nombre || 'Sin área'}</div>
@@ -1942,8 +1971,7 @@ async function loadPurchases() {
         </td>
       </tr>`;
     }).join('');
-    lucide.createIcons();
-  } catch { tbody.innerHTML = '<tr><td colspan="7" class="text-center py-10 text-destructive">Error al cargar órdenes.</td></tr>'; }
+  lucide.createIcons();
 }
 
 window.Views.purchases = function () {
@@ -1954,11 +1982,72 @@ window.Views.purchases = function () {
         <button class="btn btn-primary" onclick="Router.go('new-purchase')"><i data-lucide="plus" class="w-4 h-4 mr-2"></i>Nueva Orden</button>
       </div>
     `)}
+
+    <!-- ── PANEL DE FILTROS ─────────────────────────────────────────────── -->
+    <div class="card p-4 mb-4">
+      <div class="flex items-center gap-2 mb-3">
+        <i data-lucide="sliders-horizontal" class="w-4 h-4 text-primary"></i>
+        <span class="text-sm font-bold">Filtros de búsqueda</span>
+        <span class="ml-auto">
+          <button id="pf-clear-btn" onclick="_clearPurchaseFilters()"
+            class="text-xs text-muted-foreground hover:text-destructive flex items-center gap-1 transition-colors">
+            <i data-lucide="x-circle" class="w-3.5 h-3.5"></i> Limpiar filtros
+          </button>
+        </span>
+      </div>
+      <!-- Fila 1: Buscador + Tipo -->
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-3">
+        <!-- Búsqueda de texto (ocupa 2 columnas) -->
+        <div class="sm:col-span-2 relative min-w-0">
+          <i data-lucide="search" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none"></i>
+          <input id="pf-texto" type="text" placeholder="Buscar por N° orden, proveedor, área, condición de pago..."
+            class="input w-full pl-9 text-sm"
+            oninput="_applyPurchaseFilters()">
+        </div>
+        <!-- Tipo OC/OS -->
+        <div class="min-w-0">
+          <select id="pf-tipo" class="select w-full text-sm" onchange="_applyPurchaseFilters()">
+            <option value="">OC y OS</option>
+            <option value="compra">Solo Órdenes de Compra</option>
+            <option value="servicio">Solo Órdenes de Servicio</option>
+          </select>
+        </div>
+      </div>
+      <!-- Fila 2: Proveedor + Rango de fechas -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <!-- Proveedor -->
+        <div class="min-w-0">
+          <select id="pf-proveedor" class="select w-full text-sm" onchange="_applyPurchaseFilters()">
+            <option value="">Todos los proveedores</option>
+          </select>
+        </div>
+        <!-- Rango de fechas -->
+        <div class="flex gap-2 items-center min-w-0">
+          <div class="flex items-center gap-1 shrink-0">
+            <i data-lucide="calendar" class="w-3.5 h-3.5 text-muted-foreground"></i>
+            <span class="text-xs text-muted-foreground font-medium">Desde</span>
+          </div>
+          <input id="pf-desde" type="date" class="input flex-1 text-sm min-w-0" title="Fecha desde" onchange="_applyPurchaseFilters()">
+          <span class="text-muted-foreground text-xs font-medium shrink-0">—</span>
+          <input id="pf-hasta" type="date" class="input flex-1 text-sm min-w-0" title="Fecha hasta" onchange="_applyPurchaseFilters()">
+        </div>
+      </div>
+      <!-- Contador de resultados -->
+      <div id="pf-counter" class="mt-2.5 text-[11px] text-muted-foreground"></div>
+    </div>
+
     <div class="card">
       <div class="table-container">
         <table class="data">
           <thead>
-            <tr><th>N° OC/OS</th><th>Proveedor / Área</th><th>Fecha</th><th>Monto Total</th><th>Estado</th><th class="text-right">Acciones</th></tr>
+            <tr>
+              <th>N° OC/OS</th>
+              <th>Proveedor / Área</th>
+              <th>Fecha</th>
+              <th>Monto Total</th>
+              <th>Estado</th>
+              <th class="text-right">Acciones</th>
+            </tr>
           </thead>
           <tbody id="purchases-table-body">
             <tr><td colspan="6" class="text-center py-10 text-muted-foreground">Cargando órdenes...</td></tr>
@@ -1966,6 +2055,39 @@ window.Views.purchases = function () {
         </table>
       </div>
     </div>`;
+};
+
+window._clearPurchaseFilters = function() {
+  ['pf-texto','pf-proveedor','pf-tipo','pf-desde','pf-hasta'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  _applyPurchaseFilters();
+};
+
+// Mostrar contador de resultados actualizado
+const _origApplyFilters = window._applyPurchaseFilters;
+window._applyPurchaseFilters = function() {
+  _origApplyFilters && _origApplyFilters();
+  // Actualizar contador
+  setTimeout(() => {
+    const counter = document.getElementById('pf-counter');
+    if (!counter) return;
+    const tbody = document.getElementById('purchases-table-body');
+    const rows = tbody?.querySelectorAll('tr[id], tbody tr').length || 0;
+    const totalRows = tbody?.querySelectorAll('tr').length || 0;
+    const total = _allPurchases.length;
+    const showing = tbody?.querySelectorAll('tr').length || 0;
+    if (total > 0) {
+      const hasFilters = ['pf-texto','pf-proveedor','pf-tipo','pf-desde','pf-hasta'].some(id => {
+        const el = document.getElementById(id);
+        return el && el.value;
+      });
+      counter.textContent = hasFilters
+        ? `Mostrando ${showing} de ${total} órdenes`
+        : `${total} órdenes en total`;
+    }
+  }, 50);
 };
 
 window.Views.purchases.afterMount = loadPurchases;

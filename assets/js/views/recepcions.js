@@ -97,6 +97,10 @@ function renderRecepcionTable() {
 
     tbody.innerHTML = list.map(p => {
         const ds = _docState(p);
+        // ¿Es OC/OS en cuotas?
+        const esCuotas = parseInt(p.total_cuotas_reg) > 0;
+        const cuotasConFac = parseInt(p.cuotas_con_factura) || 0;
+        const totalCuotas = parseInt(p.total_cuotas_reg) || 0;
 
         // ── Badge de estado documental ──
         let docBadge = '';
@@ -129,6 +133,23 @@ function renderRecepcionTable() {
                 </span>`;
         }
 
+        // ── Badge de cuotas con factura ──
+        let cuotasBadge = '';
+        if (esCuotas) {
+            const allFac = cuotasConFac >= totalCuotas;
+            cuotasBadge = `
+                <div class="mt-1">
+                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                        allFac
+                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                            : 'bg-amber-50 text-amber-700 border-amber-200'
+                    }">
+                        <i data-lucide="receipt" class="w-3 h-3"></i>
+                        ${cuotasConFac}/${totalCuotas} facturas de cuota
+                    </span>
+                </div>`;
+        }
+
         // ── Botón de acción ──
         let actionBtn = '';
         if (ds === 'complete') {
@@ -152,6 +173,14 @@ function renderRecepcionTable() {
                 </button>`;
         }
 
+        // Botón extra para facturas de cuotas (si tiene cuotas registradas)
+        const cuotaBtn = esCuotas ? `
+            <button class="btn btn-outline btn-sm btn-sm-auto text-blue-600 border-blue-200 hover:bg-blue-50"
+                    onclick="gestionarFacturasCuotas(${p.id}, '${p.numero_oc}')" title="Ver y subir facturas de cuotas">
+                <i data-lucide="layers" class="w-3.5 h-3.5"></i>
+                Fact. Cuotas
+            </button>` : '';
+
         return `
         <tr class="${ds === 'complete' ? 'opacity-75' : ''}">
             <td class="font-mono text-xs font-bold text-primary">${p.numero_oc}</td>
@@ -160,12 +189,13 @@ function renderRecepcionTable() {
                 <div class="text-[10px] text-muted-foreground uppercase">${p.area_nombre || 'Sin área'}</div>
             </td>
             <td class="text-xs font-medium">${p.fecha || '—'}</td>
-            <td>${docBadge}</td>
+            <td>${docBadge}${cuotasBadge}</td>
             <td class="text-right">
-                <div class="flex justify-end items-center gap-1.5">
+                <div class="flex justify-end items-center gap-1.5 flex-wrap">
                     <button class="btn btn-ghost p-1.5" title="Ver Detalles" onclick="viewOrderDetails(${p.id})">
                         <i data-lucide="eye" class="w-4 h-4"></i>
                     </button>
+                    ${cuotaBtn}
                     ${actionBtn}
                 </div>
             </td>
@@ -174,6 +204,141 @@ function renderRecepcionTable() {
 
     lucide.createIcons();
 }
+
+// ── Gestionar facturas de cuotas ─────────────────────────────────────────────
+window.gestionarFacturasCuotas = async function(id, numero_oc) {
+    UI.loading('Cargando cuotas...');
+    let cuotas = [];
+    let moneda = 'PEN';
+    try {
+        const data = await fetch(`api/purchases.php?id=${id}`).then(r => r.json());
+        cuotas = data.purchase?.cuotas || [];
+        moneda = data.purchase?.moneda || 'PEN';
+    } catch(e) {
+        UI.stopLoading();
+        UI.toast('Error al cargar cuotas', 'error');
+        return;
+    }
+    UI.stopLoading();
+    if (cuotas.length === 0) {
+        UI.toast('Esta orden no tiene cuotas registradas', 'warning');
+        return;
+    }
+    const monSym = moneda === 'USD' ? '$' : (moneda === 'EUR' ? '€' : 'S/');
+    const cuotasHTML = cuotas.map(c => {
+        const tieneFac = !!c.comprobante_url;
+        return `
+        <div class="border border-border rounded-xl p-4 flex items-center justify-between gap-3 ${
+            tieneFac ? 'bg-emerald-50 border-emerald-200' : 'bg-white'
+        }">
+            <div class="flex items-center gap-3">
+                <div class="w-9 h-9 rounded-xl flex items-center justify-center text-sm font-black ${
+                    tieneFac ? 'bg-emerald-100 text-emerald-700' : 'bg-blue-50 text-blue-700'
+                }">${c.numero_cuota}</div>
+                <div>
+                    <div class="text-sm font-bold">${c.descripcion || `Cuota ${c.numero_cuota} de ${c.total_cuotas}`}</div>
+                    <div class="text-[10px] text-muted-foreground">Vence: ${c.fecha_vencimiento} · ${monSym} ${parseFloat(c.monto_cuota).toFixed(2)}</div>
+                    ${tieneFac ? `<a href="${c.comprobante_url}" target="_blank" class="text-[10px] text-emerald-600 font-bold hover:underline flex items-center gap-1 mt-0.5"><i data-lucide="file-text" class="w-3 h-3"></i> Ver factura subida</a>` : ''}
+                </div>
+            </div>
+            <div class="flex items-center gap-2 shrink-0">
+                ${tieneFac
+                    ? `<span class="badge badge-green text-[10px]"><i data-lucide="check" class="w-2.5 h-2.5"></i> Factura OK</span>`
+                    : `<button class="btn btn-outline btn-sm text-amber-700 border-amber-300 hover:bg-amber-50"
+                          onclick="uploadFacturaCuota(${id}, '${numero_oc}', ${c.id}, ${c.numero_cuota}, ${c.total_cuotas})">
+                           <i data-lucide="upload" class="w-3.5 h-3.5"></i> Subir Factura
+                       </button>`
+                }
+            </div>
+        </div>`;
+    }).join('');
+
+    UI.modal({
+        title: `📋 Facturas por Cuota — ${numero_oc}`,
+        body: `
+            <div class="space-y-3">
+                <div class="p-3 bg-blue-50 border border-blue-200 rounded-xl text-xs text-blue-800 flex items-start gap-2">
+                    <i data-lucide="info" class="w-4 h-4 shrink-0 mt-0.5"></i>
+                    <span>Cada cuota de esta orden requiere su propia factura del proveedor. Suba la factura correspondiente a cada cuota conforme la reciba.</span>
+                </div>
+                <div class="space-y-2">${cuotasHTML}</div>
+            </div>`,
+        confirmText: 'Cerrar',
+        onConfirm: () => { loadRecepcions(); return true; }
+    });
+    setTimeout(() => lucide.createIcons(), 80);
+};
+
+// ── Subir factura a una cuota individual ──────────────────────────────────────
+window.uploadFacturaCuota = async function(orden_id, numero_oc, cuota_id, numero_cuota, total_cuotas) {
+    UI.modal({
+        title: `📄 Factura — Cuota ${numero_cuota}/${total_cuotas} · ${numero_oc}`,
+        body: `
+            <div class="space-y-4">
+                <div class="p-3 bg-blue-50 border border-blue-200 rounded-xl flex items-start gap-3">
+                    <i data-lucide="info" class="w-5 h-5 text-blue-600 mt-0.5 shrink-0"></i>
+                    <div>
+                        <p class="text-sm font-bold text-blue-800">Factura de Cuota ${numero_cuota} de ${total_cuotas}</p>
+                        <p class="text-xs text-blue-700 mt-0.5">Suba la factura que el proveedor le entregó correspondiente a esta cuota.</p>
+                    </div>
+                </div>
+                <div>
+                    <label class="text-xs font-bold uppercase tracking-wider mb-2 block">Factura / Comprobante de la Cuota <span class="text-destructive">*</span></label>
+                    <div class="relative group">
+                        <input type="file" id="fac-cuota-archivo" class="hidden" accept="image/*,application/pdf"
+                               onchange="document.getElementById('fac-cuota-name').textContent = this.files[0]?.name || 'Seleccionar archivo...';">
+                        <label for="fac-cuota-archivo" class="flex items-center justify-between p-3 border-2 border-dashed border-blue-300 rounded-xl cursor-pointer hover:border-blue-500 hover:bg-blue-50/50 transition-all">
+                            <div class="flex items-center gap-3">
+                                <div class="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center text-blue-600">
+                                    <i data-lucide="file-text"></i>
+                                </div>
+                                <span id="fac-cuota-name" class="text-sm font-medium text-muted-foreground">Subir factura de la cuota ${numero_cuota}...</span>
+                            </div>
+                            <span class="btn btn-ghost btn-sm">Explorar</span>
+                        </label>
+                    </div>
+                    <p class="text-[10px] text-muted-foreground mt-2 italic">El archivo se subirá a Google Drive y solo se guardará el enlace.</p>
+                </div>
+            </div>`,
+        confirmText: `✓ Registrar Factura Cuota ${numero_cuota}`,
+        onConfirm: async () => {
+            const file = document.getElementById('fac-cuota-archivo').files[0];
+            if (!file) { UI.toast('Debe seleccionar la factura de la cuota', 'error'); return false; }
+
+            UI.loading(`Subiendo factura de cuota ${numero_cuota} a Google Drive...`);
+            const driveLink = await uploadReceptionFileToDrive(file, `FACTURA_CUOTA${numero_cuota}_${numero_oc}`);
+            if (!driveLink) {
+                UI.stopLoading();
+                UI.toast('No se pudo subir el archivo a Drive. Intente de nuevo.', 'error');
+                return false;
+            }
+
+            UI.loading('Registrando factura en el sistema...');
+            const res = await fetch('api/recepcions.php', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'upload_cuota_factura',
+                    purchase_id: orden_id,
+                    cuota_id: cuota_id,
+                    comprobante_url: driveLink
+                })
+            }).then(r => r.json());
+
+            UI.stopLoading();
+            if (res.ok) {
+                UI.toast(`✅ Factura de Cuota ${numero_cuota}/${total_cuotas} registrada correctamente.`, 'success');
+                // Reabrir el gestor actualizado
+                await gestionarFacturasCuotas(orden_id, numero_oc);
+                return true;
+            } else {
+                UI.toast('Error: ' + res.error, 'error');
+                return false;
+            }
+        }
+    });
+    setTimeout(() => lucide.createIcons(), 60);
+};
 
 // ── Upload solo factura (cuando conformidad ya existe) ────────────────────────
 window.uploadFactura = async function(id, numero_oc) {

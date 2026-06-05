@@ -139,6 +139,61 @@
   }
 
   window._unreadCount = 0;
+
+  // ── DashboardBus ────────────────────────────────────────────────────────────
+  // Coordina la actualización automática del dashboard tras cualquier mutación.
+  window.DashboardBus = {
+    _refreshFn: null,
+    _pollInterval: null,
+
+    // Registrar la función de refresco cuando el dashboard monta.
+    // También inicia el polling cada 60 s.
+    register(fn) {
+      this._refreshFn = fn;
+      clearInterval(this._pollInterval);
+      this._pollInterval = setInterval(() => {
+        if (Router.current === 'dashboard' && this._refreshFn) {
+          this._refreshFn(true); // true = silencioso (sin skeleton)
+        }
+      }, 60000);
+    },
+
+    // Limpiar al salir del dashboard.
+    unregister() {
+      this._refreshFn = null;
+      clearInterval(this._pollInterval);
+      this._pollInterval = null;
+    },
+
+    // Llamar tras cualquier mutación exitosa.
+    // Si el dashboard está activo, refresca inmediatamente.
+    invalidate() {
+      if (Router.current === 'dashboard' && this._refreshFn) {
+        this._refreshFn(true); // true = sin skeleton
+      }
+    }
+  };
+
+  // ── Interceptor global de fetch ──────────────────────────────────────────────
+  // Detecta POST/PATCH/PUT/DELETE exitosos a api/*.php y avisa al DashboardBus.
+  (function() {
+    const _orig = window.fetch;
+    window.fetch = async function(...args) {
+      const res = await _orig.apply(this, args);
+      try {
+        const url  = (typeof args[0] === 'string' ? args[0] : (args[0]?.url || ''));
+        const meth = (args[1]?.method || 'GET').toUpperCase();
+        const isMutation = ['POST','PUT','PATCH','DELETE'].includes(meth);
+        const isApiCall  = /api\/[\w]+\.php/.test(url);
+        if (isMutation && isApiCall && res.ok) {
+          // Pequeño delay para que la UI del módulo haya terminado de procesar
+          setTimeout(() => window.DashboardBus?.invalidate(), 400);
+        }
+      } catch(_) {}
+      return res;
+    };
+  })();
+
   async function checkNotifications() {
     const user = Auth.getUser();
     if (!user) return;
@@ -158,6 +213,12 @@
   }
 
   function renderView(user, section) {
+    // Al salir del dashboard, detener su polling
+    if (Router.current !== 'dashboard') {
+      // No hacemos nada extra — unregister se llama implícitamente al registrar la próxima vista
+    }
+    window.DashboardBus?.unregister();
+
     if (section === 'notifications') {
         window._unreadCount = 0;
         renderSidebar(user);

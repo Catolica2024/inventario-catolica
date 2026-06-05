@@ -231,11 +231,15 @@ class Mailer {
         $prefix = ($oc['tipo'] === 'servicio') ? 'OS' : 'OC';
         $items_html = "";
         foreach ($items as $it) {
+            $cat  = htmlspecialchars($it['categoria_nombre'] ?? '—');
+            $desc = htmlspecialchars($it['descripcion'] ?? '—');
+            $monSym_item = $oc['moneda'] === 'USD' ? '$' : ($oc['moneda'] === 'EUR' ? '€' : 'S/');
             $items_html .= "<tr>
-                <td style='padding:12px 8px; border-bottom:1px solid #f1f5f9; color: #334155; font-size: 12px;'>{$it['descripcion']}</td>
-                <td style='padding:12px 8px; border-bottom:1px solid #f1f5f9; text-align:center; color: #64748b; font-size: 12px;'>{$it['cantidad']}</td>
-                <td style='padding:12px 8px; border-bottom:1px solid #f1f5f9; text-align:right; color: #64748b; font-size: 12px;'>S/ " . number_format($it['precio_unitario'], 2) . "</td>
-                <td style='padding:12px 8px; border-bottom:1px solid #f1f5f9; text-align:right; font-weight:bold; color: #1e293b; font-size: 12px;'>S/ " . number_format($it['total'], 2) . "</td>
+                <td style='padding:10px 8px; border-bottom:1px solid #f1f5f9; font-size:11px; color:#64748b; font-weight:700; white-space:nowrap;'>{$cat}</td>
+                <td style='padding:10px 8px; border-bottom:1px solid #f1f5f9; color:#334155; font-size:12px;'>{$desc}</td>
+                <td style='padding:10px 8px; border-bottom:1px solid #f1f5f9; text-align:center; color:#64748b; font-size:12px; font-weight:700;'>{$it['cantidad']}</td>
+                <td style='padding:10px 8px; border-bottom:1px solid #f1f5f9; text-align:right; color:#64748b; font-size:12px;'>{$monSym_item} " . number_format($it['precio_unitario'], 2) . "</td>
+                <td style='padding:10px 8px; border-bottom:1px solid #f1f5f9; text-align:right; font-weight:800; color:#1b5cff; font-size:12px;'>{$monSym_item} " . number_format($it['total'], 2) . "</td>
             </tr>";
         }
 
@@ -243,8 +247,172 @@ class Mailer {
         $monSym = $oc['moneda'] === 'USD' ? '$' : ($oc['moneda'] === 'EUR' ? '€' : 'S/');
         $total_operacion = $oc['total'] + $oc['monto_movilidad'];
 
+        // ── BLOQUE DETALLADO DE CONDICIÓN DE PAGO ─────────────────────────────
+        $pdo = db();
+        $condicion_pago = $oc['condicion_pago'];
+        $condicion_detalle = $oc['condicion_detalle'] ?? '';
+        $payment_detail_html = '';
+
+        if ($condicion_pago === 'Credito' && stripos($condicion_detalle, 'cuotas') !== false) {
+            // ── CASO: Pago en Cuotas ──────────────────────────────────────────
+            $cuotas_stmt = $pdo->prepare("SELECT * FROM ordenes_cuotas WHERE orden_id = ? ORDER BY numero_cuota");
+            $cuotas_stmt->execute([$oc['id']]);
+            $cuotas = $cuotas_stmt->fetchAll();
+
+            $total_cuotas  = count($cuotas);
+            $monto_cuota   = $total_cuotas > 0 ? floatval($cuotas[0]['monto_cuota']) : 0;
+
+            // Tabla de cuotas
+            $cuotas_rows = '';
+            foreach ($cuotas as $c) {
+                $cuotas_rows .= "
+                <tr>
+                    <td style='padding:8px 12px; border-bottom:1px solid #f1f5f9; text-align:center; font-size:12px; font-weight:700; color:#1b5cff;'>
+                        Cuota {$c['numero_cuota']}/{$c['total_cuotas']}
+                    </td>
+                    <td style='padding:8px 12px; border-bottom:1px solid #f1f5f9; font-size:12px; color:#334155;'>
+                        " . ($c['descripcion'] ?: "Cuota {$c['numero_cuota']} de {$c['total_cuotas']}") . "
+                    </td>
+                    <td style='padding:8px 12px; border-bottom:1px solid #f1f5f9; text-align:center; font-size:12px; color:#64748b;'>
+                        " . date('d/m/Y', strtotime($c['fecha_vencimiento'])) . "
+                    </td>
+                    <td style='padding:8px 12px; border-bottom:1px solid #f1f5f9; text-align:right; font-size:13px; font-weight:800; color:#1e293b;'>
+                        {$monSym} " . number_format($c['monto_cuota'], 2) . "
+                    </td>
+                </tr>";
+            }
+
+            $payment_detail_html = "
+            <div style='background: linear-gradient(135deg,#eff6ff,#dbeafe); padding:24px; border-radius:16px; border:2px solid #bfdbfe; margin-bottom:28px;'>
+                <div style='display:flex; align-items:center; gap:10px; margin-bottom:16px;'>
+                    <div style='background:#1b5cff; width:36px; height:36px; border-radius:10px; display:flex; align-items:center; justify-content:center; flex-shrink:0;'>
+                        <span style='color:#fff; font-size:18px;'>💳</span>
+                    </div>
+                    <div>
+                        <div style='font-size:11px; font-weight:700; color:#1d4ed8; text-transform:uppercase; letter-spacing:0.05em;'>Condición de Pago</div>
+                        <div style='font-size:16px; font-weight:800; color:#1e3a8a;'>Crédito en {$total_cuotas} Cuotas Iguales</div>
+                    </div>
+                </div>
+                <div style='display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; margin-bottom:16px;'>
+                    <div style='background:#fff; border-radius:10px; padding:12px; text-align:center; border:1px solid #bfdbfe;'>
+                        <div style='font-size:10px; font-weight:700; color:#64748b; text-transform:uppercase; margin-bottom:4px;'>N° de Cuotas</div>
+                        <div style='font-size:22px; font-weight:900; color:#1b5cff;'>{$total_cuotas}</div>
+                    </div>
+                    <div style='background:#fff; border-radius:10px; padding:12px; text-align:center; border:1px solid #bfdbfe;'>
+                        <div style='font-size:10px; font-weight:700; color:#64748b; text-transform:uppercase; margin-bottom:4px;'>Valor por Cuota</div>
+                        <div style='font-size:18px; font-weight:900; color:#1e293b;'>{$monSym} " . number_format($monto_cuota, 2) . "</div>
+                    </div>
+                    <div style='background:#fff; border-radius:10px; padding:12px; text-align:center; border:1px solid #bfdbfe;'>
+                        <div style='font-size:10px; font-weight:700; color:#64748b; text-transform:uppercase; margin-bottom:4px;'>Total Operación</div>
+                        <div style='font-size:18px; font-weight:900; color:#1e293b;'>{$monSym} " . number_format($total_operacion, 2) . "</div>
+                    </div>
+                </div>
+                <div style='background:#fff; border-radius:10px; overflow:hidden; border:1px solid #bfdbfe;'>
+                    <div style='background:#1b5cff; padding:8px 12px;'>
+                        <span style='color:#fff; font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:0.08em;'>📅 Calendario de Vencimientos</span>
+                    </div>
+                    <table style='width:100%; border-collapse:collapse;'>
+                        <thead>
+                            <tr style='background:#f8fafc;'>
+                                <th style='padding:8px 12px; text-align:center; font-size:10px; color:#64748b; font-weight:700;'>Cuota</th>
+                                <th style='padding:8px 12px; text-align:left; font-size:10px; color:#64748b; font-weight:700;'>Descripción</th>
+                                <th style='padding:8px 12px; text-align:center; font-size:10px; color:#64748b; font-weight:700;'>Vencimiento</th>
+                                <th style='padding:8px 12px; text-align:right; font-size:10px; color:#64748b; font-weight:700;'>Monto</th>
+                            </tr>
+                        </thead>
+                        <tbody>{$cuotas_rows}</tbody>
+                    </table>
+                </div>
+            </div>";
+
+        } elseif ($condicion_pago === 'Adelanto + Saldo') {
+            // ── CASO: Adelanto + Saldo ─────────────────────────────────────────
+            $adelanto_porc  = floatval($oc['adelanto_porcentaje'] ?? 0);
+            $adelanto_monto = floatval($oc['adelanto_monto'] ?? ($total_operacion * $adelanto_porc / 100));
+            $saldo_monto    = floatval($oc['saldo_monto'] ?? ($total_operacion - $adelanto_monto));
+
+            $payment_detail_html = "
+            <div style='background: linear-gradient(135deg,#fdf4ff,#f3e8ff); padding:24px; border-radius:16px; border:2px solid #e9d5ff; margin-bottom:28px;'>
+                <div style='display:flex; align-items:center; gap:10px; margin-bottom:16px;'>
+                    <div style='background:#9333ea; width:36px; height:36px; border-radius:10px; display:flex; align-items:center; justify-content:center; flex-shrink:0;'>
+                        <span style='color:#fff; font-size:18px;'>💼</span>
+                    </div>
+                    <div>
+                        <div style='font-size:11px; font-weight:700; color:#7e22ce; text-transform:uppercase; letter-spacing:0.05em;'>Condición de Pago</div>
+                        <div style='font-size:16px; font-weight:800; color:#581c87;'>Adelanto + Saldo</div>
+                    </div>
+                </div>
+                <div style='display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px;'>
+                    <div style='background:#fff; border-radius:10px; padding:14px; text-align:center; border:1px solid #e9d5ff;'>
+                        <div style='font-size:10px; font-weight:700; color:#64748b; text-transform:uppercase; margin-bottom:4px;'>Adelanto</div>
+                        <div style='font-size:14px; font-weight:900; color:#7e22ce;'>" . number_format($adelanto_porc, 0) . "%</div>
+                        <div style='font-size:16px; font-weight:800; color:#1e293b; margin-top:4px;'>{$monSym} " . number_format($adelanto_monto, 2) . "</div>
+                        <div style='font-size:10px; color:#9333ea; font-weight:600; margin-top:4px;'>Pago inicial</div>
+                    </div>
+                    <div style='background:#fff; border-radius:10px; padding:14px; text-align:center; border:1px solid #e9d5ff;'>
+                        <div style='font-size:10px; font-weight:700; color:#64748b; text-transform:uppercase; margin-bottom:4px;'>Saldo Final</div>
+                        <div style='font-size:14px; font-weight:900; color:#7e22ce;'>" . number_format(100 - $adelanto_porc, 0) . "%</div>
+                        <div style='font-size:16px; font-weight:800; color:#1e293b; margin-top:4px;'>{$monSym} " . number_format($saldo_monto, 2) . "</div>
+                        <div style='font-size:10px; color:#9333ea; font-weight:600; margin-top:4px;'>Al entregar</div>
+                    </div>
+                    <div style='background:linear-gradient(135deg,#9333ea,#7c3aed); border-radius:10px; padding:14px; text-align:center;'>
+                        <div style='font-size:10px; font-weight:700; color:rgba(255,255,255,0.8); text-transform:uppercase; margin-bottom:4px;'>Total Operación</div>
+                        <div style='font-size:18px; font-weight:900; color:#fff; margin-top:4px;'>{$monSym} " . number_format($total_operacion, 2) . "</div>
+                    </div>
+                </div>
+            </div>";
+
+        } elseif ($condicion_pago === 'Alquiler') {
+            // ── CASO: Alquiler mensual ─────────────────────────────────────────
+            $cuotas_stmt = $pdo->prepare("SELECT COUNT(*) as total, monto_cuota, MIN(fecha_vencimiento) as proxima FROM ordenes_cuotas WHERE orden_id = ?");
+            $cuotas_stmt->execute([$oc['id']]);
+            $alq = $cuotas_stmt->fetch();
+            $total_meses = intval($alq['total']);
+            $monto_mes   = floatval($alq['monto_cuota']);
+
+            $payment_detail_html = "
+            <div style='background: linear-gradient(135deg,#f0fdf4,#dcfce7); padding:20px; border-radius:14px; border:2px solid #bbf7d0; margin-bottom:28px;'>
+                <div style='font-size:11px; font-weight:700; color:#15803d; text-transform:uppercase; margin-bottom:8px;'>🏢 Condición de Pago: Alquiler Mensual</div>
+                <div style='display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px;'>
+                    <div style='background:#fff; border-radius:8px; padding:12px; text-align:center; border:1px solid #bbf7d0;'>
+                        <div style='font-size:10px; color:#64748b; font-weight:700; margin-bottom:4px;'>MESES CONTRATADOS</div>
+                        <div style='font-size:20px; font-weight:900; color:#15803d;'>{$total_meses}</div>
+                    </div>
+                    <div style='background:#fff; border-radius:8px; padding:12px; text-align:center; border:1px solid #bbf7d0;'>
+                        <div style='font-size:10px; color:#64748b; font-weight:700; margin-bottom:4px;'>CUOTA MENSUAL</div>
+                        <div style='font-size:16px; font-weight:900; color:#1e293b;'>{$monSym} " . number_format($monto_mes, 2) . "</div>
+                    </div>
+                    <div style='background:linear-gradient(135deg,#16a34a,#15803d); border-radius:8px; padding:12px; text-align:center;'>
+                        <div style='font-size:10px; color:rgba(255,255,255,0.8); font-weight:700; margin-bottom:4px;'>TOTAL OPERACIÓN</div>
+                        <div style='font-size:16px; font-weight:900; color:#fff;'>{$monSym} " . number_format($total_operacion, 2) . "</div>
+                    </div>
+                </div>
+            </div>";
+
+        } else {
+            // ── CASO: Contado / Transferencia / Crédito por días ──────────────
+            $det_text = '';
+            if ($condicion_pago === 'Credito' && $condicion_detalle) {
+                $det_text = "<br><span style='font-size:12px; color:#92400e;'>Plazo: <strong>{$condicion_detalle}</strong>";
+                if ($oc['fecha_vencimiento']) {
+                    $det_text .= " · Vence: <strong>" . date('d/m/Y', strtotime($oc['fecha_vencimiento'])) . "</strong>";
+                }
+                $det_text .= "</span>";
+            }
+            $payment_detail_html = "
+            <div style='background:#fefce8; padding:16px; border-radius:12px; border:1px solid #fde68a; margin-bottom:28px; display:flex; align-items:center; gap:14px;'>
+                <div style='font-size:28px;'>💵</div>
+                <div>
+                    <div style='font-size:11px; font-weight:700; color:#92400e; text-transform:uppercase;'>Condición de Pago</div>
+                    <div style='font-size:16px; font-weight:800; color:#78350f;'>{$condicion_pago}{$det_text}</div>
+                    <div style='font-size:13px; color:#1e293b; font-weight:700; margin-top:6px;'>Total: {$monSym} " . number_format($total_operacion, 2) . "</div>
+                </div>
+            </div>";
+        }
+        // ── FIN BLOQUE CONDICIÓN DE PAGO ──────────────────────────────────────
+
         return "
-        <div style='font-family: -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif; color: #1e293b; max-width: 600px; margin: auto; border: 1px solid #e2e8f0; border-radius: 16px; overflow: hidden; background-color: #ffffff; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);'>
+        <div style='font-family: -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif; color: #1e293b; max-width: 620px; margin: auto; border: 1px solid #e2e8f0; border-radius: 16px; overflow: hidden; background-color: #ffffff; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);'>
             <!-- Header -->
             <div style='background: linear-gradient(135deg, #1b5cff 0%, #3b82f6 100%); padding: 24px; text-align: center; color: white;'>
                 <h1 style='margin:0; font-size: 20px; font-weight: 800; letter-spacing: -0.025em;'>CATÓLICA SCHOOL</h1>
@@ -258,7 +426,7 @@ class Mailer {
                 </p>
 
                 <!-- GRAND TOTAL HERO CARD -->
-                <div style='background: #1e293b; background: linear-gradient(135deg, #1e293b 0%, #334155 100%); padding: 32px 24px; border-radius: 16px; margin-bottom: 32px; text-align: center; color: white; box-shadow: 0 10px 15px -3px rgba(30, 41, 59, 0.2);'>
+                <div style='background: linear-gradient(135deg, #1e293b 0%, #334155 100%); padding: 32px 24px; border-radius: 16px; margin-bottom: 32px; text-align: center; color: white; box-shadow: 0 10px 15px -3px rgba(30, 41, 59, 0.2);'>
                     <p style='margin: 0; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.15em; color: #94a3b8;'>Monto Total a Autorizar</p>
                     <h2 style='margin: 8px 0; font-size: 44px; font-weight: 900; letter-spacing: -0.05em; color: #ffffff;'>{$monSym} " . number_format($total_operacion, 2) . "</h2>
                     " . ($oc['monto_movilidad'] > 0 ? "
@@ -271,13 +439,17 @@ class Mailer {
                     </div>
                     ") . "
                 </div>
-                
+
                 <!-- Main Data Card -->
                 <div style='background: #f8fafc; padding: 20px; border-radius: 12px; border: 1px solid #f1f5f9; margin-bottom: 24px;'>
                     <table style='width: 100%; border-collapse: collapse;'>
                         <tr>
                             <td style='padding: 6px 0; font-size: 11px; color: #64748b; font-weight: 700; text-transform: uppercase;'>Documento</td>
                             <td style='padding: 6px 0; font-size: 13px; font-weight: 800; text-align: right; color: #1b5cff; font-family: monospace;'>{$oc['numero_oc']}</td>
+                        </tr>
+                        <tr>
+                            <td style='padding: 6px 0; font-size: 11px; color: #64748b; font-weight: 700; text-transform: uppercase;'>Tipo</td>
+                            <td style='padding: 6px 0; font-size: 13px; font-weight: 700; text-align: right; color: #1e293b;'>{$tipo_label}</td>
                         </tr>
                         <tr>
                             <td style='padding: 6px 0; font-size: 11px; color: #64748b; font-weight: 700; text-transform: uppercase;'>Proveedor</td>
@@ -288,10 +460,6 @@ class Mailer {
                             <td style='padding: 6px 0; font-size: 13px; font-weight: 700; text-align: right; color: #1e293b;'>{$oc['area_nombre']}</td>
                         </tr>
                         <tr>
-                            <td style='padding: 6px 0; font-size: 11px; color: #64748b; font-weight: 700; text-transform: uppercase;'>Pago</td>
-                            <td style='padding: 6px 0; font-size: 13px; font-weight: 700; text-align: right; color: #1e293b;'>{$oc['condicion_pago']}" . ($oc['condicion_detalle'] ? " ({$oc['condicion_detalle']})" : "") . "</td>
-                        </tr>
-                        <tr>
                             <td style='padding: 6px 0; font-size: 11px; color: #64748b; font-weight: 700; text-transform: uppercase;'>Presupuesto</td>
                             <td style='padding: 6px 0; font-size: 13px; font-weight: 800; text-align: right; color: " . ($oc['dentro_presupuesto'] == 1 ? '#10b981' : '#ef4444') . ";'>
                                 " . ($oc['dentro_presupuesto'] == 1 ? '✅ DENTRO DE PRESUPUESTO' : '⚠️ FUERA DE PRESUPUESTO') . "
@@ -299,6 +467,9 @@ class Mailer {
                         </tr>
                     </table>
                 </div>
+
+                <!-- BLOQUE DETALLADO DE CONDICIÓN DE PAGO -->
+                {$payment_detail_html}
 
                 <!-- Observations Block -->
                 " . (!empty($oc['observaciones']) ? "
@@ -314,14 +485,29 @@ class Mailer {
                         <table style='width: 100%; border-collapse: collapse; font-size: 12px;'>
                             <thead>
                                 <tr style='background: #f8fafc;'>
-                                    <th style='padding:12px 8px; text-align:left; color: #64748b; font-size: 10px; font-weight: 700;'>Descripción</th>
-                                    <th style='padding:12px 8px; text-align:center; color: #64748b; font-size: 10px; font-weight: 700;'>Cant.</th>
-                                    <th style='padding:12px 8px; text-align:right; color: #64748b; font-size: 10px; font-weight: 700;'>P.U.</th>
-                                    <th style='padding:12px 8px; text-align:right; color: #64748b; font-size: 10px; font-weight: 700;'>Total</th>
+                                    <th style='padding:10px 8px; text-align:left; color:#64748b; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.05em;'>Categoría</th>
+                                    <th style='padding:10px 8px; text-align:left; color:#64748b; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.05em;'>Descripción</th>
+                                    <th style='padding:10px 8px; text-align:center; color:#64748b; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.05em;'>Cant.</th>
+                                    <th style='padding:10px 8px; text-align:right; color:#64748b; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.05em;'>P.U.</th>
+                                    <th style='padding:10px 8px; text-align:right; color:#64748b; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.05em;'>Total</th>
                                 </tr>
                             </thead>
                             <tbody>{$items_html}</tbody>
                         </table>
+                    </div>
+                    <!-- Subtotales -->
+                    <div style='display:flex; justify-content:flex-end; margin-top:12px;'>
+                        <div style='background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:12px 18px; min-width:220px;'>
+                            <div style='display:flex; justify-content:space-between; font-size:11px; color:#64748b; margin-bottom:4px;'>
+                                <span>Subtotal:</span><span style='font-weight:600;'>{$monSym} " . number_format($oc['subtotal'], 2) . "</span>
+                            </div>
+                            <div style='display:flex; justify-content:space-between; font-size:11px; color:#64748b; margin-bottom:8px;'>
+                                <span>IGV ({$oc['igv_porcentaje']}%):</span><span style='font-weight:600;'>{$monSym} " . number_format($oc['igv'], 2) . "</span>
+                            </div>
+                            <div style='display:flex; justify-content:space-between; font-size:14px; font-weight:800; color:#1b5cff; border-top:2px solid #e2e8f0; padding-top:8px;'>
+                                <span>TOTAL:</span><span>{$monSym} " . number_format($oc['total'], 2) . "</span>
+                            </div>
+                        </div>
                     </div>
                 </div>
 

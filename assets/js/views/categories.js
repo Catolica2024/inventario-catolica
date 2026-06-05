@@ -116,8 +116,7 @@ window.Views['categories-inv'] = function() {
           <input
             id="cat-search"
             type="text"
-            class="input w-full"
-            style="padding-left: 2.5rem;"
+            class="input w-full pl-9"
             placeholder="Buscar por nombre, prefijo o tipo..."
             oninput="filterCategories()"
           >

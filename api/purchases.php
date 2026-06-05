@@ -63,6 +63,7 @@ try {
                 SELECT oc.*, p.razon_social as proveedor_nombre, a.nombre as area_nombre,
                        (SELECT COUNT(*) FROM ordenes_cuotas WHERE orden_id = oc.id) as total_cuotas_reg,
                        (SELECT COUNT(*) FROM ordenes_cuotas WHERE orden_id = oc.id AND pagado = 1) as cuotas_pagadas,
+                       (SELECT COUNT(*) FROM ordenes_cuotas WHERE orden_id = oc.id AND comprobante_url IS NOT NULL AND comprobante_url != '') as cuotas_con_factura,
                        (SELECT pagado FROM ordenes_movilidad WHERE orden_id = oc.id LIMIT 1) as mobility_pagado,
                        (SELECT voucher_url FROM ordenes_movilidad WHERE orden_id = oc.id LIMIT 1) as mobility_voucher,
                        (SELECT p2.razon_social FROM ordenes_movilidad m2 JOIN proveedores p2 ON m2.proveedor_id = p2.id WHERE m2.orden_id = oc.id LIMIT 1) as mobility_proveedor_nombre
@@ -300,7 +301,7 @@ try {
             // Generar tokens de aprobación remota (se guarda el email destinatario para tracking)
             $token_gerente  = bin2hex(random_bytes(32));
             $token_finanzas = bin2hex(random_bytes(32));
-            $exp = date('Y-m-d H:i:s', strtotime('+96 hours')); // 4 días para aprobar/rechazar
+            $exp = date('Y-m-d H:i:s', strtotime('+168 hours')); // 7 días para aprobar/rechazar
 
             $email_gerente  = Mailer::getEmail('gerente');
             $email_finanzas = Mailer::getEmail('finanzas');

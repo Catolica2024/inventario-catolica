@@ -2,7 +2,14 @@ window.Views = window.Views || {};
 window.Views.dashboard = function(user) {
   return `
     ${UI.pageHeader(`Bienvenido de nuevo, ${user.name.split(' ')[0]} 👋`, 'Resumen estratégico del inventario institucional', `
-        <button class="btn btn-outline shadow-sm btn-sm-auto" onclick="App.renderView(Auth.getUser(), 'dashboard')"><i data-lucide="refresh-cw" class="w-4 h-4 mr-2"></i>Actualizar</button>
+        <div class="flex items-center gap-3">
+            <!-- Indicador de refresco automático -->
+            <div id="db-refresh-indicator" class="opacity-0 transition-opacity duration-300 flex items-center gap-1.5 text-[10px] font-bold text-primary">
+                <span class="w-2 h-2 rounded-full bg-primary animate-pulse"></span>
+                Actualizando...
+            </div>
+            <button class="btn btn-outline shadow-sm btn-sm-auto" onclick="App.renderView(Auth.getUser(), 'dashboard')"><i data-lucide="refresh-cw" class="w-4 h-4 mr-2"></i>Actualizar</button>
+        </div>
     `)}
     <div id="dashboard-content" class="space-y-8">
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -18,20 +25,33 @@ window.Views.dashboard = function(user) {
     </div>`;
 };
 
-window.Views.dashboard.afterMount = async function(user) {
-  const container = document.getElementById('dashboard-content');
+// Función central de carga: puede llamarse en montaje inicial o en refrescos silenciosos.
+// silent=true → no muestra skeleton, solo actualiza los valores ya renderizados.
+async function _loadDashboardContent(user, container, silent = false) {
   try {
+    // Indicador sutil de refresco (solo en modo silencioso)
+    if (silent) {
+      const ind = document.getElementById('db-refresh-indicator');
+      if (ind) { ind.classList.remove('opacity-0'); ind.classList.add('opacity-100'); }
+    }
+
     const resp = await fetch('api/dashboard.php');
     const data = await resp.json();
 
+    const fmtPEN = (v) => 'S/ ' + parseFloat(v).toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const fmtUSD = (v) => '$ ' + parseFloat(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+    const pm = data.pagos?.por_moneda || { PEN: {pagado:0,pendiente:0}, USD: {pagado:0,pendiente:0} };
+
     const kpis = [
-      { label:'Activos Registrados', value: data.kpis.activos, icon:'boxes', tint:'bg-blue-500', text:'text-blue-600', desc: 'Equipos operativos' },
-      { label:'Alertas de Stock',   value: data.kpis.stock_bajo, icon:'alert-circle', tint:'bg-amber-500', text:'text-amber-600', desc: 'Items bajo el mínimo' },
-      { label:'En Mantenimiento',  value: data.kpis.mantenimientos, icon:'wrench', tint:'bg-cyan-500', text:'text-cyan-600', desc: 'Revisiones programadas' },
-      { label:'Compras del Mes',    value: data.kpis.compras, icon:'shopping-cart', tint:'bg-emerald-500', text:'text-emerald-600', desc: 'Órdenes procesadas' },
+      { label:'Activos Registrados',  value: data.kpis.activos,        icon:'boxes',        tint:'bg-blue-500',    text:'text-blue-600',    desc: 'Equipos operativos' },
+      { label:'Alertas de Stock',     value: data.kpis.stock_bajo,      icon:'alert-circle', tint:'bg-amber-500',   text:'text-amber-600',   desc: 'Items bajo el mínimo' },
+      { label:'En Mantenimiento',     value: data.kpis.mantenimientos,  icon:'wrench',       tint:'bg-cyan-500',    text:'text-cyan-600',    desc: 'Revisiones programadas' },
+      { label:'Compras del Mes',      value: data.kpis.compras,         icon:'shopping-cart', tint:'bg-emerald-500', text:'text-emerald-600', desc: 'Órdenes procesadas' },
     ];
 
     container.innerHTML = `
+      <!-- KPIs operativos -->
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
         ${kpis.map(k => `
           <div class="card p-6 flex flex-col justify-between hover:shadow-2xl hover:shadow-slate-200 transition-all cursor-default group overflow-hidden relative border-primary/5">
@@ -51,6 +71,80 @@ window.Views.dashboard.afterMount = async function(user) {
                 <i data-lucide="${k.icon}" class="w-24 h-24"></i>
             </div>
           </div>`).join('')}
+      </div>
+
+      <!-- Panel de pagos por moneda -->
+      <div class="card p-6 border-primary/5 shadow-xl shadow-slate-200/50">
+        <div class="flex items-center gap-2 mb-5">
+          <div class="w-8 h-8 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600">
+            <i data-lucide="banknote" class="w-4 h-4"></i>
+          </div>
+          <div>
+            <h3 class="text-sm font-black uppercase tracking-[0.15em] text-slate-800">Estado de Pagos por Moneda</h3>
+            <p class="text-[10px] text-muted-foreground mt-0.5">Órdenes aprobadas, recibidas y completadas</p>
+          </div>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+
+          <!-- ── SOLES (PEN) ── -->
+          <div class="rounded-2xl border border-emerald-100 bg-gradient-to-br from-emerald-50 to-white p-5 space-y-4">
+            <div class="flex items-center gap-2">
+              <span class="text-xs font-black bg-emerald-100 text-emerald-700 px-2.5 py-1 rounded-full tracking-wider">S/ SOLES (PEN)</span>
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+              <div class="bg-white border border-emerald-100 rounded-xl p-4 shadow-sm">
+                <div class="flex items-center gap-2 mb-2">
+                  <div class="w-7 h-7 rounded-lg bg-emerald-100 flex items-center justify-center">
+                    <i data-lucide="circle-check-big" class="w-3.5 h-3.5 text-emerald-600"></i>
+                  </div>
+                  <span class="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Pagado</span>
+                </div>
+                <div class="text-xl font-black text-emerald-700">${fmtPEN(pm.PEN?.pagado ?? 0)}</div>
+                <div class="text-[9px] text-muted-foreground mt-0.5 font-semibold">Pagos completados</div>
+              </div>
+              <div class="bg-white border border-orange-100 rounded-xl p-4 shadow-sm">
+                <div class="flex items-center gap-2 mb-2">
+                  <div class="w-7 h-7 rounded-lg bg-orange-100 flex items-center justify-center">
+                    <i data-lucide="clock" class="w-3.5 h-3.5 text-orange-500"></i>
+                  </div>
+                  <span class="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Pendiente</span>
+                </div>
+                <div class="text-xl font-black text-orange-600">${fmtPEN(pm.PEN?.pendiente ?? 0)}</div>
+                <div class="text-[9px] text-muted-foreground mt-0.5 font-semibold">Aprobado, sin pagar</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ── DÓLARES (USD) ── -->
+          <div class="rounded-2xl border border-blue-100 bg-gradient-to-br from-blue-50 to-white p-5 space-y-4">
+            <div class="flex items-center gap-2">
+              <span class="text-xs font-black bg-blue-100 text-blue-700 px-2.5 py-1 rounded-full tracking-wider">$ DÓLARES (USD)</span>
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+              <div class="bg-white border border-emerald-100 rounded-xl p-4 shadow-sm">
+                <div class="flex items-center gap-2 mb-2">
+                  <div class="w-7 h-7 rounded-lg bg-emerald-100 flex items-center justify-center">
+                    <i data-lucide="circle-check-big" class="w-3.5 h-3.5 text-emerald-600"></i>
+                  </div>
+                  <span class="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Pagado</span>
+                </div>
+                <div class="text-xl font-black text-emerald-700">${fmtUSD(pm.USD?.pagado ?? 0)}</div>
+                <div class="text-[9px] text-muted-foreground mt-0.5 font-semibold">Pagos completados</div>
+              </div>
+              <div class="bg-white border border-orange-100 rounded-xl p-4 shadow-sm">
+                <div class="flex items-center gap-2 mb-2">
+                  <div class="w-7 h-7 rounded-lg bg-orange-100 flex items-center justify-center">
+                    <i data-lucide="clock" class="w-3.5 h-3.5 text-orange-500"></i>
+                  </div>
+                  <span class="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Pendiente</span>
+                </div>
+                <div class="text-xl font-black text-orange-600">${fmtUSD(pm.USD?.pendiente ?? 0)}</div>
+                <div class="text-[9px] text-muted-foreground mt-0.5 font-semibold">Aprobado, sin pagar</div>
+              </div>
+            </div>
+          </div>
+
+        </div>
       </div>
 
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -249,8 +343,34 @@ window.Views.dashboard.afterMount = async function(user) {
         </div>
     `).join('');
 
+
   } catch (err) {
     console.error('Error loading dashboard:', err);
-    container.innerHTML = `<div class="card p-20 text-center text-destructive font-black uppercase tracking-widest text-xs border-dashed">Sincronización de datos fallida.</div>`;
+    if (!silent) {
+      container.innerHTML = `<div class="card p-20 text-center text-destructive font-black uppercase tracking-widest text-xs border-dashed">Sincronización de datos fallida.</div>`;
+    }
+  } finally {
+    // Ocultar indicador de refresco
+    const ind = document.getElementById('db-refresh-indicator');
+    if (ind) { ind.classList.remove('opacity-100'); ind.classList.add('opacity-0'); }
   }
+}
+
+// afterMount: monta el dashboard y lo registra en DashboardBus
+window.Views.dashboard.afterMount = async function(user) {
+  const container = document.getElementById('dashboard-content');
+
+  // Función de refresco: primera llamada muestra skeleton, las siguientes son silenciosas
+  let _firstLoad = true;
+  const refresh = async (silent = false) => {
+    // Si es el primer load, renderó el skeleton la vista estática ya
+    await _loadDashboardContent(user, container, _firstLoad ? false : silent);
+    _firstLoad = false;
+  };
+
+  // Registrar con DashboardBus (habilita polling + actualización por mutaciones)
+  if (window.DashboardBus) DashboardBus.register(refresh);
+
+  // Carga inicial
+  await refresh(false);
 };

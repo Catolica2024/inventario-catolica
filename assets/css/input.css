@@ -101,9 +101,15 @@ body { min-height: 100%; overflow-x: hidden; background: var(--background); colo
 textarea.input {
   height: auto;
 }
-/* Forzar espacio para iconos si se usan clases de utilidad */
+/* Forzar espacio para iconos si se usan clases de utilidad.
+   Deben llevar !important para sobreescribir el padding-left base de .input */
+.pl-8  { padding-left: 2rem !important; }
+.pl-9  { padding-left: 2.25rem !important; }
 .pl-10 { padding-left: 2.5rem !important; }
+.pl-12 { padding-left: 3rem !important; }
+.pr-9  { padding-right: 2.25rem !important; }
 .pr-10 { padding-right: 2.5rem !important; }
+.pr-12 { padding-right: 3rem !important; }
 .input:focus, .select:focus, .textarea:focus { 
   border-color: var(--primary); 
   box-shadow: 0 0 0 4px var(--ring);

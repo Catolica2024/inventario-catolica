@@ -72,20 +72,50 @@ try {
     $gasto_dentro = $gasto_presupuesto['dentro'] ?: 0;
     $gasto_fuera = $gasto_presupuesto['fuera'] ?: 0;
 
+    // 9. Montos pagados y pendientes desglosados por moneda
+    $pagos_por_moneda = $pdo->query("
+        SELECT
+            moneda,
+            COALESCE(SUM(CASE WHEN pagado = 1 THEN total ELSE 0 END), 0)                                      AS pagado,
+            COALESCE(SUM(CASE WHEN estado = 'Aprobada' AND pagado = 0 AND adelanto_pagado = 0 THEN total ELSE 0 END), 0) AS pendiente
+        FROM ordenes_compra
+        WHERE estado IN ('Aprobada', 'Recibida', 'Completada')
+        GROUP BY moneda
+    ")->fetchAll(PDO::FETCH_ASSOC);
+
+    // Indexar por moneda para fácil acceso en JS
+    $pagos = ['PEN' => ['pagado' => 0, 'pendiente' => 0], 'USD' => ['pagado' => 0, 'pendiente' => 0]];
+    foreach ($pagos_por_moneda as $row) {
+        $m = $row['moneda'];
+        if (isset($pagos[$m])) {
+            $pagos[$m]['pagado']    = (float)$row['pagado'];
+            $pagos[$m]['pendiente'] = (float)$row['pendiente'];
+        }
+    }
+
+    // Totales globales (sumados, para compatibilidad)
+    $monto_pagado             = $pagos['PEN']['pagado']    + $pagos['USD']['pagado'];
+    $monto_pendiente_aprobado = $pagos['PEN']['pendiente'] + $pagos['USD']['pendiente'];
+
     json_response([
         'kpis' => [
-            'activos' => number_format($activos_totales),
+            'activos'        => number_format($activos_totales),
             'mantenimientos' => $mantenimientos_pendientes,
-            'compras' => 'S/ ' . number_format($compras_mes, 2),
-            'stock_bajo' => $stock_bajo
+            'compras'        => 'S/ ' . number_format($compras_mes, 2),
+            'stock_bajo'     => $stock_bajo
         ],
-        'distribucion' => $distribucion,
-        'estados_activos' => $estados_activos,
-        'recientes' => $recientes,
+        'distribucion'      => $distribucion,
+        'estados_activos'   => $estados_activos,
+        'recientes'         => $recientes,
         'gasto_presupuesto' => [
             'dentro' => (float)$gasto_dentro,
-            'fuera' => (float)$gasto_fuera,
-            'total' => (float)($gasto_dentro + $gasto_fuera)
+            'fuera'  => (float)$gasto_fuera,
+            'total'  => (float)($gasto_dentro + $gasto_fuera)
+        ],
+        'pagos' => [
+            'monto_pagado'             => $monto_pagado,
+            'monto_pendiente_aprobado' => $monto_pendiente_aprobado,
+            'por_moneda'               => $pagos
         ]
     ]);
 

@@ -12,7 +12,33 @@ if ($method === 'PATCH') {
         $b = get_body();
         $purchase_id     = $b['purchase_id']     ?? null;
         $comprobante_url = $b['comprobante_url']  ?? null;
+        $action          = $b['action']           ?? 'upload_factura';
 
+        // ── SUB-ACCIÓN: subir factura para una cuota específica ───────────────
+        if ($action === 'upload_cuota_factura') {
+            $cuota_id = $b['cuota_id'] ?? null;
+            if (!$purchase_id || !$cuota_id || !$comprobante_url) {
+                json_response(['error' => 'purchase_id, cuota_id y comprobante_url son requeridos'], 400);
+            }
+            // Verificar que la cuota pertenece a esta orden
+            $stmt = $pdo->prepare("SELECT id, numero_cuota, total_cuotas FROM ordenes_cuotas WHERE id = ? AND orden_id = ?");
+            $stmt->execute([$cuota_id, $purchase_id]);
+            $cuota = $stmt->fetch();
+            if (!$cuota) json_response(['error' => 'Cuota no encontrada o no pertenece a esta orden'], 404);
+
+            // Guardar la URL del comprobante en la cuota
+            $pdo->prepare("UPDATE ordenes_cuotas SET comprobante_url = ? WHERE id = ? AND orden_id = ?")
+                ->execute([$comprobante_url, $cuota_id, $purchase_id]);
+
+            ob_clean();
+            json_response([
+                'ok' => true,
+                'mensaje' => "Factura de Cuota {$cuota['numero_cuota']}/{$cuota['total_cuotas']} registrada correctamente."
+            ]);
+            exit;
+        }
+
+        // ── SUB-ACCIÓN DEFAULT: subir factura general a orden ya recibida ─────
         if (!$purchase_id || !$comprobante_url) {
             json_response(['error' => 'purchase_id y comprobante_url son requeridos'], 400);
         }
