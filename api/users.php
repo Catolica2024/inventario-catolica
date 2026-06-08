@@ -7,19 +7,36 @@ try {
     $pdo = db();
     switch ($method) {
         case 'GET':
-            $rows = $pdo->query("
-                SELECT u.id, u.nombre, u.email, u.estado, u.created_at, u.personal_id, u.permisos,
-                       r.nombre as rol_nombre, r.id as rol_id,
-                       p.nombre as personal_nombre
-                FROM usuarios u
-                JOIN roles r ON u.rol_id = r.id
-                LEFT JOIN personal p ON u.personal_id = p.id
-                ORDER BY u.nombre ASC
-            ")->fetchAll();
+            $filterId = isset($_GET['id']) ? (int)$_GET['id'] : null;
+            if ($filterId) {
+                // Consulta eficiente de un solo usuario (para sincronización de permisos)
+                $stmt = $pdo->prepare("
+                    SELECT u.id, u.nombre, u.email, u.estado, u.created_at, u.personal_id, u.permisos,
+                           r.nombre as rol_nombre, r.id as rol_id,
+                           p.nombre as personal_nombre
+                    FROM usuarios u
+                    JOIN roles r ON u.rol_id = r.id
+                    LEFT JOIN personal p ON u.personal_id = p.id
+                    WHERE u.id = ?
+                ");
+                $stmt->execute([$filterId]);
+                $rows = $stmt->fetchAll();
+            } else {
+                $rows = $pdo->query("
+                    SELECT u.id, u.nombre, u.email, u.estado, u.created_at, u.personal_id, u.permisos,
+                           r.nombre as rol_nombre, r.id as rol_id,
+                           p.nombre as personal_nombre
+                    FROM usuarios u
+                    JOIN roles r ON u.rol_id = r.id
+                    LEFT JOIN personal p ON u.personal_id = p.id
+                    ORDER BY u.nombre ASC
+                ")->fetchAll();
+            }
             $roles = $pdo->query("SELECT * FROM roles ORDER BY nombre")->fetchAll();
             $staff = $pdo->query("SELECT id, nombre, cargo FROM personal WHERE estado = 'activo' ORDER BY nombre")->fetchAll();
             json_response(['users' => $rows, 'roles' => $roles, 'staff' => $staff]);
             break;
+
 
         case 'POST':
             $b = get_body();
@@ -84,21 +101,37 @@ try {
             break;
 
         case 'PATCH':
-            // Toggle de un módulo sensible (ej. dashboard) en los permisos del usuario
+            // Soporta dos modos:
+            // 1. toggle_module + value: activa/desactiva un módulo individual
+            // 2. permisos (string): reemplaza todos los permisos de golpe
             $b = get_body();
             $id            = $b['id'] ?? null;
             $toggle_module = $b['toggle_module'] ?? null;
-            $value         = $b['value'] ?? false; // true = habilitar, false = deshabilitar
+            $value         = $b['value'] ?? false;
 
-            if (!$id || !$toggle_module) {
-                json_response(['error' => 'Faltan parámetros: id y toggle_module son requeridos'], 400);
+            if (!$id) {
+                json_response(['error' => 'Falta parámetro: id es requerido'], 400);
             }
 
-            // Obtener permisos actuales del usuario
+            // Verificar que el usuario existe
             $stmt = $pdo->prepare("SELECT permisos FROM usuarios WHERE id = ?");
             $stmt->execute([$id]);
             $row = $stmt->fetch();
             if (!$row) json_response(['error' => 'Usuario no encontrado'], 404);
+
+            // MODO 1: reemplazo completo de permisos (desde modal de gestión masiva)
+            if (array_key_exists('permisos', $b) && $toggle_module === null) {
+                $newPerms = isset($b['permisos']) && $b['permisos'] !== '' ? trim($b['permisos']) : null;
+                $upd = $pdo->prepare("UPDATE usuarios SET permisos = ? WHERE id = ?");
+                $upd->execute([$newPerms, $id]);
+                json_response(['ok' => true, 'permisos' => $newPerms]);
+                break;
+            }
+
+            // MODO 2: toggle individual de un módulo
+            if (!$toggle_module) {
+                json_response(['error' => 'Falta parámetro: toggle_module es requerido'], 400);
+            }
 
             $perms = array_filter(
                 array_map('trim', explode(',', $row['permisos'] ?? '')),
@@ -106,12 +139,10 @@ try {
             );
 
             if ($value) {
-                // Agregar módulo si no existe
                 if (!in_array($toggle_module, $perms)) {
                     $perms[] = $toggle_module;
                 }
             } else {
-                // Quitar módulo
                 $perms = array_filter($perms, fn($p) => $p !== $toggle_module);
             }
 

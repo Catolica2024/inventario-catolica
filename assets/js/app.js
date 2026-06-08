@@ -104,9 +104,12 @@
   }
 
   function renderSidebar(user) {
+    // Siempre leer el usuario FRESCO de localStorage para reflejar cambios de permisos
+    const freshUser = Auth.getUser() || user;
     const nav = document.getElementById('sidebar-nav');
+    if (!nav) return;
     const groups = MENU
-      .map(g => ({...g, items: g.items.filter(i => canAccess(user, i.id))}))
+      .map(g => ({...g, items: g.items.filter(i => canAccess(freshUser, i.id))}))
       .filter(g => g.items.length);
 
     nav.innerHTML = groups.map(g => `
@@ -130,13 +133,14 @@
     lucide.createIcons();
     
     nav.querySelectorAll('[data-section]').forEach(a => {
-      a.onclick = ()=> { 
+      a.onclick = () => { 
         Router.go(a.dataset.section); 
         document.getElementById('sidebar').classList.remove('open'); 
         document.getElementById('mobile-overlay').classList.remove('active');
       };
     });
   }
+
 
   window._unreadCount = 0;
 
@@ -212,11 +216,38 @@
     } catch (e) {}
   }
 
-  function renderView(user, section) {
-    // Al salir del dashboard, detener su polling
-    if (Router.current !== 'dashboard') {
-      // No hacemos nada extra — unregister se llama implícitamente al registrar la próxima vista
-    }
+  // ── Sincronización de permisos desde el servidor ─────────────────────────────
+  // Cada 60 s consulta los permisos actuales del usuario en BD y actualiza el
+  // localStorage + sidebar si el admin los modificó mientras el usuario está activo.
+  async function syncUserPermissions() {
+    const user = Auth.getUser();
+    if (!user || user.role === 'admin') return; // admin siempre tiene todo
+    try {
+      const data = await fetch(`api/users.php?id=${user.id}`).then(r => r.json());
+      const serverUser = (data.users || []).find(u => u.id == user.id);
+      if (!serverUser) return;
+      const newPerms = serverUser.permisos || null;
+      // Si los permisos cambiaron, actualizar localStorage y redibujar sidebar
+      if (newPerms !== user.permissions) {
+        const updated = { ...user, permissions: newPerms };
+        Auth.setUser(updated);
+        renderSidebar(updated);
+        // Si el usuario está en una sección que ya no tiene acceso, redirigir
+        const current = Router.current;
+        if (current && !canAccess(updated, current)) {
+          UI.toast('Tus permisos han sido actualizados por el administrador.', 'info');
+          Router.go('dashboard');
+        }
+      }
+    } catch (e) { /* silencioso */ }
+  }
+
+
+  function renderView(section) {
+    // Siempre leer el usuario FRESCO para respetar los permisos actuales
+    const user = Auth.getUser();
+    if (!user) return;
+
     window.DashboardBus?.unregister();
 
     if (section === 'notifications') {
@@ -247,6 +278,7 @@
     }, 50);
   }
 
+
   function boot() {
     const user = Auth.getUser();
     if (!user) {
@@ -255,11 +287,16 @@
     }
     renderShell(user);
     checkNotifications();
-    setInterval(checkNotifications, 30000); // Cada 30 seg
-    Router.onChange(s => { renderView(user, s); renderSidebar(user); });
+    syncUserPermissions();
+    setInterval(checkNotifications, 30000);   // Notificaciones cada 30 s
+    setInterval(syncUserPermissions, 60000);   // Permisos cada 60 s
+    // Router.onChange siempre lee usuario fresco — sin closure fijo
+    Router.onChange(s => { renderView(s); renderSidebar(Auth.getUser()); });
     Router.init();
   }
 
   document.addEventListener('DOMContentLoaded', boot);
-  window.App = { boot, renderShell, renderView };
+  // Exponer renderView con firma compatible (user, section) y solo (section)
+  window.App = { boot, renderShell, renderView: (a, b) => b ? renderView(b) : renderView(a) };
 })();
+

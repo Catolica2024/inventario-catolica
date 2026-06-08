@@ -37,6 +37,7 @@ window.MODULES_LIST = [
   { id: 'purchases', label: 'Órdenes de Compra' },
   { id: 'recepcions', label: 'Recepciones' },
   { id: 'suppliers', label: 'Proveedores' },
+  { id: 'rubros', label: 'Rubros de Proveedores' },
   { id: 'approvals', label: 'Aprobaciones' },
   { id: 'treasury', label: 'Tesorería / Pagos' },
   { id: 'staff', label: 'Personal' },

@@ -222,6 +222,7 @@ function renderTreasuryTable() {
 
     const user = window.Auth.getUser();
     const esContabilidad = user?.role === 'contabilidad';
+    const esTesoreria = user?.role === 'tesoreria';
 
     // --- LÓGICA DE FILTRADO UNIFICADA ---
     // Siempre calculamos desde _treasuryData fresco. Sin variables intermedias.
@@ -383,10 +384,16 @@ function renderTreasuryTable() {
             <td>${estadoBadge}</td>
             <td>${docStatusBadge}</td>
             <td class="text-right">
-                <button class="btn btn-primary btn-sm" onclick="openPaymentDetails(${p.id})">
-                    <i data-lucide="${(p.pagado == 1 || p.estado === 'Completada' || esContabilidad) ? 'eye' : 'credit-card'}" class="w-3.5 h-3.5"></i>
-                    ${(p.pagado == 1 || p.estado === 'Completada' || esContabilidad) ? 'Ver Detalle' : esCuotas ? 'Gestionar Cuotas' : 'Procesar Pago'}
-                </button>
+                <div class="flex justify-end gap-1.5">
+                    <button class="btn btn-ghost btn-sm" onclick="viewOrderDetails(${p.id})" title="Ver detallado de la OC/OS">
+                        <i data-lucide="file-search" class="w-3.5 h-3.5"></i>
+                        <span class="hidden sm:inline">Ver OC</span>
+                    </button>
+                    <button class="btn btn-primary btn-sm" onclick="openPaymentDetails(${p.id})">
+                        <i data-lucide="${(p.pagado == 1 || p.estado === 'Completada' || esContabilidad || esTesoreria) ? 'eye' : 'credit-card'}" class="w-3.5 h-3.5"></i>
+                        ${(p.pagado == 1 || p.estado === 'Completada' || esContabilidad) ? 'Ver Detalle' : esCuotas ? 'Gestionar Cuotas' : 'Procesar Pago'}
+                    </button>
+                </div>
             </td>
         </tr>`;
     }).join('');
@@ -615,6 +622,53 @@ window.openPaymentDetails = async function (id) {
 
             ${condPagoSection ? `<div class="card p-3 border-primary/20">${condPagoSection}</div>` : ''}
             ${docSection}
+
+            <!-- Detalle de Ítems OC/OS -->
+            <div class="card p-0 overflow-hidden">
+                <div class="flex items-center gap-2 px-4 py-2.5 bg-muted/40 border-b">
+                    <i data-lucide="list" class="w-3.5 h-3.5 text-primary"></i>
+                    <span class="text-xs font-bold uppercase tracking-wide">Detalle de Ítems</span>
+                    <span class="ml-auto text-[10px] text-muted-foreground">${(fullOC.items || []).length} ítem(s)</span>
+                </div>
+                <div class="max-h-64 overflow-y-auto">
+                    <table class="w-full text-xs">
+                        <thead class="bg-muted sticky top-0 z-10">
+                            <tr>
+                                <th class="px-3 py-2 text-left font-bold">Categoría</th>
+                                <th class="px-3 py-2 text-left font-bold">Descripción / Detalle</th>
+                                <th class="px-3 py-2 text-right font-bold w-20">P. Unit.</th>
+                                <th class="px-3 py-2 text-center font-bold w-12">Cant.</th>
+                                <th class="px-3 py-2 text-right font-bold w-22">Total</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y">
+                            ${(fullOC.items || []).map(it => `
+                            <tr class="hover:bg-muted/20 transition-colors">
+                                <td class="px-3 py-2 font-medium text-primary/80">${it.categoria_nombre || '—'}</td>
+                                <td class="px-3 py-2 text-muted-foreground">${(it.descripcion && it.descripcion !== it.categoria_nombre) ? it.descripcion : '—'}</td>
+                                <td class="px-3 py-2 text-right">${monSym} ${parseFloat(it.precio_unitario || 0).toFixed(2)}</td>
+                                <td class="px-3 py-2 text-center">${it.cantidad}</td>
+                                <td class="px-3 py-2 text-right font-semibold">${monSym} ${parseFloat(it.total).toFixed(2)}</td>
+                            </tr>`).join('')}
+                        </tbody>
+                        <tfoot class="bg-muted/50 border-t-2 font-bold">
+                            <tr>
+                                <td colspan="4" class="px-3 py-2 text-right uppercase text-[9px] tracking-wide">Subtotal OC/OS</td>
+                                <td class="px-3 py-2 text-right">${monSym} ${parseFloat(p.total || 0).toFixed(2)}</td>
+                            </tr>
+                            ${p.monto_movilidad > 0 ? `
+                            <tr>
+                                <td colspan="4" class="px-3 py-2 text-right uppercase text-[9px] text-orange-600 tracking-wide">Movilidad (Sep.)</td>
+                                <td class="px-3 py-2 text-right text-orange-600">${monSym} ${parseFloat(p.monto_movilidad).toFixed(2)}</td>
+                            </tr>
+                            <tr class="bg-primary/5 text-primary">
+                                <td colspan="4" class="px-3 py-2 text-right uppercase text-[10px] font-black tracking-wide">Total Operación</td>
+                                <td class="px-3 py-2 text-right font-black">${monSym} ${(parseFloat(p.total) + parseFloat(p.monto_movilidad)).toFixed(2)}</td>
+                            </tr>` : ''}
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
 
             <!-- Datos bancarios -->
             <div class="card p-4 border-primary/20 bg-primary/5">

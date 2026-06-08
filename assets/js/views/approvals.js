@@ -504,33 +504,44 @@ window.viewOrderDetails = async function(id) {
         </div>` : ''}
 
         <div>
-          <p class="text-sm font-semibold mb-2">Detalle de Ítems</p>
-          <div class="max-h-60 overflow-y-auto border rounded-lg">
+          <p class="text-sm font-semibold mb-2 flex items-center gap-2">
+            <i data-lucide="list" class="w-3.5 h-3.5 text-primary"></i>
+            Detalle de Ítems
+          </p>
+          <div class="max-h-72 overflow-y-auto border rounded-lg">
             <table class="w-full text-xs">
-              <thead class="bg-muted sticky top-0">
-                <tr><th class="p-2 text-left">Desc.</th><th class="p-2 text-center w-12">Cant.</th><th class="p-2 text-right w-20">Total</th></tr>
+              <thead class="bg-muted sticky top-0 z-10">
+                <tr>
+                  <th class="p-2 text-left font-bold">Categoría</th>
+                  <th class="p-2 text-left font-bold">Descripción / Detalle</th>
+                  <th class="p-2 text-right font-bold w-20">P. Unit.</th>
+                  <th class="p-2 text-center font-bold w-12">Cant.</th>
+                  <th class="p-2 text-right font-bold w-22">Total</th>
+                </tr>
               </thead>
               <tbody class="divide-y">
                 ${oc.items.map(it => `
-                  <tr>
-                    <td class="p-2">${it.descripcion}</td>
+                  <tr class="hover:bg-muted/30 transition-colors">
+                    <td class="p-2 font-medium text-primary/80">${it.categoria_nombre || '—'}</td>
+                    <td class="p-2 text-muted-foreground">${(it.descripcion && it.descripcion !== it.categoria_nombre) ? it.descripcion : '—'}</td>
+                    <td class="p-2 text-right">${monSym} ${parseFloat(it.precio_unitario || 0).toFixed(2)}</td>
                     <td class="p-2 text-center">${it.cantidad}</td>
-                    <td class="p-2 text-right font-medium">${monSym} ${parseFloat(it.total).toFixed(2)}</td>
+                    <td class="p-2 text-right font-semibold">${monSym} ${parseFloat(it.total).toFixed(2)}</td>
                   </tr>
                 `).join('')}
               </tbody>
-              <tfoot class="bg-muted/50 font-bold border-t">
+              <tfoot class="bg-muted/50 font-bold border-t-2">
                 <tr>
-                  <td colspan="2" class="p-2 text-right uppercase text-[9px]">Subtotal OC</td>
+                  <td colspan="4" class="p-2 text-right uppercase text-[9px] tracking-wide">Subtotal OC</td>
                   <td class="p-2 text-right">${monSym} ${parseFloat(oc.total).toFixed(2)}</td>
                 </tr>
                 ${oc.monto_movilidad > 0 ? `
                 <tr>
-                  <td colspan="2" class="p-2 text-right uppercase text-[9px] text-orange-600">Movilidad (Sep.)</td>
+                  <td colspan="4" class="p-2 text-right uppercase text-[9px] text-orange-600 tracking-wide">Movilidad (Sep.)</td>
                   <td class="p-2 text-right text-orange-600">${monSym} ${parseFloat(oc.monto_movilidad).toFixed(2)}</td>
                 </tr>
                 <tr class="bg-primary/5 text-primary">
-                  <td colspan="2" class="p-2 text-right uppercase">Total Operación</td>
+                  <td colspan="4" class="p-2 text-right uppercase text-[10px] font-black tracking-wide">Total Operación</td>
                   <td class="p-2 text-right font-black border-t border-primary/20">${monSym} ${(parseFloat(oc.total) + parseFloat(oc.monto_movilidad)).toFixed(2)}</td>
                 </tr>
                 ` : ''}

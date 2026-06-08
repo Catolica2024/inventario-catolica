@@ -70,7 +70,7 @@ async function loadUsers() {
     }
     tbody.innerHTML = data.users.map(u => {
       const permsArr = parsePerms(u.permisos);
-      const hasDashboard = permsArr.includes('dashboard');
+      const customModCount = permsArr.length;
       const isAdmin = u.rol_nombre === 'admin';
       const isInactive = u.estado === 'inactivo';
       return `
@@ -88,23 +88,23 @@ async function loadUsers() {
           <span class="badge ${u.estado === 'activo' ? 'badge-green' : 'badge-red'}">${u.estado}</span>
         </td>
 
-        <!-- TOGGLE DASHBOARD -->
+        <!-- GESTIÓN DE MÓDULOS -->
         <td class="text-center">
           ${isAdmin
             ? `<span class="inline-flex items-center gap-1 text-[10px] font-bold text-primary uppercase tracking-wide">
-                <i data-lucide="shield-check" class="w-3.5 h-3.5"></i>Siempre
+                <i data-lucide="shield-check" class="w-3.5 h-3.5"></i>Acceso total
                </span>`
             : `<button
-                  id="dash-toggle-${u.id}"
-                  onclick="toggleDashboard(${u.id}, '${u.nombre.replace(/'/g, "\\'")}', ${hasDashboard})"
+                  id="mod-btn-${u.id}"
+                  onclick="openUserModulesModal(${u.id}, '${u.nombre.replace(/'/g, "\\'")}')"
                   class="relative inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider transition-all duration-200
-                         ${hasDashboard
+                         ${customModCount > 0
                            ? 'bg-primary/10 text-primary border border-primary/30 hover:bg-primary/20'
                            : 'bg-muted text-muted-foreground border border-border hover:bg-muted/80'}
                          ${isInactive ? 'opacity-40 pointer-events-none' : ''}"
-                  title="${hasDashboard ? 'Revocar acceso al Dashboard' : 'Conceder acceso al Dashboard'}">
-                  <span class="w-2 h-2 rounded-full ${hasDashboard ? 'bg-primary' : 'bg-slate-300'}"></span>
-                  ${hasDashboard ? 'Habilitado' : 'Deshabilitado'}
+                  title="Gestionar módulos habilitados para este usuario">
+                  <i data-lucide="layers" class="w-3 h-3"></i>
+                  ${customModCount > 0 ? `${customModCount} módulo${customModCount > 1 ? 's' : ''}` : 'Sin extra'}
                </button>`
           }
         </td>
@@ -129,36 +129,93 @@ async function loadUsers() {
   } catch(e) { tbody.innerHTML = '<tr><td colspan="6" class="text-center py-10 text-destructive">Error al cargar.</td></tr>'; }
 }
 
-// Toggle acceso al Dashboard sin abrir modal de edición completa
-window.toggleDashboard = async function(userId, userName, currentlyEnabled) {
-  const action = currentlyEnabled ? 'revocar' : 'conceder';
-  const icon   = currentlyEnabled ? '🔒' : '📊';
+window.openUserModulesModal = async function(userId, userName) {
+  UI.loading('Cargando módulos...');
+  const data = await fetch('api/users.php').then(r => r.json());
+  UI.stopLoading();
+  const u = data.users.find(x => x.id == userId);
+  if (!u) return;
+
+  const currentPerms = parsePerms(u.permisos);
+  const roleBasePerms = (window.ROLE_PERMISSIONS[u.rol_nombre] || []);
+  const hasAll = roleBasePerms.includes('*');
 
   UI.modal({
-    title: `${icon} ${currentlyEnabled ? 'Revocar' : 'Habilitar'} Dashboard`,
+    title: `<span class="flex items-center gap-2"><i data-lucide="layers" class="w-4 h-4 text-primary"></i> Módulos: ${userName}</span>`,
+    size: 'lg',
     body: `
       <div class="space-y-4">
+        <div class="p-3 bg-muted/40 rounded-xl border text-xs text-muted-foreground">
+          <span class="font-bold text-foreground">Rol base:</span> <span class="badge badge-blue ml-1">${u.rol_nombre}</span>
+          <span class="ml-2">${hasAll ? '— Acceso total por rol (todos los módulos)' : '— Los módulos del rol base no se pueden desactivar aquí.'}</span>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-1 max-h-[380px] overflow-y-auto pr-1">
+          ${window.MODULES_LIST.map(m => {
+            const inRole = hasAll || roleBasePerms.includes(m.id);
+            const isChecked = currentPerms.includes(m.id);
+            return `
+            <label class="flex items-center gap-2.5 p-2.5 rounded-lg border transition-colors ${isChecked || inRole ? 'bg-primary/5 border-primary/20' : 'border-transparent hover:bg-muted/50'} cursor-pointer">
+              <input type="checkbox" class="checkbox checkbox-sm" name="user-mod-perm" value="${m.id}"
+                ${isChecked ? 'checked' : ''}
+                ${inRole ? 'disabled title="Incluido en el rol base"' : ''}>
+              <div class="flex-1 min-w-0">
+                <span class="text-xs font-medium block truncate">${m.label}</span>
+                ${inRole ? '<span class="text-[9px] text-primary font-bold uppercase">Rol base</span>' : ''}
+              </div>
+              ${isChecked && !inRole ? '<i data-lucide="check-circle" class="w-3 h-3 text-primary shrink-0"></i>' : ''}
+            </label>`;
+          }).join('')}
+        </div>
+        <div class="flex gap-2 pt-1 border-t">
+          <button type="button" class="btn btn-ghost btn-sm text-xs" onclick="
+            document.querySelectorAll('input[name=\\'user-mod-perm\\']:not([disabled])').forEach(cb => cb.checked = true)
+          ">Marcar todos</button>
+          <button type="button" class="btn btn-ghost btn-sm text-xs text-destructive" onclick="
+            document.querySelectorAll('input[name=\\'user-mod-perm\\']:not([disabled])').forEach(cb => cb.checked = false)
+          ">Limpiar extras</button>
+        </div>
+      </div>`,
+    confirmText: 'Guardar cambios',
+    onConfirm: async () => {
+      const selected = Array.from(document.querySelectorAll('input[name="user-mod-perm"]:checked:not([disabled])')).map(cb => cb.value);
+      UI.loading('Guardando módulos...');
+      const resp = await fetch('api/users.php', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: userId, permisos: selected.join(',') })
+      }).then(r => r.json());
+      UI.stopLoading();
+      if (resp.ok) { UI.toast('Módulos actualizados para ' + userName, 'success'); loadUsers(); }
+      else UI.toast('Error: ' + resp.error, 'error');
+    }
+  });
+  setTimeout(() => lucide.createIcons(), 50);
+};
+
+
+// Toggle rápido de un módulo desde la tabla principal
+window.toggleDashboard = async function(userId, userName, currentlyEnabled) {
+  return window.toggleModule(userId, userName, 'dashboard', currentlyEnabled);
+};
+
+window.toggleModule = async function(userId, userName, moduleId, currentlyEnabled) {
+  const mod = window.MODULES_LIST.find(m => m.id === moduleId);
+  const modLabel = mod ? mod.label : moduleId;
+  const action = currentlyEnabled ? 'revocar' : 'conceder';
+
+  UI.modal({
+    title: `${currentlyEnabled ? '🔒' : '✅'} ${currentlyEnabled ? 'Revocar' : 'Habilitar'} módulo`,
+    body: `
+      <div class="space-y-3">
         <div class="flex items-start gap-4 p-4 rounded-2xl ${currentlyEnabled ? 'bg-destructive/5 border border-destructive/10' : 'bg-primary/5 border border-primary/10'}">
           <div class="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${currentlyEnabled ? 'bg-destructive/10' : 'bg-primary/10'}">
-            <i data-lucide="${currentlyEnabled ? 'eye-off' : 'layout-dashboard'}" class="w-5 h-5 ${currentlyEnabled ? 'text-destructive' : 'text-primary'}"></i>
+            <i data-lucide="${currentlyEnabled ? 'eye-off' : 'check-circle'}" class="w-5 h-5 ${currentlyEnabled ? 'text-destructive' : 'text-primary'}"></i>
           </div>
           <div>
-            <p class="text-sm font-black">${currentlyEnabled ? 'Revocar' : 'Conceder'} acceso al Dashboard</p>
-            <p class="text-xs text-muted-foreground mt-1">
-              El usuario <strong>${userName}</strong>
-              ${currentlyEnabled
-                ? ' <strong>dejará de ver</strong> el Dashboard con KPIs, gráficos y estadísticas del sistema.'
-                : ' <strong>podrá visualizar</strong> el Dashboard con KPIs financieros, gráficos y estadísticas estratégicas del sistema.'}
-            </p>
+            <p class="text-sm font-black">${currentlyEnabled ? 'Revocar' : 'Conceder'} acceso a: <span class="text-primary">${modLabel}</span></p>
+            <p class="text-xs text-muted-foreground mt-1">Usuario: <strong>${userName}</strong></p>
           </div>
         </div>
-        ${!currentlyEnabled ? `<div class="p-3 bg-amber-50 border border-amber-200 rounded-xl">
-          <p class="text-[10px] font-bold text-amber-700 flex items-center gap-1.5">
-            <i data-lucide="alert-triangle" class="w-3.5 h-3.5"></i>
-            INFORMACIÓN SENSIBLE
-          </p>
-          <p class="text-[10px] text-amber-600 mt-1">El Dashboard expone KPIs operativos, montos de compras y estados del inventario. Asigne este acceso con discreción.</p>
-        </div>` : ''}
       </div>`,
     confirmText: currentlyEnabled ? 'Sí, revocar acceso' : 'Sí, habilitar acceso',
     onConfirm: async () => {
@@ -167,12 +224,12 @@ window.toggleDashboard = async function(userId, userName, currentlyEnabled) {
         const res = await fetch('api/users.php', {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id: userId, toggle_module: 'dashboard', value: !currentlyEnabled })
+          body: JSON.stringify({ id: userId, toggle_module: moduleId, value: !currentlyEnabled })
         }).then(r => r.json());
         UI.stopLoading();
         if (res.ok) {
           UI.toast(
-            currentlyEnabled ? `Dashboard revocado a ${userName}` : `Dashboard habilitado para ${userName}`,
+            currentlyEnabled ? `Módulo "${modLabel}" revocado a ${userName}` : `Módulo "${modLabel}" habilitado para ${userName}`,
             currentlyEnabled ? 'warning' : 'success'
           );
           loadUsers();
@@ -185,9 +242,9 @@ window.toggleDashboard = async function(userId, userName, currentlyEnabled) {
       }
     }
   });
-  // Renderizar íconos dentro del modal
   setTimeout(() => lucide.createIcons(), 50);
 };
+
 
 function userFormHTML(u, roles, staff, isNew) {
   const userPerms = u && u.permisos ? u.permisos.split(',') : [];
@@ -313,14 +370,14 @@ window.Views.users = function() {
       </div>
     `)}
 
-    <!-- Banner informativo Dashboard -->
+    <!-- Banner informativo Módulos -->
     <div class="flex items-start gap-4 p-4 mb-4 rounded-2xl bg-primary/5 border border-primary/10">
       <div class="w-8 h-8 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
-        <i data-lucide="layout-dashboard" class="w-4 h-4 text-primary"></i>
+        <i data-lucide="layers" class="w-4 h-4 text-primary"></i>
       </div>
       <div>
-        <p class="text-xs font-black text-primary uppercase tracking-wide">Control de acceso al Dashboard</p>
-        <p class="text-[11px] text-muted-foreground mt-0.5">El Dashboard contiene KPIs financieros y operativos confidenciales. Usa el toggle <strong>Dashboard</strong> por usuario para habilitar o revocar su visualización. El rol <strong>admin</strong> siempre tiene acceso.</p>
+        <p class="text-xs font-black text-primary uppercase tracking-wide">Control de módulos por usuario</p>
+        <p class="text-[11px] text-muted-foreground mt-0.5">El admin puede habilitar o deshabilitar módulos adicionales para cada usuario, incluyendo <strong>Rubros de Proveedores</strong>, <strong>Dashboard</strong> y cualquier otra sección del sistema. Haz clic en el botón <strong>Módulos</strong> de cada usuario para gestionarlo. El rol <strong>admin</strong> siempre tiene acceso total.</p>
       </div>
     </div>
 
@@ -333,7 +390,7 @@ window.Views.users = function() {
               <th>Usuario / Email</th>
               <th>Rol</th>
               <th>Estado</th>
-              <th class="text-center">Dashboard</th>
+              <th class="text-center">Módulos Extra</th>
               <th class="text-right">Acciones</th>
             </tr>
           </thead>
