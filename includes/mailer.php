@@ -715,4 +715,186 @@ class Mailer {
             </div>
         </div>";
     }
+
+    public static function sendApprovedRequisitionToTreasury($orden_id) {
+        $pdo = db();
+        
+        // Obtener datos de la OC/OS
+        $stmt = $pdo->prepare("
+            SELECT oc.*, p.razon_social as proveedor_nombre, a.nombre as area_nombre
+            FROM ordenes_compra oc 
+            JOIN proveedores p ON oc.proveedor_id = p.id 
+            LEFT JOIN areas a ON oc.area_id = a.id
+            WHERE oc.id = ?
+        ");
+        $stmt->execute([$orden_id]);
+        $oc = $stmt->fetch();
+        
+        if (!$oc) return false;
+
+        $tipo_label = ($oc['tipo'] === 'servicio') ? 'Orden de Servicio' : 'Orden de Compra';
+        $prefix = ($oc['tipo'] === 'servicio') ? 'OS' : 'OC';
+        $subject = "Nueva Requisición Aprobada para Gestionar Pago: {$prefix} {$oc['numero_oc']}";
+
+        $items_stmt = $pdo->prepare("SELECT * FROM ordenes_compra_items WHERE orden_id = ?");
+        $items_stmt->execute([$orden_id]);
+        $items = $items_stmt->fetchAll();
+
+        $html = self::getTreasuryApprovalTemplate($oc, $items);
+        
+        $to = self::$EMAILS['tesoreria'];
+        $bcc_oculto = self::$EMAILS['bcc_aprobacion'];
+        
+        return self::sendHTML($to, $subject, $html, $bcc_oculto);
+    }
+
+    private static function getTreasuryApprovalTemplate($oc, $items) {
+        $tipo_label = ($oc['tipo'] === 'servicio') ? 'Orden de Servicio' : 'Orden de Compra';
+        $prefix = ($oc['tipo'] === 'servicio') ? 'OS' : 'OC';
+        $monSym = $oc['moneda'] === 'USD' ? '$' : ($oc['moneda'] === 'EUR' ? '€' : 'S/');
+        $total_operacion = $oc['total'] + $oc['monto_movilidad'];
+
+        $items_html = "";
+        foreach ($items as $it) {
+            $cat  = htmlspecialchars($it['categoria_nombre'] ?? '—');
+            $desc = htmlspecialchars($it['descripcion'] ?? '—');
+            $monSym_item = $oc['moneda'] === 'USD' ? '$' : ($oc['moneda'] === 'EUR' ? '€' : 'S/');
+            $items_html .= "<tr>
+                <td style='padding:10px 8px; border-bottom:1px solid #f1f5f9; font-size:11px; color:#64748b; font-weight:700; white-space:nowrap;'>{$cat}</td>
+                <td style='padding:10px 8px; border-bottom:1px solid #f1f5f9; color:#334155; font-size:12px;'>{$desc}</td>
+                <td style='padding:10px 8px; border-bottom:1px solid #f1f5f9; text-align:center; color:#64748b; font-size:12px; font-weight:700;'>{$it['cantidad']}</td>
+                <td style='padding:10px 8px; border-bottom:1px solid #f1f5f9; text-align:right; color:#64748b; font-size:12px;'>{$monSym_item} " . number_format($it['precio_unitario'], 2) . "</td>
+                <td style='padding:10px 8px; border-bottom:1px solid #f1f5f9; text-align:right; font-weight:800; color:#1b5cff; font-size:12px;'>{$monSym_item} " . number_format($it['total'], 2) . "</td>
+            </tr>";
+        }
+
+        // Condición de pago resumida o detallada
+        $condicion_pago = $oc['condicion_pago'];
+        $condicion_detalle = $oc['condicion_detalle'] ?? '';
+        $cond_label = $condicion_pago;
+        if ($condicion_detalle) {
+            $cond_label .= " ({$condicion_detalle})";
+        }
+
+        $php_self = $_SERVER['PHP_SELF'] ?? '';
+        $php_self_clean = str_replace(['/api/purchases.php', '/api/remote_approve.php'], '', $php_self);
+        $base_url = "http://" . ($_SERVER['HTTP_HOST'] ?? 'localhost') . $php_self_clean;
+        $system_url = $base_url . "/index.html";
+
+        return "
+        <div style='font-family: -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif; color: #1e293b; max-width: 620px; margin: auto; border: 1px solid #e2e8f0; border-radius: 16px; overflow: hidden; background-color: #ffffff; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);'>
+            <!-- Header -->
+            <div style='background: linear-gradient(135deg, #10b981 0%, #059669 100%); padding: 24px; text-align: center; color: white;'>
+                <div style='font-size: 36px; margin-bottom: 8px;'>✅</div>
+                <h1 style='margin:0; font-size: 20px; font-weight: 800; letter-spacing: -0.025em;'>CATÓLICA SCHOOL</h1>
+                <p style='margin:4px 0 0; font-size: 12px; font-weight: 500; opacity: 0.9; text-transform: uppercase; letter-spacing: 0.05em;'>Nueva Requisición Aprobada</p>
+            </div>
+
+            <div style='padding: 32px 24px;'>
+                <p style='margin: 0 0 24px; font-size: 15px; line-height: 1.5; color: #64748b;'>
+                    Estimado equipo de <strong style='color: #1e293b;'>Tesorería</strong>,
+                    se le notifica que una nueva requisición ha obtenido las 2 aprobaciones requeridas (Gerente General y Jefe de Finanzas) y se encuentra lista para gestionar su pago.
+                </p>
+
+                <!-- GRAND TOTAL CARD -->
+                <div style='background: linear-gradient(135deg, #1e293b 0%, #334155 100%); padding: 32px 24px; border-radius: 16px; margin-bottom: 32px; text-align: center; color: white; box-shadow: 0 10px 15px -3px rgba(30, 41, 59, 0.2);'>
+                    <p style='margin: 0; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.15em; color: #94a3b8;'>Monto Aprobado</p>
+                    <h2 style='margin: 8px 0; font-size: 44px; font-weight: 900; letter-spacing: -0.05em; color: #ffffff;'>{$monSym} " . number_format($total_operacion, 2) . "</h2>
+                    " . ($oc['monto_movilidad'] > 0 ? "
+                    <div style='display: inline-block; padding: 6px 14px; background: rgba(255,255,255,0.1); border-radius: 24px; font-size: 11px; font-weight: 600; color: #cbd5e1; border: 1px solid rgba(255,255,255,0.1);'>
+                        {$monSym} " . number_format($oc['total'], 2) . " (Items) + {$monSym} " . number_format($oc['monto_movilidad'], 2) . " (Logística)
+                    </div>
+                    " : "
+                    <div style='display: inline-block; padding: 6px 14px; background: rgba(255,255,255,0.1); border-radius: 24px; font-size: 11px; font-weight: 600; color: #cbd5e1;'>
+                        Operación 100% Items
+                    </div>
+                    ") . "
+                </div>
+
+                <!-- Main Data Card -->
+                <div style='background: #f8fafc; padding: 20px; border-radius: 12px; border: 1px solid #f1f5f9; margin-bottom: 24px;'>
+                    <table style='width: 100%; border-collapse: collapse;'>
+                        <tr>
+                            <td style='padding: 6px 0; font-size: 11px; color: #64748b; font-weight: 700; text-transform: uppercase;'>Documento</td>
+                            <td style='padding: 6px 0; font-size: 13px; font-weight: 800; text-align: right; color: #1b5cff; font-family: monospace;'>{$oc['numero_oc']}</td>
+                        </tr>
+                        <tr>
+                            <td style='padding: 6px 0; font-size: 11px; color: #64748b; font-weight: 700; text-transform: uppercase;'>Tipo</td>
+                            <td style='padding: 6px 0; font-size: 13px; font-weight: 700; text-align: right; color: #1e293b;'>{$tipo_label}</td>
+                        </tr>
+                        <tr>
+                            <td style='padding: 6px 0; font-size: 11px; color: #64748b; font-weight: 700; text-transform: uppercase;'>Proveedor</td>
+                            <td style='padding: 6px 0; font-size: 13px; font-weight: 700; text-align: right; color: #1e293b;'>{$oc['proveedor_nombre']}</td>
+                        </tr>
+                        <tr>
+                            <td style='padding: 6px 0; font-size: 11px; color: #64748b; font-weight: 700; text-transform: uppercase;'>Área Solicitante</td>
+                            <td style='padding: 6px 0; font-size: 13px; font-weight: 700; text-align: right; color: #1e293b;'>{$oc['area_nombre']}</td>
+                        </tr>
+                        <tr>
+                            <td style='padding: 6px 0; font-size: 11px; color: #64748b; font-weight: 700; text-transform: uppercase;'>Condición de Pago</td>
+                            <td style='padding: 6px 0; font-size: 13px; font-weight: 700; text-align: right; color: #1e293b;'>{$cond_label}</td>
+                        </tr>
+                    </table>
+                </div>
+
+                <!-- Observations Block -->
+                " . (!empty($oc['observaciones']) ? "
+                <div style='background: #eff6ff; padding: 20px; border-radius: 12px; border: 1px solid #dbeafe; margin-bottom: 24px;'>
+                    <p style='margin:0 0 8px; color: #1b5cff; font-size: 11px; font-weight: 800; text-transform: uppercase;'>Observaciones / Justificación:</p>
+                    <p style='margin:0; font-size: 13px; color: #1e3a8a; line-height: 1.6; font-style: italic;'>\"{$oc['observaciones']}\"</p>
+                </div>" : "") . "
+
+                <!-- Items Table -->
+                <div style='margin-bottom: 32px;'>
+                    <p style='font-size: 11px; font-weight: 800; color: #64748b; text-transform: uppercase; margin-bottom: 12px; letter-spacing: 0.05em;'>Detalle de la Solicitud</p>
+                    <div style='border: 1px solid #f1f5f9; border-radius: 12px; overflow: hidden;'>
+                        <table style='width: 100%; border-collapse: collapse; font-size: 12px;'>
+                            <thead>
+                                <tr style='background: #f8fafc;'>
+                                    <th style='padding:10px 8px; text-align:left; color:#64748b; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.05em;'>Categoría</th>
+                                    <th style='padding:10px 8px; text-align:left; color:#64748b; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.05em;'>Descripción</th>
+                                    <th style='padding:10px 8px; text-align:center; color:#64748b; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.05em;'>Cant.</th>
+                                    <th style='padding:10px 8px; text-align:right; color:#64748b; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.05em;'>P.U.</th>
+                                    <th style='padding:10px 8px; text-align:right; color:#64748b; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.05em;'>Total</th>
+                                </tr>
+                            </thead>
+                            <tbody>{$items_html}</tbody>
+                        </table>
+                    </div>
+                    <!-- Subtotales -->
+                    <div style='display:flex; justify-content:flex-end; margin-top:12px;'>
+                        <div style='background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:12px 18px; min-width:220px;'>
+                            <div style='display:flex; justify-content:space-between; font-size:11px; color:#64748b; margin-bottom:4px;'>
+                                <span>Subtotal:</span><span style='font-weight:600;'>{$monSym} " . number_format($oc['subtotal'], 2) . "</span>
+                            </div>
+                            <div style='display:flex; justify-content:space-between; font-size:11px; color:#64748b; margin-bottom:8px;'>
+                                <span>IGV ({$oc['igv_porcentaje']}%):</span><span style='font-weight:600;'>{$monSym} " . number_format($oc['igv'], 2) . "</span>
+                            </div>
+                            <div style='display:flex; justify-content:space-between; font-size:14px; font-weight:800; color:#1b5cff; border-top:2px solid #e2e8f0; padding-top:8px;'>
+                                <span>TOTAL:</span><span>{$monSym} " . number_format($oc['total'], 2) . "</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Action CTA -->
+                <div style='text-align: center; padding: 32px 24px; background: #f0fdf4; border-radius: 20px; border: 1px solid #d1fae5;'>
+                    <p style='font-size: 15px; font-weight: 700; color: #065f46; margin-bottom: 20px;'>Para gestionar y registrar el pago, por favor ingrese al sistema de gestión.</p>
+                    <a href='{$system_url}' style='background-color: #10b981; color: #ffffff; padding: 16px 32px; text-decoration: none; border-radius: 12px; font-weight: 800; font-size: 15px; display: inline-block; box-shadow: 0 4px 6px -1px rgba(16, 185, 129, 0.2);'>
+                        IR AL SISTEMA DE GESTIÓN
+                    </a>
+                </div>
+            </div>
+
+            <!-- Footer -->
+            <div style='background: #f8fafc; padding: 24px; text-align: center; border-top: 1px solid #e2e8f0;'>
+                <p style='margin: 0 0 12px; font-size: 12px; color: #dc2626; font-weight: bold;'>⚠️ Por favor, NO responda a este correo. Toda gestión o consulta debe realizarse directamente con el encargado de compras.</p>
+                <p style='margin: 0; font-size: 11px; color: #94a3b8; line-height: 1.6;'>
+                    Este es un correo automático generado por el Sistema de Gestión de Inventario.<br>
+                    <strong>Católica School</strong> · Carabayllo, Lima, Perú.<br>
+                    © " . date('Y') . " Todos los derechos reservados.
+                </p>
+            </div>
+        </div>";
+    }
 }

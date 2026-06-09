@@ -108,7 +108,7 @@ window.viewOrderDetails = async function(id) {
         <div class="grid grid-cols-2 gap-4 text-sm">
           <div><p class="text-muted-foreground">Proveedor</p><p class="font-semibold">${oc.proveedor_nombre}</p></div>
           <div><p class="text-muted-foreground">RUC</p><p class="font-semibold">${oc.ruc || '—'}</p></div>
-          <div><p class="text-muted-foreground">Área Solicitante</p><p class="font-semibold">${oc.area_solicitante || '—'}</p></div>
+          <div><p class="text-muted-foreground">Área Solicitante</p><p class="font-semibold">${oc.area_nombre || '—'}</p></div>
           <div><p class="text-muted-foreground">Fecha Requerida</p><p class="font-semibold">${oc.fecha_requerida || '—'}</p></div>
           <div>
             <p class="text-muted-foreground">Condición Pago</p>

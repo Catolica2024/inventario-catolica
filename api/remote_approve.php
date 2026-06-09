@@ -132,6 +132,14 @@ try {
         $msg = "La " . ($res['tipo'] === 'servicio' ? 'OS' : 'OC') . " {$res['numero_oc']} ha sido APROBADA totalmente.";
         $pdo->prepare("INSERT INTO notificaciones (usuario_id, titulo, mensaje, tipo) VALUES (?, 'Documento Aprobado', ?, 'success')")
             ->execute([$res['creado_por'], $msg]);
+
+        // Enviar correo a Tesorería
+        try {
+            require_once __DIR__ . '/../includes/mailer.php';
+            Mailer::sendApprovedRequisitionToTreasury($id);
+        } catch (Exception $e) {
+            error_log("Error enviando correo de aprobación a tesorería (remoto) para OC/OS $id: " . $e->getMessage());
+        }
     } else {
         // Notificar aprobación parcial
         $quien = ($rol === 'gerente_general' ? 'el Gerente General' : 'el Jefe de Finanzas');
