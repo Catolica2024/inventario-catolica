@@ -281,6 +281,29 @@ function renderTreasuryTable() {
         const cuotasPag = parseInt(p.cuotas_pagadas || 0);
         const cuotasTot = parseInt(p.total_cuotas_reg || 0);
 
+        let proximaCuotaHTML = '';
+        if (esCuotas && p.proxima_cuota_vencimiento) {
+            const nextVenc = p.proxima_cuota_vencimiento;
+            const nextNum = p.proxima_cuota_numero;
+            const parts = nextVenc.split('-');
+            const dueDate = new Date(parts[0], parts[1] - 1, parts[2]);
+            const today = new Date();
+            today.setHours(0,0,0,0);
+            
+            const diffTime = dueDate - today;
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            
+            const formattedDate = `${parts[2]}/${parts[1]}`; // dd/mm
+            
+            if (diffDays < 0) {
+                proximaCuotaHTML = `<div class="text-[10px] text-red-600 font-bold mt-0.5 whitespace-nowrap">C${nextNum} venció hace ${Math.abs(diffDays)}d (${formattedDate})</div>`;
+            } else if (diffDays === 0) {
+                proximaCuotaHTML = `<div class="text-[10px] text-orange-600 font-bold mt-0.5 whitespace-nowrap">C${nextNum} vence hoy! (${formattedDate})</div>`;
+            } else {
+                proximaCuotaHTML = `<div class="text-[9px] text-muted-foreground mt-0.5 whitespace-nowrap">C${nextNum} vence: ${formattedDate} (en ${diffDays}d)</div>`;
+            }
+        }
+
         // Badge de condición
         let condBadge = '';
         if (p.condicion_pago === 'Credito') {
@@ -324,14 +347,31 @@ function renderTreasuryTable() {
                 <span class="text-[10px] text-orange-600 font-medium">Pago pendiente de confirmar</span>
             </div>`;
         } else if (esCuotas && cuotasPag > 0) {
-            estadoBadge = `<div class="flex flex-col gap-1">
+            estadoBadge = `<div class="flex flex-col gap-1 items-center">
                 <span class="badge badge-blue text-[10px]">${cuotasPag}/${cuotasTot} cuotas</span>
                 <div class="w-full bg-muted rounded-full h-1.5">
                   <div class="bg-primary h-1.5 rounded-full" style="width:${(cuotasPag / cuotasTot * 100).toFixed(0)}%"></div>
                 </div>
+                ${proximaCuotaHTML}
             </div>`;
         } else if (esCuotas) {
-            estadoBadge = `<span class="badge badge-yellow text-[10px]">0/${cuotasTot} cuotas</span>`;
+            estadoBadge = `<div class="flex flex-col gap-0.5 items-center">
+                <span class="badge badge-yellow text-[10px]">0/${cuotasTot} cuotas</span>
+                ${proximaCuotaHTML}
+            </div>`;
+        } else if (p.condicion_pago === 'Adelanto + Saldo') {
+            if (p.adelanto_pagado == 0) {
+                estadoBadge = '<span class="badge badge-green"><i data-lucide="check" class="w-3 h-3"></i> Listo para pagar (Adelanto)</span>';
+            } else {
+                const hasConf = p.conformidad_url || p.sin_conformidad == 1;
+                if (hasConf) {
+                    estadoBadge = '<span class="badge badge-green"><i data-lucide="check" class="w-3 h-3"></i> Listo para pagar (Saldo)</span>';
+                } else {
+                    estadoBadge = '<span class="badge badge-blue"><i data-lucide="check-circle" class="w-3 h-3"></i> Adelanto Pagado</span>';
+                }
+            }
+        } else if (p.condicion_pago !== 'Credito' && p.condicion_pago !== 'Alquiler') {
+            estadoBadge = '<span class="badge badge-green"><i data-lucide="check" class="w-3 h-3"></i> Listo para pagar</span>';
         } else if (p.fecha_vencimiento) {
             const diff = Math.ceil((new Date(p.fecha_vencimiento) - new Date()) / (1000 * 60 * 60 * 24));
             const cls = diff < 5 ? 'badge-red' : diff < 15 ? 'badge-yellow' : 'badge-yellow';
@@ -339,12 +379,6 @@ function renderTreasuryTable() {
                 <span class="badge ${cls} text-[10px]">Vence: ${new Date(p.fecha_vencimiento).toLocaleDateString('es-PE')}</span>
                 <span class="text-[10px] text-muted-foreground">${diff > 0 ? 'En ' + diff + ' días' : 'VENCIDO'}</span>
             </div>`;
-        } else if (p.condicion_pago === 'Adelanto + Saldo') {
-            if (p.adelanto_pagado == 0) {
-                estadoBadge = '<span class="badge badge-yellow"><i data-lucide="clock" class="w-3 h-3"></i> Pendiente Adelanto</span>';
-            } else {
-                estadoBadge = '<span class="badge badge-blue"><i data-lucide="check-circle" class="w-3 h-3"></i> Adelanto Pagado</span>';
-            }
         } else {
             estadoBadge = '<span class="badge badge-yellow"><i data-lucide="clock" class="w-3 h-3"></i> Pendiente</span>';
         }

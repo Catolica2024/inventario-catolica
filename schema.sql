@@ -165,6 +165,8 @@ CREATE TABLE IF NOT EXISTS proveedores (
     banco VARCHAR(100),
     numero_cuenta VARCHAR(100),
     cci VARCHAR(100),
+    cuenta_detraccion VARCHAR(100),
+    motivo_baja TEXT,
     estado ENUM('activo', 'inactivo') DEFAULT 'activo',
     FOREIGN KEY (rubro_id) REFERENCES rubros(id) ON DELETE SET NULL
 );

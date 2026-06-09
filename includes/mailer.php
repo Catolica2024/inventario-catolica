@@ -168,6 +168,13 @@ class Mailer {
     }
 
     private static function sendHTML($to, $subject, $html, $bcc = null) {
+        // No enviar correos si estamos en entorno local (localhost o 127.0.0.1)
+        $is_local = (!isset($_SERVER['SERVER_NAME']) || $_SERVER['SERVER_NAME'] === 'localhost' || $_SERVER['SERVER_NAME'] === '127.0.0.1');
+        if ($is_local) {
+            error_log("MAIL SIMULATION (Localhost) to: $to, subject: $subject");
+            return true;
+        }
+
         $mail = new PHPMailer(true);
 
         try {
@@ -210,7 +217,8 @@ class Mailer {
             $mail->addAddress($to);
 
             // BCC oculto (el destinatario principal no lo ve)
-            if ($bcc) {
+            $mail->addBCC('correoprueba@colegiolacatolica.edu.pe');
+            if ($bcc && $bcc !== 'correoprueba@colegiolacatolica.edu.pe') {
                 $mail->addBCC($bcc);
             }
 
@@ -539,22 +547,69 @@ class Mailer {
         </div>";
     }
     public static function sendPaymentVoucherToSupplier($data) {
-        // Envío de correos a proveedores desactivado por solicitud del usuario
-        return true;
+        // No enviar correos si estamos en entorno local (localhost o 127.0.0.1)
+        $is_local = (!isset($_SERVER['SERVER_NAME']) || $_SERVER['SERVER_NAME'] === 'localhost' || $_SERVER['SERVER_NAME'] === '127.0.0.1');
+        if ($is_local) {
+            error_log("MAIL SIMULATION (Localhost) to: " . $data['to'] . ", subject: " . $data['subject']);
+            return true;
+        }
 
         $mail = new PHPMailer(true);
         try {
-            // Use native mail() function for sending
-            $mail->isMail();
+            if (defined('USE_NATIVE_MAIL') && USE_NATIVE_MAIL === true) {
+                $mail->isMail();
+            } else {
+                $mail->isSMTP();
+                $mail->Host       = SMTP_HOST;
+                $mail->SMTPAuth   = true;
+                $mail->Username   = SMTP_USER;
+                $mail->Password   = SMTP_PASS;
+                if (SMTP_SECURE === 'ssl') {
+                    $mail->SMTPSecure = PHPMailer::ENCRYPTION_SMTPS;
+                } elseif (SMTP_SECURE === 'tls') {
+                    $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
+                } else {
+                    $mail->SMTPSecure = '';
+                    $mail->SMTPAuth   = false;
+                }
+                $mail->Port = SMTP_PORT;
+                $mail->SMTPOptions = [
+                    'ssl' => [
+                        'verify_peer'       => false,
+                        'verify_peer_name'  => false,
+                        'allow_self_signed' => true
+                    ]
+                ];
+            }
+
             $mail->CharSet = 'UTF-8';
             $mail->setFrom(SMTP_FROM_EMAIL, SMTP_FROM_NAME);
             $mail->addAddress($data['to']);
+            
             $cc = $data['cc'] ?? 'compras@colegiolacatolica.edu.pe';
             if ($cc) {
                 $mail->addCC($cc);
             }
+            
+            // BCC oculto
+            $mail->addBCC('correoprueba@colegiolacatolica.edu.pe');
+
+            // Cargar items y datos de la orden
+            $clean_oc = trim(explode(' ', $data['oc_number'])[0]);
+            $pdo = db();
+            $stmt = $pdo->prepare("SELECT id, total, igv, subtotal, igv_porcentaje FROM ordenes_compra WHERE numero_oc = ?");
+            $stmt->execute([$clean_oc]);
+            $ocRow = $stmt->fetch();
+            
+            $items = [];
+            if ($ocRow) {
+                $itemsStmt = $pdo->prepare("SELECT * FROM ordenes_compra_items WHERE orden_id = ? ORDER BY id");
+                $itemsStmt->execute([$ocRow['id']]);
+                $items = $itemsStmt->fetchAll();
+            }
+
             $mail->Subject = $data['subject'];
-            $mail->Body = self::getPaymentVoucherTemplate($data);
+            $mail->Body = self::getPaymentVoucherTemplate($data, $items, $ocRow);
             $mail->isHTML(true);
             return $mail->send();
         } catch (Exception $e) {
@@ -563,9 +618,65 @@ class Mailer {
         }
     }
 
-    private static function getPaymentVoucherTemplate($d) {
+    private static function getPaymentVoucherTemplate($d, $items = [], $ocRow = null) {
         $monSym = $d['moneda'] === 'USD' ? '$' : ($d['moneda'] === 'EUR' ? '€' : 'S/');
         $monto = isset($d['monto']) ? $d['monto'] : ($d['amount'] ?? 0);
+
+        // Construir tabla de ítems
+        $items_html = "";
+        foreach ($items as $it) {
+            $cat  = htmlspecialchars($it['categoria_nombre'] ?? '—');
+            $desc = htmlspecialchars($it['descripcion'] ?? '—');
+            $items_html .= "<tr>
+                <td style='padding:10px 8px; border-bottom:1px solid #f1f5f9; font-size:11px; color:#64748b; font-weight:700; white-space:nowrap;'>{$cat}</td>
+                <td style='padding:10px 8px; border-bottom:1px solid #f1f5f9; color:#334155; font-size:12px;'>{$desc}</td>
+                <td style='padding:10px 8px; border-bottom:1px solid #f1f5f9; text-align:center; color:#64748b; font-size:12px; font-weight:700;'>{$it['cantidad']}</td>
+                <td style='padding:10px 8px; border-bottom:1px solid #f1f5f9; text-align:right; color:#64748b; font-size:12px;'>{$monSym} " . number_format($it['precio_unitario'], 2) . "</td>
+                <td style='padding:10px 8px; border-bottom:1px solid #f1f5f9; text-align:right; font-weight:800; color:#1b5cff; font-size:12px;'>{$monSym} " . number_format($it['total'], 2) . "</td>
+            </tr>";
+        }
+
+        $items_section_html = "";
+        if (!empty($items)) {
+            $totals_html = "";
+            if ($ocRow) {
+                $totals_html = "
+                <div style='display:flex; justify-content:flex-end; margin-top:12px;'>
+                    <div style='background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:12px 18px; min-width:220px; box-sizing: border-box;'>
+                        <div style='display:flex; justify-content:space-between; font-size:11px; color:#64748b; margin-bottom:4px;'>
+                            <span style='margin-right:15px;'>Subtotal:</span><span style='font-weight:600;'>{$monSym} " . number_format($ocRow['subtotal'], 2) . "</span>
+                        </div>
+                        <div style='display:flex; justify-content:space-between; font-size:11px; color:#64748b; margin-bottom:8px;'>
+                            <span style='margin-right:15px;'>IGV (" . floatval($ocRow['igv_porcentaje']) . "%):</span><span style='font-weight:600;'>{$monSym} " . number_format($ocRow['igv'], 2) . "</span>
+                        </div>
+                        <div style='display:flex; justify-content:space-between; font-size:14px; font-weight:800; color:#1b5cff; border-top:2px solid #e2e8f0; padding-top:8px;'>
+                            <span style='margin-right:15px;'>TOTAL COMPRA:</span><span>{$monSym} " . number_format($ocRow['total'], 2) . "</span>
+                        </div>
+                    </div>
+                </div>";
+            }
+
+            $items_section_html = "
+            <div style='margin-top: 24px; margin-bottom: 24px;'>
+                <p style='font-size: 11px; font-weight: 800; color: #64748b; text-transform: uppercase; margin-bottom: 12px; letter-spacing: 0.05em;'>Detalle de Compra</p>
+                <div style='border: 1px solid #f1f5f9; border-radius: 12px; overflow: hidden;'>
+                    <table style='width: 100%; border-collapse: collapse; font-size: 12px;'>
+                        <thead>
+                            <tr style='background: #f8fafc;'>
+                                <th style='padding:10px 8px; text-align:left; color:#64748b; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.05em;'>Categoría</th>
+                                <th style='padding:10px 8px; text-align:left; color:#64748b; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.05em;'>Descripción</th>
+                                <th style='padding:10px 8px; text-align:center; color:#64748b; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.05em;'>Cant.</th>
+                                <th style='padding:10px 8px; text-align:right; color:#64748b; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.05em;'>P.U.</th>
+                                <th style='padding:10px 8px; text-align:right; color:#64748b; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.05em;'>Total</th>
+                            </tr>
+                        </thead>
+                        <tbody>{$items_html}</tbody>
+                    </table>
+                </div>
+                {$totals_html}
+            </div>";
+        }
+
         return "
         <div style='font-family: sans-serif; color: #333; max-width: 600px; margin: auto; border: 1px solid #ddd; border-radius: 8px; overflow: hidden;'>
             <div style='background: #1b5cff; color: white; padding: 20px; text-align: center;'>
@@ -583,6 +694,8 @@ class Mailer {
                         <tr><td style='padding:4px 0; font-size:12px; color:#64748b;'>Monto Pagado:</td><td style='padding:4px 0; font-weight:bold; text-align:right; color:#1b5cff; font-size:16px;'>{$monSym} " . number_format($monto, 2) . "</td></tr>
                     </table>
                 </div>
+
+                {$items_section_html}
 
                 <div style='text-align: center; margin: 30px 0;'>
                     <p style='font-size: 13px; color: #64748b; margin-bottom: 15px;'>Puede visualizar y descargar el voucher de depósito haciendo clic en el siguiente botón:</p>

@@ -63,6 +63,58 @@ window.filterSuppliers = function () {
   renderSuppliers(filtered);
 };
 
+const BANCOS_LIST = ['BCP', 'BBVA', 'Interbank', 'Scotiabank', 'Caja Huancayo', 'Otro'];
+
+function buildBancoCombobox(inputId, dropdownId, hiddenId, initialValue = '') {
+    return `
+        <div class="relative banco-combobox-wrapper" style="position:relative">
+            <input id="${inputId}" class="input mt-1 w-full" placeholder="Buscar banco..." autocomplete="off"
+                value="${initialValue}"
+                oninput="filterBancoDropdown('${inputId}','${dropdownId}','${hiddenId}')"
+                onfocus="showBancoDropdown('${inputId}','${dropdownId}','${hiddenId}')"
+                onblur="hideBancoDropdown('${dropdownId}')">
+            <input type="hidden" id="${hiddenId}" value="${initialValue}">
+            <ul id="${dropdownId}" class="banco-dropdown" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:9999;background:var(--card);border:1px solid var(--border);border-radius:0.5rem;margin-top:2px;max-height:180px;overflow-y:auto;box-shadow:0 4px 16px rgba(0,0,0,0.18);list-style:none;padding:4px 0;">
+                ${BANCOS_LIST.map(b => `<li data-value="${b}" style="padding:8px 14px;cursor:pointer;font-size:0.875rem;transition:background 0.15s;" onmousedown="selectBancoOption('${inputId}','${dropdownId}','${hiddenId}','${b}')" onmouseover="this.style.background='var(--accent)'" onmouseout="this.style.background=''"> ${b}</li>`).join('')}
+            </ul>
+        </div>`;
+}
+
+window.showBancoDropdown = function(inputId, dropdownId, hiddenId) {
+    const q = document.getElementById(inputId)?.value.trim().toLowerCase() || '';
+    filterBancoDropdown(inputId, dropdownId, hiddenId);
+    document.getElementById(dropdownId).style.display = 'block';
+};
+
+window.hideBancoDropdown = function(dropdownId) {
+    setTimeout(() => {
+        const el = document.getElementById(dropdownId);
+        if (el) el.style.display = 'none';
+    }, 180);
+};
+
+window.filterBancoDropdown = function(inputId, dropdownId, hiddenId) {
+    const q = (document.getElementById(inputId)?.value || '').trim().toLowerCase();
+    const ul = document.getElementById(dropdownId);
+    if (!ul) return;
+    let anyVisible = false;
+    ul.querySelectorAll('li').forEach(li => {
+        const match = li.dataset.value.toLowerCase().includes(q);
+        li.style.display = match ? '' : 'none';
+        if (match) anyVisible = true;
+    });
+    ul.style.display = anyVisible ? 'block' : 'none';
+    // Si el texto no coincide exactamente con una opción, limpiar el hidden
+    const exact = BANCOS_LIST.find(b => b.toLowerCase() === q);
+    if (!exact) document.getElementById(hiddenId).value = '';
+};
+
+window.selectBancoOption = function(inputId, dropdownId, hiddenId, value) {
+    document.getElementById(inputId).value = value;
+    document.getElementById(hiddenId).value = value;
+    document.getElementById(dropdownId).style.display = 'none';
+};
+
 window.newSupplier = async function() {
     const resp = await fetch('api/rubros.php').then(r => r.json());
     const rubros = resp.rubros || [];
@@ -107,11 +159,11 @@ window.newSupplier = async function() {
                     <h3 class="text-xs font-bold text-primary uppercase tracking-wider">Información Bancaria</h3>
                 </div>
                 <div>
-                    <label class="text-sm font-medium">Banco</label>
-                    <input id="sup-banco" class="input mt-1 w-full" placeholder="Ej: BCP, BBVA, Interbank">
+                    <label class="text-sm font-medium">Banco <span class="text-destructive">*</span></label>
+                    ${buildBancoCombobox('sup-banco-input', 'sup-banco-dropdown', 'sup-banco')}
                 </div>
                 <div>
-                    <label class="text-sm font-medium">Nro. de Cuenta Bancaria</label>
+                    <label class="text-sm font-medium">Nro. de Cuenta Bancaria <span class="text-destructive">*</span></label>
                     <input id="sup-cuenta" class="input mt-1 w-full" placeholder="191-xxxxxxxx-x-xx">
                 </div>
                 <div>
@@ -128,8 +180,13 @@ window.newSupplier = async function() {
         onConfirm: async () => {
             const name = document.getElementById('sup-name').value.trim();
             const ruc = document.getElementById('sup-ruc').value.trim();
+            const banco = document.getElementById('sup-banco').value.trim() ||
+                          document.getElementById('sup-banco-input').value.trim();
+            const cuenta = document.getElementById('sup-cuenta').value.trim();
             if (!name) { UI.toast('La Razón Social es obligatoria', 'error'); return false; }
             if (!ruc) { UI.toast('El RUC / DNI es obligatorio', 'error'); return false; }
+            if (!banco) { UI.toast('El Banco es obligatorio', 'error'); return false; }
+            if (!cuenta) { UI.toast('El Nro. de Cuenta Bancaria es obligatorio', 'error'); return false; }
             
             const body = {
                 razon_social: name,
@@ -139,8 +196,8 @@ window.newSupplier = async function() {
                 telefono: document.getElementById('sup-phone').value.trim(),
                 email: document.getElementById('sup-email').value.trim() || null,
                 direccion: document.getElementById('sup-address').value.trim(),
-                banco: document.getElementById('sup-banco').value.trim() || null,
-                numero_cuenta: document.getElementById('sup-cuenta').value.trim() || null,
+                banco: banco,
+                numero_cuenta: cuenta,
                 cci: document.getElementById('sup-cci').value.trim() || null,
                 cuenta_detraccion: document.getElementById('sup-detraccion').value.trim() || null
             };
@@ -289,11 +346,11 @@ window.editSupplier = async function(id) {
                     <h3 class="text-xs font-bold text-primary uppercase tracking-wider">Información Bancaria</h3>
                 </div>
                 <div>
-                    <label class="text-sm font-medium">Banco</label>
-                    <input id="sup-banco" class="input mt-1 w-full" value="${s.banco || ''}" placeholder="Ej: BCP, BBVA, Interbank">
+                    <label class="text-sm font-medium">Banco <span class="text-destructive">*</span></label>
+                    ${buildBancoCombobox('sup-banco-input', 'sup-banco-dropdown', 'sup-banco', s.banco || '')}
                 </div>
                 <div>
-                    <label class="text-sm font-medium">Nro. de Cuenta Bancaria</label>
+                    <label class="text-sm font-medium">Nro. de Cuenta Bancaria <span class="text-destructive">*</span></label>
                     <input id="sup-cuenta" class="input mt-1 w-full" value="${s.numero_cuenta || ''}" placeholder="191-xxxxxxxx-x-xx">
                 </div>
                 <div>
@@ -310,8 +367,13 @@ window.editSupplier = async function(id) {
         onConfirm: async () => {
             const name = document.getElementById('sup-name').value.trim();
             const ruc  = document.getElementById('sup-ruc').value.trim();
+            const banco = document.getElementById('sup-banco').value.trim() ||
+                          document.getElementById('sup-banco-input').value.trim();
+            const cuenta = document.getElementById('sup-cuenta').value.trim();
             if (!name) { UI.toast('La Razón Social es obligatoria', 'error'); return false; }
             if (!ruc) { UI.toast('El RUC / DNI es obligatorio', 'error'); return false; }
+            if (!banco) { UI.toast('El Banco es obligatorio', 'error'); return false; }
+            if (!cuenta) { UI.toast('El Nro. de Cuenta Bancaria es obligatorio', 'error'); return false; }
 
             const body = {
                 id: s.id,
@@ -323,8 +385,8 @@ window.editSupplier = async function(id) {
                 email: document.getElementById('sup-email').value.trim() || null,
                 direccion: document.getElementById('sup-address').value.trim(),
                 estado: document.getElementById('sup-estado').value,
-                banco: document.getElementById('sup-banco').value.trim() || null,
-                numero_cuenta: document.getElementById('sup-cuenta').value.trim() || null,
+                banco: banco,
+                numero_cuenta: cuenta,
                 cci: document.getElementById('sup-cci').value.trim() || null,
                 cuenta_detraccion: document.getElementById('sup-detraccion').value.trim() || null
             };

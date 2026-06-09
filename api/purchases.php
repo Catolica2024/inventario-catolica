@@ -66,7 +66,9 @@ try {
                        (SELECT COUNT(*) FROM ordenes_cuotas WHERE orden_id = oc.id AND comprobante_url IS NOT NULL AND comprobante_url != '') as cuotas_con_factura,
                        (SELECT pagado FROM ordenes_movilidad WHERE orden_id = oc.id LIMIT 1) as mobility_pagado,
                        (SELECT voucher_url FROM ordenes_movilidad WHERE orden_id = oc.id LIMIT 1) as mobility_voucher,
-                       (SELECT p2.razon_social FROM ordenes_movilidad m2 JOIN proveedores p2 ON m2.proveedor_id = p2.id WHERE m2.orden_id = oc.id LIMIT 1) as mobility_proveedor_nombre
+                       (SELECT p2.razon_social FROM ordenes_movilidad m2 JOIN proveedores p2 ON m2.proveedor_id = p2.id WHERE m2.orden_id = oc.id LIMIT 1) as mobility_proveedor_nombre,
+                       (SELECT fecha_vencimiento FROM ordenes_cuotas WHERE orden_id = oc.id AND pagado = 0 ORDER BY numero_cuota ASC LIMIT 1) as proxima_cuota_vencimiento,
+                       (SELECT numero_cuota FROM ordenes_cuotas WHERE orden_id = oc.id AND pagado = 0 ORDER BY numero_cuota ASC LIMIT 1) as proxima_cuota_numero
                 FROM ordenes_compra oc
                 JOIN proveedores p ON oc.proveedor_id = p.id
                 LEFT JOIN areas a ON oc.area_id = a.id

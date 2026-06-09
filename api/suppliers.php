@@ -5,6 +5,20 @@ require_once __DIR__ . '/../includes/db.php';
 $method = $_SERVER['REQUEST_METHOD'];
 try {
     $pdo = db();
+
+    // Auto-migración auto-reparable: Verificar y agregar columnas faltantes en proveedores
+    try {
+        $columns = $pdo->query("DESCRIBE proveedores")->fetchAll(PDO::FETCH_COLUMN);
+        if (!in_array('cuenta_detraccion', $columns)) {
+            $pdo->exec("ALTER TABLE proveedores ADD COLUMN cuenta_detraccion VARCHAR(100) DEFAULT NULL");
+        }
+        if (!in_array('motivo_baja', $columns)) {
+            $pdo->exec("ALTER TABLE proveedores ADD COLUMN motivo_baja TEXT DEFAULT NULL");
+        }
+    } catch (Throwable $migrationError) {
+        error_log("Error de auto-migración de proveedores: " . $migrationError->getMessage());
+    }
+
     switch ($method) {
         case 'GET':
             $activeOnly = isset($_GET['active_only']) && $_GET['active_only'] == '1';
@@ -23,6 +37,12 @@ try {
             $b = get_body();
             if (empty($b['ruc']) || empty($b['razon_social'])) {
                 json_response(['error' => 'RUC y Razón social son obligatorios'], 400);
+            }
+            if (empty($b['banco'])) {
+                json_response(['error' => 'El Banco es obligatorio'], 400);
+            }
+            if (empty($b['numero_cuenta'])) {
+                json_response(['error' => 'El Nro. de Cuenta Bancaria es obligatorio'], 400);
             }
             $stmt = $pdo->prepare("INSERT INTO proveedores (ruc, razon_social, banco, numero_cuenta, cci, cuenta_detraccion, email, contacto, telefono, direccion, rubro_id, estado) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)");
             $stmt->execute([
