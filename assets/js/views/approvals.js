@@ -88,6 +88,78 @@ window.viewOrderDetails = async function(id) {
     const monSym = oc.moneda === 'USD' ? '$' : (oc.moneda === 'EUR' ? '€' : 'S/');
     const firstCuotaDate = (oc.cuotas && oc.cuotas.length > 0) ? oc.cuotas[0].fecha_vencimiento : (oc.fecha_vencimiento || '');
 
+    const hasConformidad = !!(oc.conformidad_url);
+    const hasFactura = !!(oc.comprobante_url);
+    const esSinConformidad = oc.sin_conformidad == 1;
+
+    let docSectionHTML = '';
+    if (hasConformidad || hasFactura || esSinConformidad || (oc.estado === 'Recibida' || oc.estado === 'Completada')) {
+      docSectionHTML = `
+      <div class="space-y-2">
+        <p class="text-sm font-semibold mb-2 flex items-center gap-2">
+          <i data-lucide="files" class="w-3.5 h-3.5 text-primary"></i>
+          Documentación de Recepción y Compras
+        </p>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          ${hasConformidad ? `
+            <a href="${oc.conformidad_url}" target="_blank" class="flex items-center gap-2.5 p-3 rounded-lg border border-green-200 bg-green-50 hover:bg-green-100 hover:shadow-md transition-all cursor-pointer">
+              <div class="w-8 h-8 rounded-lg bg-green-500 flex items-center justify-center shrink-0">
+                <i data-lucide="file-check-2" class="w-4.5 h-4.5 text-white"></i>
+              </div>
+              <div class="flex-1 min-w-0">
+                <p class="text-xs font-bold text-green-800 truncate">Acta de Conformidad</p>
+                <p class="text-[9px] text-green-600">Ver documento de recepción</p>
+              </div>
+              <i data-lucide="external-link" class="w-4 h-4 text-green-700 shrink-0"></i>
+            </a>
+          ` : (esSinConformidad ? `
+            <div class="flex items-center gap-2.5 p-3 rounded-lg border border-blue-200 bg-blue-50">
+              <div class="w-8 h-8 rounded-lg bg-blue-400 flex items-center justify-center shrink-0">
+                <i data-lucide="file-check-2" class="w-4.5 h-4.5 text-white"></i>
+              </div>
+              <div class="flex-1 min-w-0">
+                <p class="text-xs font-bold text-blue-800 truncate">Conformidad</p>
+                <p class="text-[9px] text-blue-600">No requiere conformidad física</p>
+              </div>
+            </div>
+          ` : `
+            <div class="flex items-center gap-2.5 p-3 rounded-lg border border-dashed border-red-200 bg-red-50/50">
+              <div class="w-8 h-8 rounded-lg bg-red-100 flex items-center justify-center shrink-0 border border-red-200">
+                <i data-lucide="file-x-2" class="w-4.5 h-4.5 text-red-500"></i>
+              </div>
+              <div class="flex-1 min-w-0">
+                <p class="text-xs font-bold text-red-700 truncate">Acta de Conformidad</p>
+                <p class="text-[9px] text-red-500">Pendiente de subir por recepción</p>
+              </div>
+            </div>
+          `)}
+
+          ${hasFactura ? `
+            <a href="${oc.comprobante_url}" target="_blank" class="flex items-center gap-2.5 p-3 rounded-lg border border-orange-200 bg-orange-50 hover:bg-orange-100 hover:shadow-sm transition-all cursor-pointer">
+              <div class="w-8 h-8 rounded-lg bg-orange-500 flex items-center justify-center shrink-0">
+                <i data-lucide="receipt" class="w-4.5 h-4.5 text-white"></i>
+              </div>
+              <div class="flex-1 min-w-0">
+                <p class="text-xs font-bold text-orange-800 truncate">Factura / Boleta / RxH</p>
+                <p class="text-[9px] text-orange-600">Ver comprobante de pago</p>
+              </div>
+              <i data-lucide="external-link" class="w-4 h-4 text-orange-700 shrink-0"></i>
+            </a>
+          ` : `
+            <div class="flex items-center gap-2.5 p-3 rounded-lg border border-dashed border-amber-200 bg-amber-50/50">
+              <div class="w-8 h-8 rounded-lg bg-amber-100 flex items-center justify-center shrink-0 border border-amber-200">
+                <i data-lucide="receipt" class="w-4.5 h-4.5 text-amber-500"></i>
+              </div>
+              <div class="flex-1 min-w-0">
+                <p class="text-xs font-bold text-amber-700 truncate">Factura / Boleta / RxH</p>
+                <p class="text-[9px] text-amber-500">Pendiente de subir por compras</p>
+              </div>
+            </div>
+          `}
+        </div>
+      </div>`;
+    }
+
     const body = `
       <div class="space-y-5">
         ${(oc.es_alquiler == 1 && oc.estado === 'Aprobada' && oc.pagado == 0) ? `
@@ -323,9 +395,10 @@ window.viewOrderDetails = async function(id) {
               statusClass = 'text-slate-600 bg-slate-50 border-slate-200';
             }
             
+            const tieneFactura = c.comprobante_url && c.comprobante_url !== '' && c.comprobante_url !== 'null';
             return `
             <div class="flex flex-col sm:flex-row sm:items-center justify-between p-2.5 rounded-lg border border-slate-100 bg-white gap-2">
-              <div class="flex items-center gap-2.5">
+              <div class="flex items-center gap-2.5 animate-fade-in">
                 <div class="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${isPagada ? 'bg-green-500 text-white' : 'bg-slate-100 text-slate-500 border border-slate-200'}">
                   ${isPagada ? '✓' : c.numero_cuota}
                 </div>
@@ -339,8 +412,22 @@ window.viewOrderDetails = async function(id) {
                   </div>
                 </div>
               </div>
-              <div class="flex items-center justify-between sm:justify-end gap-3 w-full sm:w-auto">
+              <div class="flex items-center justify-between sm:justify-end gap-3 w-full sm:w-auto flex-wrap">
                 <span class="text-[10px] font-bold px-2 py-0.5 rounded-full border ${statusClass}">${statusText}</span>
+                
+                ${tieneFactura ? `
+                  <a href="${c.comprobante_url}" target="_blank" 
+                     class="btn btn-outline btn-sm text-[10px] px-2 py-1 text-orange-600 border-orange-200 hover:bg-orange-50 flex items-center gap-1 shrink-0 font-bold" 
+                     title="Ver Factura de esta cuota">
+                      <i data-lucide="file-text" class="w-3 h-3"></i>
+                      <span>Factura Cuota</span>
+                  </a>
+                ` : `
+                  <span class="text-[9px] text-amber-600 font-bold bg-amber-50 px-2 py-1 rounded border border-amber-200/60 flex items-center gap-1 shrink-0" title="Pendiente de subir por compras">
+                      <i data-lucide="alert-circle" class="w-3.5 h-3.5 text-amber-500"></i> Sin Factura
+                  </span>
+                `}
+
                 <div class="flex items-center gap-1.5">
                   <span class="font-extrabold text-xs ${isPagada ? 'text-green-700' : 'text-primary'}">${monSym} ${parseFloat(c.monto_cuota).toFixed(2)}</span>
                   ${isPagada && c.voucher_url ? `
@@ -502,6 +589,8 @@ window.viewOrderDetails = async function(id) {
           <p class="text-blue-700 font-semibold mb-1 flex items-center gap-1"><i data-lucide="info" class="w-3.5 h-3.5"></i> Observaciones / Sustento:</p>
           <p class="text-blue-900 italic">"${oc.observaciones}"</p>
         </div>` : ''}
+
+        ${docSectionHTML}
 
         <div>
           <p class="text-sm font-semibold mb-2 flex items-center gap-2">

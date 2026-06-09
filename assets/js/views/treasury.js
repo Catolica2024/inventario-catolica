@@ -463,6 +463,7 @@ window.openPaymentDetails = async function (id) {
                 const venc = c.fecha_vencimiento ? new Date(c.fecha_vencimiento).toLocaleDateString('es-PE') : '—';
                 const fechaPago = c.fecha_pago ? new Date(c.fecha_pago).toLocaleDateString('es-PE') : null;
                 const descText = c.descripcion ? `<span class="badge badge-gray text-[9px] font-bold">${c.descripcion}</span>` : '';
+                const tieneFactura = c.comprobante_url && c.comprobante_url !== '' && c.comprobante_url !== 'null';
                 return `
                 <div class="flex items-center justify-between p-2.5 rounded-lg border ${isPagada ? 'bg-green-50 border-green-200' : 'bg-white border-border'}">
                     <div class="flex items-center gap-3">
@@ -474,10 +475,26 @@ window.openPaymentDetails = async function (id) {
                                 Cuota ${c.numero_cuota} de ${c.total_cuotas}
                                 ${descText}
                             </div>
-                            <div class="text-[10px] text-muted-foreground">Vence: ${venc} ${isPagada ? '· Pagado: ' + fechaPago : ''}</div>
+                            <div class="text-[10px] text-muted-foreground flex items-center gap-1.5 flex-wrap">
+                                <span>Vence: ${venc} ${isPagada ? '· Pagado: ' + fechaPago : ''}</span>
+                            </div>
                         </div>
                     </div>
                     <div class="flex items-center gap-2">
+                        <!-- Factura de la cuota -->
+                        ${tieneFactura ? `
+                            <a href="${c.comprobante_url}" target="_blank" 
+                               class="btn btn-outline btn-sm text-[10px] px-2 py-1 text-orange-600 border-orange-200 hover:bg-orange-50 flex items-center gap-1 shrink-0 font-bold" 
+                               title="Ver Factura de esta cuota">
+                                <i data-lucide="file-text" class="w-3 h-3"></i>
+                                <span>Factura Cuota</span>
+                            </a>
+                        ` : `
+                            <span class="text-[9px] text-amber-600 font-bold bg-amber-50 px-2 py-1 rounded border border-amber-200/60 flex items-center gap-1 shrink-0" title="Pendiente de subir por compras">
+                                <i data-lucide="alert-circle" class="w-3.5 h-3.5 text-amber-500"></i> Sin Factura
+                            </span>
+                        `}
+
                         <span class="font-bold text-sm ${isPagada ? 'text-green-700' : 'text-primary'}">${monSym} ${parseFloat(c.monto_cuota).toFixed(2)}</span>
                         ${!isPagada && !esContabilidad ? `
                             <button class="btn btn-primary btn-sm text-xs px-2 py-1" onclick="pagarCuota(${p.id}, ${c.id}, '${p.numero_oc}-C${c.numero_cuota}')">
@@ -589,36 +606,131 @@ window.openPaymentDetails = async function (id) {
                             ` : ''}
                         </div>
                     </div>
-                </div>
-            </div>`;
+                </div>`;
     }
 
-    // --- Sección de Comprobante / Conformidad (Si ya se subieron) ---
-    let docSection = '';
-    if (p.conformidad_url || p.comprobante_url) {
-        docSection = `
-            <div class="mt-4 space-y-2">
-                <p class="text-[10px] uppercase font-bold text-muted-foreground ml-1">Documentos de Recepción</p>
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    ${p.conformidad_url ? `
-                    <div class="p-2.5 bg-muted/50 rounded-lg border border-dashed border-muted-foreground/30 flex items-center justify-between">
-                        <div class="flex items-center gap-2">
-                            <i data-lucide="file-check" class="w-3.5 h-3.5 text-primary"></i>
-                            <span class="text-[10px] font-bold">Conformidad</span>
-                        </div>
-                        <a href="${p.conformidad_url}" target="_blank" class="text-[10px] text-primary hover:underline">Ver</a>
-                    </div>` : ''}
-                    ${p.comprobante_url ? `
-                    <div class="p-2.5 bg-muted/50 rounded-lg border border-dashed border-muted-foreground/30 flex items-center justify-between">
-                        <div class="flex items-center gap-2">
-                            <i data-lucide="file-text" class="w-3.5 h-3.5 text-orange-600"></i>
-                            <span class="text-[10px] font-bold">Factura / RxH</span>
-                        </div>
-                        <a href="${p.comprobante_url}" target="_blank" class="text-[10px] text-primary hover:underline">Ver</a>
-                    </div>` : ''}
+    // --- Sección de Comprobante / Conformidad (SIEMPRE visible con estado claro) ---
+    const hasConformidad = !!(p.conformidad_url);
+    const hasFactura = !!(p.comprobante_url);
+    const esSinConformidad = p.sin_conformidad == 1;
+
+    const conformidadCard = hasConformidad ? `
+        <a href="${p.conformidad_url}" target="_blank"
+           class="group flex flex-col gap-2 p-4 rounded-xl border-2 border-green-200 bg-green-50 hover:bg-green-100 hover:border-green-400 hover:shadow-md transition-all cursor-pointer">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                    <div class="w-9 h-9 rounded-lg bg-green-500 flex items-center justify-center shadow-sm group-hover:scale-105 transition-transform">
+                        <i data-lucide="file-check-2" class="w-5 h-5 text-white"></i>
+                    </div>
+                    <div>
+                        <div class="text-xs font-bold text-green-800">Conformidad</div>
+                        <div class="text-[10px] text-green-600">Documento de recepción</div>
+                    </div>
                 </div>
-            </div>`;
-    }
+                <div class="flex items-center gap-1.5 bg-green-500 text-white text-[11px] font-bold px-3 py-1.5 rounded-lg group-hover:bg-green-600 transition-colors">
+                    <i data-lucide="external-link" class="w-3.5 h-3.5"></i>
+                    Abrir
+                </div>
+            </div>
+            <div class="text-[10px] text-green-700 bg-green-100 rounded-md px-2 py-1 flex items-center gap-1 font-medium">
+                <i data-lucide="check-circle" class="w-3 h-3"></i> Subida y disponible — clic para visualizar
+            </div>
+        </a>
+    ` : esSinConformidad ? `
+        <div class="flex flex-col gap-2 p-4 rounded-xl border-2 border-blue-200 bg-blue-50">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                    <div class="w-9 h-9 rounded-lg bg-blue-400 flex items-center justify-center shadow-sm">
+                        <i data-lucide="file-check-2" class="w-5 h-5 text-white"></i>
+                    </div>
+                    <div>
+                        <div class="text-xs font-bold text-blue-800">Conformidad</div>
+                        <div class="text-[10px] text-blue-600">Documento de recepción</div>
+                    </div>
+                </div>
+                <span class="text-[10px] font-bold bg-blue-100 text-blue-700 px-2 py-1 rounded-lg border border-blue-200">Sin conformidad</span>
+            </div>
+            <div class="text-[10px] text-blue-700 bg-blue-100 rounded-md px-2 py-1 flex items-center gap-1 font-medium">
+                <i data-lucide="info" class="w-3 h-3"></i> Marcado como "No requiere conformidad"
+            </div>
+        </div>
+    ` : `
+        <div class="flex flex-col gap-2 p-4 rounded-xl border-2 border-dashed border-red-200 bg-red-50">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                    <div class="w-9 h-9 rounded-lg bg-red-100 border-2 border-red-200 flex items-center justify-center">
+                        <i data-lucide="file-x-2" class="w-5 h-5 text-red-400"></i>
+                    </div>
+                    <div>
+                        <div class="text-xs font-bold text-red-700">Conformidad</div>
+                        <div class="text-[10px] text-red-500">Pendiente de subir</div>
+                    </div>
+                </div>
+                <span class="text-[10px] font-bold bg-red-100 text-red-600 px-2 py-1 rounded-lg border border-red-200 animate-pulse">No subida</span>
+            </div>
+            <div class="text-[10px] text-red-600 bg-red-100 rounded-md px-2 py-1 flex items-center gap-1 font-medium">
+                <i data-lucide="alert-triangle" class="w-3 h-3"></i> Compras debe subir la conformidad
+            </div>
+        </div>
+    `;
+
+    const facturaCard = hasFactura ? `
+        <a href="${p.comprobante_url}" target="_blank"
+           class="group flex flex-col gap-2 p-4 rounded-xl border-2 border-orange-200 bg-orange-50 hover:bg-orange-100 hover:border-orange-400 hover:shadow-md transition-all cursor-pointer">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                    <div class="w-9 h-9 rounded-lg bg-orange-500 flex items-center justify-center shadow-sm group-hover:scale-105 transition-transform">
+                        <i data-lucide="receipt" class="w-5 h-5 text-white"></i>
+                    </div>
+                    <div>
+                        <div class="text-xs font-bold text-orange-800">Factura / RxH</div>
+                        <div class="text-[10px] text-orange-600">Comprobante de pago</div>
+                    </div>
+                </div>
+                <div class="flex items-center gap-1.5 bg-orange-500 text-white text-[11px] font-bold px-3 py-1.5 rounded-lg group-hover:bg-orange-600 transition-colors">
+                    <i data-lucide="external-link" class="w-3.5 h-3.5"></i>
+                    Abrir
+                </div>
+            </div>
+            <div class="text-[10px] text-orange-700 bg-orange-100 rounded-md px-2 py-1 flex items-center gap-1 font-medium">
+                <i data-lucide="check-circle" class="w-3 h-3"></i> Subida y disponible — clic para visualizar
+            </div>
+        </a>
+    ` : `
+        <div class="flex flex-col gap-2 p-4 rounded-xl border-2 border-dashed border-amber-200 bg-amber-50">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                    <div class="w-9 h-9 rounded-lg bg-amber-100 border-2 border-amber-200 flex items-center justify-center">
+                        <i data-lucide="receipt" class="w-5 h-5 text-amber-400"></i>
+                    </div>
+                    <div>
+                        <div class="text-xs font-bold text-amber-700">Factura / RxH</div>
+                        <div class="text-[10px] text-amber-500">Pendiente de subir</div>
+                    </div>
+                </div>
+                <span class="text-[10px] font-bold bg-amber-100 text-amber-600 px-2 py-1 rounded-lg border border-amber-200">No subida</span>
+            </div>
+            <div class="text-[10px] text-amber-600 bg-amber-100 rounded-md px-2 py-1 flex items-center gap-1 font-medium">
+                <i data-lucide="clock" class="w-3 h-3"></i> ${p.pagado == 1 ? 'Compras debe subir la factura' : 'Disponible tras el pago'}
+            </div>
+        </div>
+    `;
+
+    const docSection = `
+        <div class="space-y-2">
+            <div class="flex items-center gap-2">
+                <div class="w-1 h-4 rounded-full bg-primary"></div>
+                <p class="text-xs uppercase font-bold text-foreground/70 tracking-wide">Documentación Adjunta</p>
+                <div class="ml-auto flex items-center gap-1.5 text-[10px] text-muted-foreground">
+                    ${hasConformidad ? '<span class="flex items-center gap-1 text-green-600 font-semibold"><i data-lucide="check" class="w-3 h-3"></i>Conf.</span>' : ''}
+                    ${hasFactura ? '<span class="flex items-center gap-1 text-orange-600 font-semibold"><i data-lucide="check" class="w-3 h-3"></i>Factura</span>' : ''}
+                </div>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                ${conformidadCard}
+                ${facturaCard}
+            </div>
+        </div>`;
 
     // --- Sección de pago (solo si no es cuotas ni adelanto o si no está pagado) ---
     const isAdelantoSaldo = p.condicion_pago === 'Adelanto + Saldo';
