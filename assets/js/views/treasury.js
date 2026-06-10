@@ -370,8 +370,53 @@ function renderTreasuryTable() {
 
         // Badge de estado pago
         let estadoBadge = '';
+        const esOS = p.tipo === 'servicio';
+        const tieneConformidad = p.conformidad_url || p.sin_conformidad == 1;
+        const esAdelantoSaldo = p.condicion_pago === 'Adelanto + Saldo';
+        const esAlquiler = p.es_alquiler == 1 || p.condicion_pago === 'Alquiler';
+        const esPago100 = !esCuotas && !esAlquiler && !esAdelantoSaldo;
+
+        // Función auxiliar para calcular días y mostrar badge estilizado
+        const getListoParaPagarBadge = (p, labelExtra = '') => {
+            const aprobadoFechaStr = p.fecha_aprobacion;
+            if (!aprobadoFechaStr) {
+                return `<span class="badge badge-green"><i data-lucide="check" class="w-3 h-3"></i> Listo para pagar${labelExtra}</span>`;
+            }
+            const parts = aprobadoFechaStr.split(' ')[0].split('-');
+            const timeParts = aprobadoFechaStr.split(' ')[1] ? aprobadoFechaStr.split(' ')[1].split(':') : [0, 0, 0];
+            const aprobadoDate = new Date(parts[0], parts[1] - 1, parts[2], timeParts[0], timeParts[1], timeParts[2]);
+            const hoy = new Date();
+            const d1 = new Date(aprobadoDate.getFullYear(), aprobadoDate.getMonth(), aprobadoDate.getDate());
+            const d2 = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
+            const diffDays = Math.floor((d2 - d1) / (1000 * 60 * 60 * 24));
+            
+            let badgeText = '';
+            let styleClass = '';
+            
+            if (diffDays <= 0) {
+                badgeText = `hoy se aprobó, listo para pagar${labelExtra}`;
+            } else if (diffDays === 1) {
+                badgeText = `ayer se aprobó, listo para pagar${labelExtra}`;
+            } else {
+                const accion = (p.condicion_pago === 'Adelanto + Saldo' && p.adelanto_pagado == 0) ? 'listo para pagar' : 'hora de pagar';
+                badgeText = `hace ${diffDays} días se aprobó, ${accion}${labelExtra}`;
+            }
+            
+            if (diffDays >= 0 && diffDays <= 3) {
+                styleClass = 'bg-emerald-50 border border-emerald-200 text-emerald-800 font-bold rounded px-2 py-0.5 text-[10px] flex items-center gap-1.5 w-fit';
+            } else if (diffDays >= 4 && diffDays <= 5) {
+                styleClass = 'bg-orange-50 border border-orange-200 text-orange-800 font-bold rounded px-2 py-0.5 text-[10px] flex items-center gap-1.5 w-fit';
+            } else {
+                styleClass = 'bg-rose-50 border border-rose-200 text-rose-800 font-bold rounded px-2 py-0.5 text-[10px] flex items-center gap-1.5 w-fit animate-pulse';
+            }
+            
+            return `<span class="${styleClass}"><i data-lucide="check" class="w-3 h-3"></i> ${badgeText}</span>`;
+        };
+
         if (p.pagado == 1) {
             estadoBadge = '<span class="badge badge-green"><i data-lucide="check-circle" class="w-3 h-3"></i> Pagado</span>';
+        } else if (esOS && esPago100 && !tieneConformidad) {
+            estadoBadge = '<span class="badge badge-yellow"><i data-lucide="clock" class="w-3 h-3"></i> A la espera de la conformidad</span>';
         } else if (p.condicion_pago === 'Alquiler' || esCuotas) {
             const labelText = p.condicion_pago === 'Alquiler' ? 'meses' : 'cuotas';
             const badgeCls = p.condicion_pago === 'Alquiler' ? 'badge-indigo' : 'badge-blue';
@@ -390,39 +435,42 @@ function renderTreasuryTable() {
             </div>`;
         } else if (p.condicion_pago === 'Adelanto + Saldo') {
             if (p.adelanto_pagado == 0) {
-                estadoBadge = '<span class="badge badge-green"><i data-lucide="check" class="w-3 h-3"></i> Listo para pagar (Adelanto)</span>';
+                estadoBadge = getListoParaPagarBadge(p, ' (Adelanto)');
             } else {
-                const hasConf = p.conformidad_url || p.sin_conformidad == 1;
-                if (hasConf) {
-                    estadoBadge = '<span class="badge badge-green"><i data-lucide="check" class="w-3 h-3"></i> Listo para pagar (Saldo)</span>';
+                if (tieneConformidad) {
+                    estadoBadge = getListoParaPagarBadge(p, ' (Saldo)');
                 } else {
                     estadoBadge = '<span class="badge badge-blue"><i data-lucide="check-circle" class="w-3 h-3"></i> Adelanto Pagado</span>';
                 }
             }
         } else if (p.condicion_pago !== 'Credito' && p.condicion_pago !== 'Alquiler') {
-            estadoBadge = '<span class="badge badge-green"><i data-lucide="check" class="w-3 h-3"></i> Listo para pagar</span>';
+            estadoBadge = getListoParaPagarBadge(p);
         } else if (p.fecha_vencimiento) {
-            const parts = p.fecha_vencimiento.split('-');
-            const dueDate = new Date(parts[0], parts[1] - 1, parts[2]);
-            dueDate.setHours(0,0,0,0);
-            const today = new Date();
-            today.setHours(0,0,0,0);
-            const diffTime = dueDate - today;
-            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-            
-            const formattedDate = `${parts[2]}/${parts[1]}/${parts[0]}`;
-            const cls = diffDays < 0 ? 'badge-red' : diffDays < 5 ? 'badge-red' : 'badge-yellow';
-            
-            const diffText = diffDays < 0 
-                ? `<span class="text-[10px] text-red-600 font-bold">VENCIDO hace ${Math.abs(diffDays)} días</span>`
-                : diffDays === 0
-                    ? `<span class="text-[10px] text-orange-600 font-bold">¡Vence hoy!</span>`
-                    : `<span class="text-[10px] text-muted-foreground font-medium">Faltan ${diffDays} días</span>`;
-            
-            estadoBadge = `<div class="flex flex-col gap-0.5">
-                <span class="badge ${cls} text-[10px]">Último día de pago: ${formattedDate}</span>
-                ${diffText}
-            </div>`;
+            if (esOS && !tieneConformidad) {
+                estadoBadge = '<span class="badge badge-yellow"><i data-lucide="clock" class="w-3 h-3"></i> A la espera de la conformidad</span>';
+            } else {
+                const parts = p.fecha_vencimiento.split('-');
+                const dueDate = new Date(parts[0], parts[1] - 1, parts[2]);
+                dueDate.setHours(0,0,0,0);
+                const today = new Date();
+                today.setHours(0,0,0,0);
+                const diffTime = dueDate - today;
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                
+                const formattedDate = `${parts[2]}/${parts[1]}/${parts[0]}`;
+                const cls = diffDays < 0 ? 'badge-red' : diffDays < 5 ? 'badge-red' : 'badge-yellow';
+                
+                const diffText = diffDays < 0 
+                    ? `<span class="text-[10px] text-red-600 font-bold">VENCIDO hace ${Math.abs(diffDays)} días</span>`
+                    : diffDays === 0
+                        ? `<span class="text-[10px] text-orange-600 font-bold">¡Vence hoy!</span>`
+                        : `<span class="text-[10px] text-muted-foreground font-medium">Faltan ${diffDays} días</span>`;
+                
+                estadoBadge = `<div class="flex flex-col gap-0.5">
+                    <span class="badge ${cls} text-[10px]">Último día de pago: ${formattedDate}</span>
+                    ${diffText}
+                </div>`;
+            }
         } else {
             estadoBadge = '<span class="badge badge-yellow"><i data-lucide="clock" class="w-3 h-3"></i> Pendiente</span>';
         }
@@ -778,7 +826,12 @@ window.openPaymentDetails = async function (id) {
 
     // --- Sección de pago (solo si no es cuotas ni adelanto o si no está pagado) ---
     const isAdelantoSaldo = p.condicion_pago === 'Adelanto + Saldo';
-    const showPayForm = !esCuotas && !isAdelantoSaldo && p.pagado == 0 && !esContabilidad;
+    const esOS = p.tipo === 'servicio';
+    const tieneConformidad = p.conformidad_url || p.sin_conformidad == 1;
+    const esPago100 = !esCuotas && !isAdelantoSaldo;
+    const pagoBloqueadoPorConformidad = esOS && esPago100 && !tieneConformidad;
+
+    const showPayForm = !esCuotas && !isAdelantoSaldo && p.pagado == 0 && !esContabilidad && !pagoBloqueadoPorConformidad;
     const showPaidInfo = p.pagado == 1;
 
     const body = `
@@ -960,6 +1013,15 @@ window.openPaymentDetails = async function (id) {
                 <div class="p-4 border border-yellow-200 bg-yellow-50 rounded-lg">
                     <h4 class="font-bold text-yellow-800 flex items-center gap-2 mb-2 text-sm"><i data-lucide="clock" class="w-4 h-4"></i>Pago Pendiente</h4>
                     <p class="text-xs text-yellow-700">Esta orden de compra aún no ha sido pagada.</p>
+                </div>
+            ` : ''}
+
+            ${pagoBloqueadoPorConformidad ? `
+                <div class="p-4 bg-red-50 border border-red-200 rounded-xl text-center">
+                    <i data-lucide="alert-circle" class="w-10 h-10 text-red-500 mx-auto mb-2"></i>
+                    <h3 class="font-bold text-red-800 text-sm animate-pulse">PAGO BLOQUEADO</h3>
+                    <p class="text-xs text-red-600 mt-1">El encargado de compras aún no ha subido la <strong>Conformidad de Servicio</strong> o marcado su ausencia.</p>
+                    <p class="text-[10px] text-red-500 mt-2">Es obligatorio validar la entrega del servicio antes de proceder con el pago.</p>
                 </div>
             ` : ''}
 
