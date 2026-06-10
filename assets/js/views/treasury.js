@@ -19,11 +19,6 @@ window.Views.treasury = function () {
           <span>Pendientes de Pago</span>
           <span id="count-pending" class="tab-count">0</span>
         </button>
-        <button id="tab-partial" class="treasury-tab flex-shrink-0" onclick="switchTreasuryTab('partial')">
-          <i data-lucide="layers" class="w-4 h-4"></i>
-          <span>Cuotas en Curso</span>
-          <span id="count-partial" class="tab-count">0</span>
-        </button>
         <button id="tab-history" class="treasury-tab flex-shrink-0" onclick="switchTreasuryTab('history')">
           <i data-lucide="history" class="w-4 h-4"></i>
           <span>Historial de Pagos</span>
@@ -126,7 +121,7 @@ let _treasuryCurrentTab = 'pending';
 
 window.switchTreasuryTab = function (tab) {
     _treasuryCurrentTab = tab;
-    ['pending', 'partial', 'history'].forEach(t => {
+    ['pending', 'history'].forEach(t => {
         const btn = document.getElementById('tab-' + t);
         if (!btn) return;
         btn.classList.toggle('active-tab', t === tab);
@@ -163,7 +158,7 @@ async function loadTreasuryData() {
     if (!tbody) return;
     
     // Sincronizar UI con el tab actual (evita desincronización al navegar)
-    ['pending', 'partial', 'history'].forEach(t => {
+    ['pending', 'history'].forEach(t => {
         const btn = document.getElementById('tab-' + t);
         if (btn) btn.classList.toggle('active-tab', t === _treasuryCurrentTab);
     });
@@ -195,24 +190,18 @@ async function loadTreasuryData() {
 }
 
 function _updateTabCounts() {
-    let pending = 0, partial = 0, history = 0;
+    let pending = 0, history = 0;
     _treasuryData.forEach(p => {
         const tieneMovilidad = parseFloat(p.monto_movilidad || 0) > 0;
         const movilidadPagada = tieneMovilidad ? (p.mobility_pagado == 1) : true;
-        const esCompletada = p.estado === 'Completada';
-        const esHistorial = (p.pagado == 1 && movilidadPagada) || esCompletada;
-        const esCreditoCuotas = (p.condicion_pago === 'Credito' || p.condicion_pago === 'Alquiler') && parseInt(p.total_cuotas_reg || 0) > 0;
-        const esParcialCuotas = esCreditoCuotas && !esHistorial;
+        const esHistorial = (p.pagado == 1 && movilidadPagada);
 
         if (esHistorial) history++;
-        else if (esParcialCuotas) partial++;
         else pending++;
     });
     const cp = document.getElementById('count-pending');
-    const cc = document.getElementById('count-partial');
     const ch = document.getElementById('count-history');
     if (cp) cp.textContent = pending;
-    if (cc) cc.textContent = partial;
     if (ch) ch.textContent = history;
 }
 
@@ -240,8 +229,8 @@ function renderTreasuryTable() {
             const tieneMovilidad = parseFloat(p.monto_movilidad || 0) > 0;
             const movilidadPagada = tieneMovilidad ? (p.mobility_pagado == 1) : true;
 
-            // REGLA PRINCIPAL: pagada completamente O recibida (Completada)
-            const esHistorial = (p.pagado == 1 && movilidadPagada) || p.estado === 'Completada';
+            // REGLA PRINCIPAL: pagada completamente
+            const esHistorial = (p.pagado == 1 && movilidadPagada);
             if (!esHistorial) return false;
 
             // Filtros de usuario (opcionales)
@@ -259,17 +248,57 @@ function renderTreasuryTable() {
         list = _treasuryData.filter(p => {
             const tieneMovilidad = parseFloat(p.monto_movilidad || 0) > 0;
             const movilidadPagada = tieneMovilidad ? (p.mobility_pagado == 1) : true;
-            const esHistorial = (p.pagado == 1 && movilidadPagada) || p.estado === 'Completada';
-            const esCreditoCuotas = (p.condicion_pago === 'Credito' || p.condicion_pago === 'Alquiler') && parseInt(p.total_cuotas_reg || 0) > 0;
-            const esParcialCuotas = esCreditoCuotas && !esHistorial;
+            const esHistorial = (p.pagado == 1 && movilidadPagada);
+            return !esHistorial;
+        });
 
-            if (_treasuryCurrentTab === 'partial') return esParcialCuotas;
-            return !esHistorial && !esParcialCuotas; // pending
+        // Ordenar por urgencia de pago
+        list.sort((a, b) => {
+            const getUrgencyDate = (p) => {
+                const tieneMovilidad = parseFloat(p.monto_movilidad || 0) > 0;
+                const movilidadPagada = tieneMovilidad ? (p.mobility_pagado == 1) : true;
+                const esCuotas = parseInt(p.total_cuotas_reg || 0) > 0;
+                
+                // 1. ¿Está listo para pagar de inmediato?
+                const isContadoOTransferencia = p.condicion_pago !== 'Credito' && p.condicion_pago !== 'Alquiler' && p.condicion_pago !== 'Adelanto + Saldo';
+                const isAdelantoListo = p.condicion_pago === 'Adelanto + Saldo' && p.adelanto_pagado == 0;
+                const isSaldoListo = p.condicion_pago === 'Adelanto + Saldo' && p.adelanto_pagado == 1 && (p.conformidad_url || p.sin_conformidad == 1);
+                
+                if (isContadoOTransferencia || isAdelantoListo || isSaldoListo) {
+                    return '1970-01-01'; // Urgencia máxima
+                }
+                
+                // 2. Si es cuotas o alquiler
+                if (esCuotas && p.proxima_cuota_vencimiento) {
+                    return p.proxima_cuota_vencimiento;
+                }
+                
+                // 3. Si es crédito simple
+                if (p.fecha_vencimiento) {
+                    return p.fecha_vencimiento;
+                }
+                
+                // 4. Si es Adelanto + Saldo pero está esperando conformidad
+                if (p.condicion_pago === 'Adelanto + Saldo' && p.adelanto_pagado == 1) {
+                    return '2100-01-01'; // En espera
+                }
+                
+                return '2099-12-31'; // Fallback último
+            };
+
+            const dateA = getUrgencyDate(a);
+            const dateB = getUrgencyDate(b);
+            
+            if (dateA !== dateB) {
+                return dateA.localeCompare(dateB);
+            }
+            // En caso de misma fecha/prioridad, ordenar por ID descendente
+            return parseInt(b.id) - parseInt(a.id);
         });
     }
 
     if (list.length === 0) {
-        const msgs = { pending: 'No hay pagos pendientes.', partial: 'No hay cuotas en curso.', history: 'No hay historial de pagos.' };
+        const msgs = { pending: 'No hay pagos pendientes.', history: 'No hay historial de pagos.' };
         tbody.innerHTML = `<tr><td colspan="7" class="text-center py-10 text-muted-foreground">${msgs[_treasuryCurrentTab]}</td></tr>`;
         return;
     }
@@ -287,20 +316,31 @@ function renderTreasuryTable() {
             const nextNum = p.proxima_cuota_numero;
             const parts = nextVenc.split('-');
             const dueDate = new Date(parts[0], parts[1] - 1, parts[2]);
+            dueDate.setHours(0,0,0,0);
             const today = new Date();
             today.setHours(0,0,0,0);
             
             const diffTime = dueDate - today;
             const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
             
-            const formattedDate = `${parts[2]}/${parts[1]}`; // dd/mm
+            const formattedDate = `${parts[2]}/${parts[1]}/${parts[0]}`; // dd/mm/yyyy
             
             if (diffDays < 0) {
-                proximaCuotaHTML = `<div class="text-[10px] text-red-600 font-bold mt-0.5 whitespace-nowrap">C${nextNum} venció hace ${Math.abs(diffDays)}d (${formattedDate})</div>`;
+                proximaCuotaHTML = `<div class="text-[10px] text-red-600 font-bold mt-1.5 flex items-center gap-1 bg-red-50 border border-red-200 px-1.5 py-0.5 rounded animate-pulse w-fit">
+                    <i data-lucide="alert-triangle" class="w-3.5 h-3.5 text-red-600"></i>
+                    <span>C${nextNum} venció hace ${Math.abs(diffDays)}d (${formattedDate})</span>
+                </div>`;
             } else if (diffDays === 0) {
-                proximaCuotaHTML = `<div class="text-[10px] text-orange-600 font-bold mt-0.5 whitespace-nowrap">C${nextNum} vence hoy! (${formattedDate})</div>`;
+                proximaCuotaHTML = `<div class="text-[10px] text-orange-600 font-bold mt-1.5 flex items-center gap-1 bg-orange-50 border border-orange-200 px-1.5 py-0.5 rounded animate-pulse w-fit">
+                    <i data-lucide="clock" class="w-3.5 h-3.5 text-orange-600"></i>
+                    <span>C${nextNum} vence hoy! (${formattedDate})</span>
+                </div>`;
             } else {
-                proximaCuotaHTML = `<div class="text-[9px] text-muted-foreground mt-0.5 whitespace-nowrap">C${nextNum} vence: ${formattedDate} (en ${diffDays}d)</div>`;
+                const textCls = diffDays < 5 ? 'text-orange-600 font-bold bg-orange-50 border-orange-100' : 'text-slate-700 bg-slate-50 border-slate-200';
+                proximaCuotaHTML = `<div class="text-[9px] mt-1.5 flex items-center gap-1 border px-1.5 py-0.5 rounded w-fit ${textCls}">
+                    <i data-lucide="calendar" class="w-3.5 h-3.5"></i>
+                    <span>C${nextNum} vence: ${formattedDate} (en ${diffDays}d)</span>
+                </div>`;
             }
         }
 
@@ -330,33 +370,22 @@ function renderTreasuryTable() {
 
         // Badge de estado pago
         let estadoBadge = '';
-        const esCompletadaSinPagar = p.estado === 'Completada' && p.pagado != 1;
         if (p.pagado == 1) {
             estadoBadge = '<span class="badge badge-green"><i data-lucide="check-circle" class="w-3 h-3"></i> Pagado</span>';
-        } else if (p.condicion_pago === 'Alquiler') {
-            estadoBadge = `<div class="flex flex-col gap-1">
-                <span class="badge badge-indigo text-[10px]">${cuotasPag}/${cuotasTot} meses</span>
-                <div class="w-full bg-muted rounded-full h-1.5 overflow-hidden">
-                  <div class="bg-indigo-600 h-1.5 rounded-full" style="width:${(cuotasTot > 0 ? (cuotasPag / cuotasTot * 100).toFixed(0) : 0)}%"></div>
+        } else if (p.condicion_pago === 'Alquiler' || esCuotas) {
+            const labelText = p.condicion_pago === 'Alquiler' ? 'meses' : 'cuotas';
+            const badgeCls = p.condicion_pago === 'Alquiler' ? 'badge-indigo' : 'badge-blue';
+            const barCls = p.condicion_pago === 'Alquiler' ? 'bg-indigo-600' : 'bg-primary';
+            const pct = cuotasTot > 0 ? (cuotasPag / cuotasTot * 100).toFixed(0) : 0;
+            
+            estadoBadge = `<div class="flex flex-col gap-1 w-full max-w-[170px]">
+                <div class="flex items-center gap-2 justify-between">
+                    <span class="badge ${badgeCls} text-[10px] font-bold">${cuotasPag}/${cuotasTot} ${labelText}</span>
+                    <span class="text-[9px] text-muted-foreground font-semibold">${pct}% pagado</span>
                 </div>
-            </div>`;
-        } else if (esCompletadaSinPagar) {
-            // OC completada operativamente (recepción hecha) pero el pago aún está registrado
-            estadoBadge = `<div class="flex flex-col gap-0.5">
-                <span class="badge badge-green text-[10px]"><i data-lucide="package-check" class="w-3 h-3"></i> Recibida</span>
-                <span class="text-[10px] text-orange-600 font-medium">Pago pendiente de confirmar</span>
-            </div>`;
-        } else if (esCuotas && cuotasPag > 0) {
-            estadoBadge = `<div class="flex flex-col gap-1 items-center">
-                <span class="badge badge-blue text-[10px]">${cuotasPag}/${cuotasTot} cuotas</span>
-                <div class="w-full bg-muted rounded-full h-1.5">
-                  <div class="bg-primary h-1.5 rounded-full" style="width:${(cuotasPag / cuotasTot * 100).toFixed(0)}%"></div>
+                <div class="w-full bg-muted rounded-full h-1.5 overflow-hidden font-normal">
+                  <div class="${barCls} h-1.5 rounded-full" style="width:${pct}%"></div>
                 </div>
-                ${proximaCuotaHTML}
-            </div>`;
-        } else if (esCuotas) {
-            estadoBadge = `<div class="flex flex-col gap-0.5 items-center">
-                <span class="badge badge-yellow text-[10px]">0/${cuotasTot} cuotas</span>
                 ${proximaCuotaHTML}
             </div>`;
         } else if (p.condicion_pago === 'Adelanto + Saldo') {
@@ -373,11 +402,26 @@ function renderTreasuryTable() {
         } else if (p.condicion_pago !== 'Credito' && p.condicion_pago !== 'Alquiler') {
             estadoBadge = '<span class="badge badge-green"><i data-lucide="check" class="w-3 h-3"></i> Listo para pagar</span>';
         } else if (p.fecha_vencimiento) {
-            const diff = Math.ceil((new Date(p.fecha_vencimiento) - new Date()) / (1000 * 60 * 60 * 24));
-            const cls = diff < 5 ? 'badge-red' : diff < 15 ? 'badge-yellow' : 'badge-yellow';
+            const parts = p.fecha_vencimiento.split('-');
+            const dueDate = new Date(parts[0], parts[1] - 1, parts[2]);
+            dueDate.setHours(0,0,0,0);
+            const today = new Date();
+            today.setHours(0,0,0,0);
+            const diffTime = dueDate - today;
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            
+            const formattedDate = `${parts[2]}/${parts[1]}/${parts[0]}`;
+            const cls = diffDays < 0 ? 'badge-red' : diffDays < 5 ? 'badge-red' : 'badge-yellow';
+            
+            const diffText = diffDays < 0 
+                ? `<span class="text-[10px] text-red-600 font-bold">VENCIDO hace ${Math.abs(diffDays)} días</span>`
+                : diffDays === 0
+                    ? `<span class="text-[10px] text-orange-600 font-bold">¡Vence hoy!</span>`
+                    : `<span class="text-[10px] text-muted-foreground font-medium">Faltan ${diffDays} días</span>`;
+            
             estadoBadge = `<div class="flex flex-col gap-0.5">
-                <span class="badge ${cls} text-[10px]">Vence: ${new Date(p.fecha_vencimiento).toLocaleDateString('es-PE')}</span>
-                <span class="text-[10px] text-muted-foreground">${diff > 0 ? 'En ' + diff + ' días' : 'VENCIDO'}</span>
+                <span class="badge ${cls} text-[10px]">Último día de pago: ${formattedDate}</span>
+                ${diffText}
             </div>`;
         } else {
             estadoBadge = '<span class="badge badge-yellow"><i data-lucide="clock" class="w-3 h-3"></i> Pendiente</span>';
@@ -424,8 +468,8 @@ function renderTreasuryTable() {
                         <span class="hidden sm:inline">Ver OC</span>
                     </button>
                     <button class="btn btn-primary btn-sm" onclick="openPaymentDetails(${p.id})">
-                        <i data-lucide="${(p.pagado == 1 || p.estado === 'Completada' || esContabilidad || esTesoreria) ? 'eye' : 'credit-card'}" class="w-3.5 h-3.5"></i>
-                        ${(p.pagado == 1 || p.estado === 'Completada' || esContabilidad) ? 'Ver Detalle' : esCuotas ? 'Gestionar Cuotas' : 'Procesar Pago'}
+                        <i data-lucide="${(p.pagado == 1 || esContabilidad) ? 'eye' : 'credit-card'}" class="w-3.5 h-3.5"></i>
+                        ${(p.pagado == 1 || esContabilidad) ? 'Ver Detalle' : esCuotas ? 'Gestionar Cuotas' : 'Procesar Pago'}
                     </button>
                 </div>
             </td>
