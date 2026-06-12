@@ -630,6 +630,8 @@ try {
   `dentro_presupuesto` tinyint(1) DEFAULT 1,
   `es_alquiler` tinyint(1) NOT NULL DEFAULT 0,
   `dia_pago` tinyint(4) DEFAULT NULL,
+  `fecha_pago_adelanto` date DEFAULT NULL,
+  `fecha_pago_saldo_proyectado` date DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `numero_oc` (`numero_oc`),
   KEY `proveedor_id` (`proveedor_id`),
@@ -893,6 +895,16 @@ try {
       array (
         'definition' => 'tinyint(4) NULL DEFAULT NULL',
         'after' => 'es_alquiler',
+      ),
+      'fecha_pago_adelanto' => 
+      array (
+        'definition' => 'date NULL DEFAULT NULL',
+        'after' => 'dia_pago',
+      ),
+      'fecha_pago_saldo_proyectado' => 
+      array (
+        'definition' => 'date NULL DEFAULT NULL',
+        'after' => 'fecha_pago_adelanto',
       ),
     ),
   ),

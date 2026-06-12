@@ -132,7 +132,7 @@ class Mailer {
             </div>
             <div style='padding: 32px 24px;'>
                 <p style='font-size: 15px; color: #64748b; line-height: 1.5;'>
-                    Se ha detectado un compromiso de pago próximo a vencer bajo la condición de <strong>Crédito</strong>.
+                    Se ha detectado un compromiso de pago próximo a vencer.
                 </p>
                 
                 <div style='background: #f8fafc; padding: 20px; border-radius: 12px; border: 1px solid #f1f5f9; margin: 24px 0;'>

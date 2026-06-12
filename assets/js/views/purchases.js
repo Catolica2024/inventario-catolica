@@ -99,9 +99,19 @@ window.Views['new-purchase'] = function () {
                 <option value="Alquiler">Alquiler</option>
               </select>
             </div>
-            <div id="oc-adelanto-container" class="hidden">
-              <label class="text-sm font-medium">% Adelanto</label>
-              <input type="number" id="oc-adelanto-porc" class="input mt-1 w-full" placeholder="50" min="1" max="99" oninput="recalcOCTotals()">
+            <div id="oc-adelanto-container" class="hidden grid grid-cols-1 sm:grid-cols-3 gap-3 col-span-1 md:col-span-2">
+              <div>
+                <label class="text-sm font-medium">% Adelanto <span class="text-destructive">*</span></label>
+                <input type="number" id="oc-adelanto-porc" class="input mt-1 w-full" placeholder="50" min="1" max="99" oninput="recalcOCTotals()">
+              </div>
+              <div>
+                <label class="text-sm font-medium">Fecha Pago Adelanto <span class="text-destructive">*</span></label>
+                <input type="date" id="oc-adelanto-fecha-pago" class="input mt-1 w-full">
+              </div>
+              <div>
+                <label class="text-sm font-medium">Fecha Pago Saldo Proyectado <span class="text-destructive">*</span></label>
+                <input type="date" id="oc-adelanto-fecha-saldo" class="input mt-1 w-full">
+              </div>
             </div>
             <div id="oc-credito-container" class="hidden grid grid-cols-1 gap-2">
               <div>
@@ -397,6 +407,16 @@ window.toggleCreditDetails = function () {
     container.classList.add('hidden');
     document.getElementById('oc-adelanto-container').classList.remove('hidden');
     if (alquilerContainer) alquilerContainer.classList.add('hidden');
+    
+    // Set default dates if empty
+    const fAdelanto = document.getElementById('oc-adelanto-fecha-pago');
+    const fSaldo = document.getElementById('oc-adelanto-fecha-saldo');
+    if (fAdelanto && !fAdelanto.value) fAdelanto.value = new Date().toISOString().split('T')[0];
+    if (fSaldo && !fSaldo.value) {
+      const future = new Date();
+      future.setDate(future.getDate() + 15);
+      fSaldo.value = future.toISOString().split('T')[0];
+    }
   } else if (cond === 'Alquiler') {
     container.classList.add('hidden');
     document.getElementById('oc-adelanto-container').classList.add('hidden');
@@ -894,7 +914,9 @@ window.showOCPreview = function () {
     }
   } else if (cond === 'Adelanto + Saldo') {
     const porc = document.getElementById('oc-adelanto-porc')?.value || '?';
-    condPagoHTML = `<span class="font-bold text-purple-700">Adelanto + Saldo</span><br><span class="text-xs">${porc}% de adelanto</span>`;
+    const fAdelanto = document.getElementById('oc-adelanto-fecha-pago')?.value || '—';
+    const fSaldo = document.getElementById('oc-adelanto-fecha-saldo')?.value || '—';
+    condPagoHTML = `<span class="font-bold text-purple-700">Adelanto + Saldo</span><br><span class="text-xs">${porc}% de adelanto<br>Pago Adelanto: <strong>${fAdelanto}</strong><br>Saldo Proyectado: <strong>${fSaldo}</strong></span>`;
   } else if (cond === 'Alquiler') {
     const diaPago = document.getElementById('oc-alquiler-dia')?.value || '?';
     const meses = document.getElementById('oc-alquiler-meses')?.value || '?';
@@ -1169,11 +1191,25 @@ window.generateOC = async function () {
     const adelantoPorc = cond === 'Adelanto + Saldo' ? (parseFloat(document.getElementById('oc-adelanto-porc').value) || 0) : null;
     const adelantoMonto = adelantoPorc !== null ? (totalCalculado * (adelantoPorc / 100)) : null;
     const saldoMonto = adelantoPorc !== null ? (totalCalculado - adelantoMonto) : null;
+    const fechaPagoAdelanto = cond === 'Adelanto + Saldo' ? document.getElementById('oc-adelanto-fecha-pago').value : null;
+    const fechaPagoSaldoProyectado = cond === 'Adelanto + Saldo' ? document.getElementById('oc-adelanto-fecha-saldo').value : null;
 
-    if (cond === 'Adelanto + Saldo' && (adelantoPorc <= 0 || adelantoPorc >= 100)) {
-      UI.toast('El porcentaje de adelanto debe estar entre 1 y 99', 'warning');
-      UI.stopLoading();
-      return;
+    if (cond === 'Adelanto + Saldo') {
+      if (adelantoPorc <= 0 || adelantoPorc >= 100) {
+        UI.toast('El porcentaje de adelanto debe estar entre 1 y 99', 'warning');
+        UI.stopLoading();
+        return;
+      }
+      if (!fechaPagoAdelanto) {
+        UI.toast('Debe seleccionar la fecha de pago de adelanto', 'warning');
+        UI.stopLoading();
+        return;
+      }
+      if (!fechaPagoSaldoProyectado) {
+        UI.toast('Debe seleccionar la fecha proyectada del pago del saldo', 'warning');
+        UI.stopLoading();
+        return;
+      }
     }
 
     const payload = {
@@ -1195,6 +1231,8 @@ window.generateOC = async function () {
       adelanto_porcentaje: adelantoPorc,
       adelanto_monto: adelantoMonto ? adelantoMonto.toFixed(2) : null,
       saldo_monto: saldoMonto ? saldoMonto.toFixed(2) : null,
+      fecha_pago_adelanto: fechaPagoAdelanto,
+      fecha_pago_saldo_proyectado: fechaPagoSaldoProyectado,
       fecha_requerida: fecha_req,
       igv_porcentaje: document.getElementById('oc-igv-porcentaje').value,
       precios_con_igv: incluido ? 1 : 0,

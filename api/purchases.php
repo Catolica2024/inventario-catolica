@@ -46,17 +46,7 @@ try {
             // Listar todas — incluir info de cuotas
             $where = "1=1";
             if (isset($_GET['approved_only'])) {
-                $where = "
-                    (oc.estado IN ('Completada', 'Recibida'))
-                    OR
-                    (oc.estado = 'Aprobada' AND (
-                        (oc.condicion_pago IN ('Al contado', 'Transferencia') AND oc.pagado = 1)
-                        OR
-                        (oc.condicion_pago = 'Adelanto + Saldo' AND oc.adelanto_pagado = 1)
-                        OR
-                        (oc.condicion_pago = 'Credito')
-                    ))
-                ";
+                $where = "oc.estado IN ('Aprobada', 'Recibida', 'Completada')";
             }
 
             $rows = $pdo->query("
@@ -113,8 +103,8 @@ try {
             $pdo->beginTransaction();
             $stmt = $pdo->prepare("
                 INSERT INTO ordenes_compra
-                  (creado_por, numero_oc, tipo, proveedor_id, activo_id, fecha, area_id, moneda, condicion_pago, condicion_detalle, adelanto_porcentaje, adelanto_monto, saldo_monto, fecha_requerida, subtotal, igv, igv_porcentaje, precios_con_igv, total, monto, estado, observaciones, incluye_movilidad, monto_movilidad, dentro_presupuesto, es_alquiler, dia_pago)
-                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                  (creado_por, numero_oc, tipo, proveedor_id, activo_id, fecha, area_id, moneda, condicion_pago, condicion_detalle, adelanto_porcentaje, adelanto_monto, saldo_monto, fecha_requerida, subtotal, igv, igv_porcentaje, precios_con_igv, total, monto, estado, observaciones, incluye_movilidad, monto_movilidad, dentro_presupuesto, es_alquiler, dia_pago, fecha_pago_adelanto, fecha_pago_saldo_proyectado)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             ");
             $stmt->execute([
                 $b['usuario_id'] ?? null,
@@ -143,7 +133,9 @@ try {
                 $b['monto_movilidad'] ?? 0,
                 isset($b['dentro_presupuesto']) ? (int)$b['dentro_presupuesto'] : 1,
                 ($b['condicion_pago'] ?? '') === 'Alquiler' ? 1 : 0,
-                isset($b['dia_pago']) ? (int)$b['dia_pago'] : null
+                isset($b['dia_pago']) ? (int)$b['dia_pago'] : null,
+                $b['fecha_pago_adelanto'] ?? null,
+                $b['fecha_pago_saldo_proyectado'] ?? null
             ]);
             $orden_id = $pdo->lastInsertId();
 

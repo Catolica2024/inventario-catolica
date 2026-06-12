@@ -116,6 +116,21 @@ window.Views.treasury = function () {
 
 let _treasuryData = [];
 let _treasuryCurrentTab = 'pending';
+
+function parseDateAndDiff(dateStr) {
+    if (!dateStr) return null;
+    const parts = dateStr.split('-');
+    if (parts.length !== 3) return null;
+    const dueDate = new Date(parts[0], parts[1] - 1, parts[2]);
+    dueDate.setHours(0,0,0,0);
+    const today = new Date();
+    today.setHours(0,0,0,0);
+    const diffTime = dueDate - today;
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    const formattedDate = `${parts[2]}/${parts[1]}/${parts[0]}`;
+    return { diffDays, formattedDate };
+}
+
 // Filtros activos en historial (se leen directo del DOM en renderTreasuryTable)
 // No usamos variable intermedia para evitar datos obsoletos.
 
@@ -259,28 +274,29 @@ function renderTreasuryTable() {
                 const movilidadPagada = tieneMovilidad ? (p.mobility_pagado == 1) : true;
                 const esCuotas = parseInt(p.total_cuotas_reg || 0) > 0;
                 
-                // 1. ¿Está listo para pagar de inmediato?
+                // 1. ¿Está listo para pagar de inmediato (sin vencimiento estructurado)?
                 const isContadoOTransferencia = p.condicion_pago !== 'Credito' && p.condicion_pago !== 'Alquiler' && p.condicion_pago !== 'Adelanto + Saldo';
-                const isAdelantoListo = p.condicion_pago === 'Adelanto + Saldo' && p.adelanto_pagado == 0;
-                const isSaldoListo = p.condicion_pago === 'Adelanto + Saldo' && p.adelanto_pagado == 1 && (p.conformidad_url || p.sin_conformidad == 1);
-                
-                if (isContadoOTransferencia || isAdelantoListo || isSaldoListo) {
+                if (isContadoOTransferencia) {
                     return '1970-01-01'; // Urgencia máxima
                 }
                 
-                // 2. Si es cuotas o alquiler
+                // 2. Si es Adelanto + Saldo
+                if (p.condicion_pago === 'Adelanto + Saldo') {
+                    if (p.adelanto_pagado == 0) {
+                        return p.fecha_pago_adelanto || '1970-01-01';
+                    } else {
+                        return p.fecha_pago_saldo_proyectado || '2100-01-01';
+                    }
+                }
+                
+                // 3. Si es cuotas o alquiler
                 if (esCuotas && p.proxima_cuota_vencimiento) {
                     return p.proxima_cuota_vencimiento;
                 }
                 
-                // 3. Si es crédito simple
+                // 4. Si es crédito simple
                 if (p.fecha_vencimiento) {
                     return p.fecha_vencimiento;
-                }
-                
-                // 4. Si es Adelanto + Saldo pero está esperando conformidad
-                if (p.condicion_pago === 'Adelanto + Saldo' && p.adelanto_pagado == 1) {
-                    return '2100-01-01'; // En espera
                 }
                 
                 return '2099-12-31'; // Fallback último
@@ -336,9 +352,8 @@ function renderTreasuryTable() {
                     <span>C${nextNum} vence hoy! (${formattedDate})</span>
                 </div>`;
             } else {
-                const textCls = diffDays < 5 ? 'text-orange-600 font-bold bg-orange-50 border-orange-100' : 'text-slate-700 bg-slate-50 border-slate-200';
-                proximaCuotaHTML = `<div class="text-[9px] mt-1.5 flex items-center gap-1 border px-1.5 py-0.5 rounded w-fit ${textCls}">
-                    <i data-lucide="calendar" class="w-3.5 h-3.5"></i>
+                proximaCuotaHTML = `<div class="text-[10px] text-green-700 font-medium mt-1.5 flex items-center gap-1 bg-green-50 border border-green-200 px-1.5 py-0.5 rounded w-fit">
+                    <i data-lucide="calendar" class="w-3.5 h-3.5 text-green-600"></i>
                     <span>C${nextNum} vence: ${formattedDate} (en ${diffDays}d)</span>
                 </div>`;
             }
@@ -435,12 +450,62 @@ function renderTreasuryTable() {
             </div>`;
         } else if (p.condicion_pago === 'Adelanto + Saldo') {
             if (p.adelanto_pagado == 0) {
-                estadoBadge = getListoParaPagarBadge(p, ' (Adelanto)');
-            } else {
-                if (tieneConformidad) {
-                    estadoBadge = getListoParaPagarBadge(p, ' (Saldo)');
+                const info = parseDateAndDiff(p.fecha_pago_adelanto);
+                if (!info) {
+                    estadoBadge = `<div class="flex flex-col gap-0.5">
+                        <span class="badge badge-yellow text-[10px]">Adelanto Pendiente</span>
+                        <span class="text-[9px] text-muted-foreground font-semibold">Sin fecha programada</span>
+                    </div>`;
                 } else {
-                    estadoBadge = '<span class="badge badge-blue"><i data-lucide="check-circle" class="w-3 h-3"></i> Adelanto Pagado</span>';
+                    let cls, diffText;
+                    if (info.diffDays < 0) {
+                        cls = 'badge-red';
+                        diffText = `<span class="text-[10px] text-red-600 font-bold">Adelanto VENCIDO hace ${Math.abs(info.diffDays)}d</span>`;
+                    } else if (info.diffDays === 0) {
+                        cls = 'badge-orange animate-pulse';
+                        diffText = `<span class="text-[10px] text-orange-600 font-bold">¡Adelanto vence hoy!</span>`;
+                    } else {
+                        cls = 'badge-blue';
+                        diffText = `<span class="text-[10px] text-blue-600 font-medium">Adelanto vence en ${info.diffDays}d</span>`;
+                    }
+                    estadoBadge = `<div class="flex flex-col gap-0.5 w-fit">
+                        <span class="badge ${cls} text-[10px] font-bold">F. Pago Adelanto: ${info.formattedDate}</span>
+                        ${diffText}
+                    </div>`;
+                }
+            } else {
+                const info = parseDateAndDiff(p.fecha_pago_saldo_proyectado);
+                const confText = tieneConformidad 
+                    ? '' 
+                    : `<div class="text-[9px] text-amber-600 font-bold flex items-center gap-0.5 mt-0.5" title="Se requiere conformidad para pagar">
+                         <i data-lucide="alert-circle" class="w-3.5 h-3.5 text-amber-500"></i> Esperando Conf.
+                       </div>`;
+                
+                if (!info) {
+                    estadoBadge = `<div class="flex flex-col gap-0.5 w-fit">
+                        <span class="badge badge-blue text-[10px]"><i data-lucide="check" class="w-3 h-3"></i> Adelanto Pagado</span>
+                        <span class="text-[9px] text-muted-foreground font-semibold">Saldo sin fecha proyectada</span>
+                        ${confText}
+                    </div>`;
+                } else {
+                    let cls, diffText;
+                    if (info.diffDays < 0) {
+                        cls = 'badge-red';
+                        diffText = `<span class="text-[10px] text-red-600 font-bold">Saldo VENCIDO hace ${Math.abs(info.diffDays)}d</span>`;
+                    } else if (info.diffDays === 0) {
+                        cls = 'badge-orange animate-pulse';
+                        diffText = `<span class="text-[10px] text-orange-600 font-bold">¡Saldo vence hoy!</span>`;
+                    } else {
+                        cls = 'badge-green';
+                        diffText = `<span class="text-[10px] text-green-700 font-medium">Saldo vence en ${info.diffDays}d</span>`;
+                    }
+                    estadoBadge = `<div class="flex flex-col gap-0.5 w-fit">
+                        <span class="badge ${cls} text-[10px] font-bold">Saldo Proyectado: ${info.formattedDate}</span>
+                        <div class="flex items-center gap-1.5 flex-wrap">
+                            ${diffText}
+                            ${confText}
+                        </div>
+                    </div>`;
                 }
             }
         } else if (p.condicion_pago !== 'Credito' && p.condicion_pago !== 'Alquiler') {
@@ -458,13 +523,21 @@ function renderTreasuryTable() {
                 const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
                 
                 const formattedDate = `${parts[2]}/${parts[1]}/${parts[0]}`;
-                const cls = diffDays < 0 ? 'badge-red' : diffDays < 5 ? 'badge-red' : 'badge-yellow';
+                
+                let cls;
+                if (diffDays < 0) {
+                    cls = 'badge-red';
+                } else if (diffDays === 0) {
+                    cls = 'badge-orange';
+                } else {
+                    cls = 'badge-green';
+                }
                 
                 const diffText = diffDays < 0 
                     ? `<span class="text-[10px] text-red-600 font-bold">VENCIDO hace ${Math.abs(diffDays)} días</span>`
                     : diffDays === 0
                         ? `<span class="text-[10px] text-orange-600 font-bold">¡Vence hoy!</span>`
-                        : `<span class="text-[10px] text-muted-foreground font-medium">Faltan ${diffDays} días</span>`;
+                        : `<span class="text-[10px] text-green-700 font-medium">Faltan ${diffDays} días</span>`;
                 
                 estadoBadge = `<div class="flex flex-col gap-0.5">
                     <span class="badge ${cls} text-[10px]">Último día de pago: ${formattedDate}</span>
@@ -653,6 +726,45 @@ window.openPaymentDetails = async function (id) {
         }
     } else if (p.condicion_pago === 'Adelanto + Saldo') {
         const isAdelantoPagado = p.adelanto_pagado == 1;
+        
+        let adelantoDesc = '';
+        if (isAdelantoPagado) {
+            const partsReal = p.adelanto_fecha ? p.adelanto_fecha.split(' ')[0].split('-') : null;
+            const formattedReal = partsReal ? `${partsReal[2]}/${partsReal[1]}/${partsReal[0]}` : '—';
+            adelantoDesc = `<span class="text-green-600 font-bold">✓ Pagado el ${formattedReal}</span>`;
+        } else {
+            const info = parseDateAndDiff(p.fecha_pago_adelanto);
+            if (info) {
+                const daysText = info.diffDays < 0 
+                    ? `<span class="text-red-600 font-bold">(VENCIDO hace ${Math.abs(info.diffDays)} días)</span>`
+                    : info.diffDays === 0
+                        ? `<span class="text-orange-600 font-bold">(¡Vence hoy!)</span>`
+                        : `<span class="text-green-700 font-medium">(Faltan ${info.diffDays} días)</span>`;
+                adelantoDesc = `<span class="text-slate-600 font-medium">Programado: ${info.formattedDate}</span> ${daysText}`;
+            } else {
+                adelantoDesc = '<span class="text-muted-foreground font-medium">Pendiente de pago</span>';
+            }
+        }
+
+        let saldoDesc = '';
+        if (p.pagado == 1) {
+            const partsReal = p.fecha_pago ? p.fecha_pago.split(' ')[0].split('-') : null;
+            const formattedReal = partsReal ? `${partsReal[2]}/${partsReal[1]}/${partsReal[0]}` : '—';
+            saldoDesc = `<span class="text-green-600 font-bold">✓ Pagado el ${formattedReal}</span>`;
+        } else {
+            const info = parseDateAndDiff(p.fecha_pago_saldo_proyectado);
+            if (info) {
+                const daysText = info.diffDays < 0 
+                    ? `<span class="text-red-600 font-bold">(VENCIDO hace ${Math.abs(info.diffDays)} días)</span>`
+                    : info.diffDays === 0
+                        ? `<span class="text-orange-600 font-bold">(¡Vence hoy!)</span>`
+                        : `<span class="text-green-700 font-medium">(Faltan ${info.diffDays} días)</span>`;
+                saldoDesc = `<span class="text-slate-600 font-medium">Proyectado: ${info.formattedDate}</span> ${daysText}`;
+            } else {
+                saldoDesc = '<span class="text-muted-foreground font-medium">Se paga al finalizar/entrega</span>';
+            }
+        }
+
         condPagoSection = `
             <div class="space-y-3">
                 <div class="flex items-center justify-between">
@@ -665,8 +777,8 @@ window.openPaymentDetails = async function (id) {
                     <!-- Adelanto -->
                     <div class="flex items-center justify-between p-2.5 rounded-lg border ${isAdelantoPagado ? 'bg-green-50 border-green-200' : 'bg-white border-border'}">
                         <div>
-                            <div class="text-xs font-bold">Adelanto (${p.adelanto_porcentaje}%)</div>
-                            <div class="text-[10px] text-muted-foreground">${isAdelantoPagado ? 'Pagado el ' + new Date(p.adelanto_fecha).toLocaleDateString('es-PE') : 'Pendiente de pago'}</div>
+                            <div class="text-xs font-bold text-slate-800">Adelanto (${p.adelanto_porcentaje}%)</div>
+                            <div class="text-[10px] flex items-center gap-1.5 flex-wrap mt-0.5">${adelantoDesc}</div>
                         </div>
                         <div class="flex items-center gap-2">
                             <span class="font-bold text-sm ${isAdelantoPagado ? 'text-green-700' : 'text-primary'}">${monSym} ${parseFloat(p.adelanto_monto).toFixed(2)}</span>
@@ -684,8 +796,8 @@ window.openPaymentDetails = async function (id) {
                     <!-- Saldo -->
                     <div class="flex items-center justify-between p-2.5 rounded-lg border ${p.pagado == 1 ? 'bg-green-50 border-green-200' : 'bg-white border-border'}">
                         <div>
-                            <div class="text-xs font-bold">Saldo Final</div>
-                            <div class="text-[10px] text-muted-foreground">${p.pagado == 1 ? 'Pagado el ' + new Date(p.fecha_pago).toLocaleDateString('es-PE') : 'Se paga al finalizar/entrega'}</div>
+                            <div class="text-xs font-bold text-slate-800">Saldo Final</div>
+                            <div class="text-[10px] flex items-center gap-1.5 flex-wrap mt-0.5">${saldoDesc}</div>
                         </div>
                         <div class="flex items-center gap-2">
                             <span class="font-bold text-sm ${p.pagado == 1 ? 'text-green-700' : 'text-primary'}">${monSym} ${parseFloat(p.saldo_monto).toFixed(2)}</span>

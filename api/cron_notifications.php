@@ -34,6 +34,20 @@ try {
     $stmtCuotas->execute([$today]);
     $cuotas = $stmtCuotas->fetchAll();
 
+    // 3. Buscar órdenes de Adelanto + Saldo pendientes
+    $stmtAdelantoSaldo = $pdo->prepare("
+        SELECT p.id, p.numero_oc, p.total, p.monto_movilidad, p.moneda, p.tipo,
+               p.adelanto_pagado, p.fecha_pago_adelanto, p.fecha_pago_saldo_proyectado,
+               p.adelanto_monto, p.saldo_monto,
+               s.razon_social as proveedor_nombre
+        FROM ordenes_compra p
+        JOIN proveedores s ON p.proveedor_id = s.id
+        WHERE p.condicion_pago = 'Adelanto + Saldo'
+          AND p.pagado = 0
+    ");
+    $stmtAdelantoSaldo->execute();
+    $adelantoSaldoList = $stmtAdelantoSaldo->fetchAll();
+
     $notificationsCount = 0;
     $emailsSent = 0;
 
@@ -67,11 +81,49 @@ try {
         processReminder($pdo, $oc_mapped, $today, $treasuryUsers, $notificationsCount, $emailsSent);
     }
 
+    // Procesar Adelanto + Saldo
+    foreach ($adelantoSaldoList as $as) {
+        if ($as['adelanto_pagado'] == 0) {
+            if ($as['fecha_pago_adelanto'] && $as['fecha_pago_adelanto'] >= $today) {
+                $oc_mapped = [
+                    'id' => $as['id'],
+                    'numero_oc' => $as['numero_oc'],
+                    'total' => $as['adelanto_monto'],
+                    'monto_movilidad' => 0,
+                    'moneda' => $as['moneda'],
+                    'fecha_vencimiento' => $as['fecha_pago_adelanto'],
+                    'tipo' => $as['tipo'],
+                    'proveedor_nombre' => $as['proveedor_nombre'],
+                    'is_cuota' => true,
+                    'cuota_info' => "Adelanto"
+                ];
+                processReminder($pdo, $oc_mapped, $today, $treasuryUsers, $notificationsCount, $emailsSent);
+            }
+        } else {
+            if ($as['fecha_pago_saldo_proyectado'] && $as['fecha_pago_saldo_proyectado'] >= $today) {
+                $oc_mapped = [
+                    'id' => $as['id'],
+                    'numero_oc' => $as['numero_oc'],
+                    'total' => $as['saldo_monto'],
+                    'monto_movilidad' => 0,
+                    'moneda' => $as['moneda'],
+                    'fecha_vencimiento' => $as['fecha_pago_saldo_proyectado'],
+                    'tipo' => $as['tipo'],
+                    'proveedor_nombre' => $as['proveedor_nombre'],
+                    'is_cuota' => true,
+                    'cuota_info' => "Saldo Final"
+                ];
+                processReminder($pdo, $oc_mapped, $today, $treasuryUsers, $notificationsCount, $emailsSent);
+            }
+        }
+    }
+
     if (php_sapi_name() !== 'cli') {
         json_response([
             'ok' => true, 
             'processed_main' => count($purchases),
             'processed_cuotas' => count($cuotas),
+            'processed_adelanto_saldo' => count($adelantoSaldoList),
             'notifications_created' => $notificationsCount,
             'emails_sent' => $emailsSent
         ]);
@@ -100,7 +152,7 @@ function processReminder($pdo, $oc, $today, $treasuryUsers, &$notificationsCount
         $msg = "La " . ($oc['tipo'] === 'servicio' ? 'OS' : 'OC') . " " . $oc['numero_oc'] . $contexto . " de " . $oc['proveedor_nombre'] . " $daysText ($venc).";
         
         // --- EVITAR DUPLICADOS ---
-        $check = $pdo->prepare("SELECT id FROM notificaciones WHERE mensaje LIKE ? AND DATE(fecha) = ? LIMIT 1");
+        $check = $pdo->prepare("SELECT id FROM notificaciones WHERE mensaje LIKE ? AND DATE(created_at) = ? LIMIT 1");
         $check->execute(["%".$oc['numero_oc']."%".$daysText."%", $today]);
         
         if (!$check->fetch()) {

@@ -223,8 +223,9 @@ try {
     $conformidad    = $b['conformidad_url']  ?? null;
     $comprobante    = $b['comprobante_url']  ?? null;
 
-    // Si se suben ambos documentos → Completada; si solo la conformidad → Recibida (pendiente factura)
-    $nuevoEstado = ($conformidad && $comprobante) ? 'Completada' : 'Recibida';
+    // Si se suben ambos documentos (o ya se subió el comprobante previamente) → Completada; de lo contrario → Recibida
+    $hasComprobante = !empty($comprobante) || !empty($oc['comprobante_url']);
+    $nuevoEstado = ($conformidad && $hasComprobante) ? 'Completada' : 'Recibida';
 
     $sqlUpd = "UPDATE ordenes_compra SET estado = ?, fecha_recepcion = NOW()";
     $paramsUpd = [$nuevoEstado];
