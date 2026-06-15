@@ -632,6 +632,7 @@ try {
   `dia_pago` tinyint(4) DEFAULT NULL,
   `fecha_pago_adelanto` date DEFAULT NULL,
   `fecha_pago_saldo_proyectado` date DEFAULT NULL,
+  `ultimo_recordatorio` datetime DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `numero_oc` (`numero_oc`),
   KEY `proveedor_id` (`proveedor_id`),
@@ -905,6 +906,11 @@ try {
       array (
         'definition' => 'date NULL DEFAULT NULL',
         'after' => 'fecha_pago_adelanto',
+      ),
+      'ultimo_recordatorio' => 
+      array (
+        'definition' => 'datetime NULL DEFAULT NULL',
+        'after' => 'fecha_pago_saldo_proyectado',
       ),
     ),
   ),

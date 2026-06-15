@@ -118,14 +118,80 @@ try {
         }
     }
 
+    // 4. Recordatorios de Aprobación de OC/OS (3 días sin respuesta)
+    $stmtReminders = $pdo->prepare("
+        SELECT id, numero_oc, creado_por, tipo, aprobado_gerente, aprobado_finanzas, created_at, fecha
+        FROM ordenes_compra
+        WHERE estado = 'Pendiente'
+          AND ultimo_recordatorio IS NULL
+          AND created_at <= DATE_SUB(NOW(), INTERVAL 3 DAY)
+    ");
+    $stmtReminders->execute();
+    $pendingApprovals = $stmtReminders->fetchAll();
+    $remindersSent = 0;
+
+    foreach ($pendingApprovals as $pa) {
+        $orden_id = $pa['id'];
+        $has_sent_any = false;
+
+        // Recordatorio para Gerente General
+        if ($pa['aprobado_gerente'] == 0) {
+            $stToken = $pdo->prepare("SELECT token FROM ordenes_compra_tokens WHERE orden_id = ? AND rol = 'gerente_general' AND usado = 0 LIMIT 1");
+            $stToken->execute([$orden_id]);
+            $tok = $stToken->fetchColumn();
+            if ($tok) {
+                // Extender expiración del token a 7 días más a partir de ahora
+                $pdo->prepare("UPDATE ordenes_compra_tokens SET expiracion = DATE_ADD(NOW(), INTERVAL 7 DAY) WHERE token = ?")->execute([$tok]);
+                
+                try {
+                    if (Mailer::sendOCReminderNotification($orden_id, $tok, 'gerente_general')) {
+                        $emailsSent++;
+                        $remindersSent++;
+                        $has_sent_any = true;
+                    }
+                } catch (Exception $e) {
+                    error_log("Error enviando recordatorio Gerente General para OC/OS $orden_id: " . $e->getMessage());
+                }
+            }
+        }
+
+        // Recordatorio para Jefe de Finanzas
+        if ($pa['aprobado_finanzas'] == 0) {
+            $stToken = $pdo->prepare("SELECT token FROM ordenes_compra_tokens WHERE orden_id = ? AND rol = 'jefe_finanzas' AND usado = 0 LIMIT 1");
+            $stToken->execute([$orden_id]);
+            $tok = $stToken->fetchColumn();
+            if ($tok) {
+                // Extender expiración del token a 7 días más a partir de ahora
+                $pdo->prepare("UPDATE ordenes_compra_tokens SET expiracion = DATE_ADD(NOW(), INTERVAL 7 DAY) WHERE token = ?")->execute([$tok]);
+                
+                try {
+                    if (Mailer::sendOCReminderNotification($orden_id, $tok, 'jefe_finanzas')) {
+                        $emailsSent++;
+                        $remindersSent++;
+                        $has_sent_any = true;
+                    }
+                } catch (Exception $e) {
+                    error_log("Error enviando recordatorio Jefe de Finanzas para OC/OS $orden_id: " . $e->getMessage());
+                }
+            }
+        }
+
+        // Registrar la fecha del último recordatorio
+        if ($has_sent_any) {
+            $pdo->prepare("UPDATE ordenes_compra SET ultimo_recordatorio = NOW() WHERE id = ?")->execute([$orden_id]);
+        }
+    }
+
     if (php_sapi_name() !== 'cli') {
         json_response([
             'ok' => true, 
             'processed_main' => count($purchases),
             'processed_cuotas' => count($cuotas),
             'processed_adelanto_saldo' => count($adelantoSaldoList),
+            'processed_reminders' => count($pendingApprovals),
             'notifications_created' => $notificationsCount,
-            'emails_sent' => $emailsSent
+            'emails_sent' => $emailsSent,
+            'reminders_sent' => $remindersSent
         ]);
     }
 

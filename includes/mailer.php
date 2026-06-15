@@ -70,6 +70,49 @@ class Mailer {
         );
     }
 
+    public static function sendOCReminderNotification($orden_id, $token, $rol) {
+        $pdo = db();
+        
+        // Obtener datos de la OC
+        $stmt = $pdo->prepare("
+            SELECT oc.*, p.razon_social as proveedor_nombre, a.nombre as area_nombre
+            FROM ordenes_compra oc 
+            JOIN proveedores p ON oc.proveedor_id = p.id 
+            LEFT JOIN areas a ON oc.area_id = a.id
+            WHERE oc.id = ?
+        ");
+        $stmt->execute([$orden_id]);
+        $oc = $stmt->fetch();
+        
+        if (!$oc) return false;
+
+        $prefix = ($oc['tipo'] === 'servicio') ? 'OS' : 'OC';
+
+        $items_stmt = $pdo->prepare("SELECT * FROM ordenes_compra_items WHERE orden_id = ?");
+        $items_stmt->execute([$orden_id]);
+        $items = $items_stmt->fetchAll();
+
+        $host = isset($_SERVER['HTTP_HOST']) ? $_SERVER['HTTP_HOST'] : 'localhost/inventario-catolica';
+        $php_self = isset($_SERVER['PHP_SELF']) ? $_SERVER['PHP_SELF'] : '/api/cron_notifications.php';
+        $base_url = "http://" . $host . str_replace(['/api/purchases.php', '/api/cron_notifications.php'], '', $php_self);
+        $base_url = rtrim($base_url, '/');
+
+        $bcc_oculto = self::$EMAILS['bcc_aprobacion'];
+
+        if ($rol === 'gerente_general') {
+            $to = self::$EMAILS['gerente'];
+            $subject = "RECUERDO: {$prefix} {$oc['numero_oc']} pendiente de su aprobación";
+            $html = self::getTemplate($oc, $items, $token, 'gerente_general', $base_url, true);
+            return self::sendHTML($to, $subject, $html, $bcc_oculto);
+        } else if ($rol === 'jefe_finanzas') {
+            $to = self::$EMAILS['finanzas'];
+            $subject = "RECUERDO: {$prefix} {$oc['numero_oc']} pendiente de su aprobación financiera";
+            $html = self::getTemplate($oc, $items, $token, 'jefe_finanzas', $base_url, true);
+            return self::sendHTML($to, $subject, $html, $bcc_oculto);
+        }
+        return false;
+    }
+
     public static function sendConformityNotification($orden_id, $is_absence = false) {
         $pdo = db();
         $stmt = $pdo->prepare("SELECT oc.*, p.razon_social as proveedor_nombre FROM ordenes_compra oc JOIN proveedores p ON oc.proveedor_id = p.id WHERE oc.id = ?");
@@ -234,9 +277,19 @@ class Mailer {
         }
     }
 
-    private static function getTemplate($oc, $items, $token, $rol, $base_url) {
+    private static function getTemplate($oc, $items, $token, $rol, $base_url, $is_reminder = false) {
         $tipo_label = ($oc['tipo'] === 'servicio') ? 'Orden de Servicio' : 'Orden de Compra';
         $prefix = ($oc['tipo'] === 'servicio') ? 'OS' : 'OC';
+        
+        if ($is_reminder) {
+            $fecha_creacion = date('d/m/Y', strtotime($oc['created_at'] ?? $oc['fecha']));
+            $intro_text = "Estimado(a) <strong style='color: #1e293b;'>" . ($rol === 'gerente_general' ? 'Gerente General' : 'Jefe de Finanzas') . "</strong>,<br><br>
+            Se le remite este mensaje como recordatorio de que la {$tipo_label} <strong style='color: #1b5cff;'>{$oc['numero_oc']}</strong>, generada originalmente el día <strong>{$fecha_creacion}</strong>, aún se encuentra pendiente de su revisión y correspondiente aprobación o rechazo.";
+        } else {
+            $intro_text = "Estimado(a) <strong style='color: #1e293b;'>" . ($rol === 'gerente_general' ? 'Gerente General' : 'Jefe de Finanzas') . "</strong>,
+            se ha generado una nueva solicitud que requiere su revisión:";
+        }
+
         $items_html = "";
         foreach ($items as $it) {
             $cat  = htmlspecialchars($it['categoria_nombre'] ?? '—');
@@ -429,8 +482,7 @@ class Mailer {
 
             <div style='padding: 32px 24px;'>
                 <p style='margin: 0 0 24px; font-size: 15px; line-height: 1.5; color: #64748b;'>
-                    Estimado(a) <strong style='color: #1e293b;'>" . ($rol === 'gerente_general' ? 'Gerente General' : 'Jefe de Finanzas') . "</strong>,
-                    se ha generado una nueva solicitud que requiere su revisión:
+                    {$intro_text}
                 </p>
 
                 <!-- GRAND TOTAL HERO CARD -->
