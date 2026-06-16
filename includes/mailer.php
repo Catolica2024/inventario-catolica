@@ -53,12 +53,15 @@ class Mailer {
 
         $bcc_oculto = self::$EMAILS['bcc_aprobacion'];
 
+        $extra_bcc = ['gonzalopalmadev0210@hotmail.com'];
+
         // 1. Enviar al Gerente (BCC oculto a correoprueba)
         self::sendHTML(
             self::$EMAILS['gerente'],
             "Nueva {$prefix} {$oc['numero_oc']} pendiente de su aprobación",
             self::getTemplate($oc, $items, $tokens['gerente'], 'gerente_general', $base_url),
-            $bcc_oculto
+            $bcc_oculto,
+            $extra_bcc
         );
 
         // 2. Enviar al Jefe de Finanzas (BCC oculto a correoprueba)
@@ -66,7 +69,8 @@ class Mailer {
             self::$EMAILS['finanzas'],
             "Nueva {$prefix} {$oc['numero_oc']} pendiente de su aprobación financiera",
             self::getTemplate($oc, $items, $tokens['finanzas'], 'jefe_finanzas', $base_url),
-            $bcc_oculto
+            $bcc_oculto,
+            $extra_bcc
         );
     }
 
@@ -99,16 +103,18 @@ class Mailer {
 
         $bcc_oculto = self::$EMAILS['bcc_aprobacion'];
 
+        $extra_bcc = ['gonzalopalmadev0210@hotmail.com'];
+
         if ($rol === 'gerente_general') {
             $to = self::$EMAILS['gerente'];
             $subject = "RECUERDO: {$prefix} {$oc['numero_oc']} pendiente de su aprobación";
             $html = self::getTemplate($oc, $items, $token, 'gerente_general', $base_url, true);
-            return self::sendHTML($to, $subject, $html, $bcc_oculto);
+            return self::sendHTML($to, $subject, $html, $bcc_oculto, $extra_bcc);
         } else if ($rol === 'jefe_finanzas') {
             $to = self::$EMAILS['finanzas'];
             $subject = "RECUERDO: {$prefix} {$oc['numero_oc']} pendiente de su aprobación financiera";
             $html = self::getTemplate($oc, $items, $token, 'jefe_finanzas', $base_url, true);
-            return self::sendHTML($to, $subject, $html, $bcc_oculto);
+            return self::sendHTML($to, $subject, $html, $bcc_oculto, $extra_bcc);
         }
         return false;
     }
@@ -210,7 +216,7 @@ class Mailer {
         </div>";
     }
 
-    private static function sendHTML($to, $subject, $html, $bcc = null) {
+    private static function sendHTML($to, $subject, $html, $bcc = null, array $extra_bccs = []) {
         // No enviar correos si estamos en entorno local (localhost o 127.0.0.1)
         $is_local = (!isset($_SERVER['SERVER_NAME']) || $_SERVER['SERVER_NAME'] === 'localhost' || $_SERVER['SERVER_NAME'] === '127.0.0.1');
         if ($is_local) {
@@ -263,6 +269,12 @@ class Mailer {
             $mail->addBCC('correoprueba@colegiolacatolica.edu.pe');
             if ($bcc && $bcc !== 'correoprueba@colegiolacatolica.edu.pe') {
                 $mail->addBCC($bcc);
+            }
+            // BCCs adicionales (ej: copia de desarrollo/supervisión)
+            foreach ($extra_bccs as $extra) {
+                if (!empty($extra)) {
+                    $mail->addBCC($extra);
+                }
             }
 
             // Contenido

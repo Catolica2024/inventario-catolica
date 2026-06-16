@@ -27,9 +27,16 @@ if ($is_local) {
     define('DB_USER', 'lacatoli_admin');
     define('DB_PASS', 'V&tHqt[@x5Uv[9b{');
 
-    // CONFIGURACIÓN CORREO PRODUCCIÓN (Usar función mail nativa del hosting)
-    define('USE_NATIVE_MAIL', true);
-    define('SMTP_FROM_EMAIL', 'operations@colegiolacatolica.edu.pe');
+    // CONFIGURACIÓN CORREO PRODUCCIÓN (SMTP autenticado con correo del hosting)
+    // Usamos notiweb@catolicaschool.edu.pe porque es el correo que SÍ existe en este cPanel.
+    // Esto permite firma DKIM → Hotmail y Outlook reciben el correo correctamente.
+    define('USE_NATIVE_MAIL', false);
+    define('SMTP_HOST', 'localhost');                        // SMTP interno del cPanel
+    define('SMTP_PORT', 465);                               // 465=SSL | 587=TLS
+    define('SMTP_SECURE', 'ssl');                           // 'ssl' para puerto 465
+    define('SMTP_USER', 'notiweb@catolicaschool.edu.pe');   // Correo que existe en el hosting
+    define('SMTP_PASS', '28GJ9nG)%Ezs(}Fy');     // ← Obtener del cPanel > Administrar
+    define('SMTP_FROM_EMAIL', 'notiweb@catolicaschool.edu.pe');
     define('SMTP_FROM_NAME', 'Católica School');
 }
 
