@@ -536,7 +536,7 @@ try {
   `leido` tinyint(1) DEFAULT 0,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=93 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci',
+) ENGINE=InnoDB AUTO_INCREMENT=95 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci',
     'columns' => 
     array (
       'id' => 
@@ -589,6 +589,7 @@ try {
   `fecha` date DEFAULT NULL,
   `monto` decimal(10,2) DEFAULT NULL,
   `estado` enum(\'Pendiente\',\'Aprobada\',\'Rechazada\',\'Recibida\',\'Completada\') DEFAULT \'Pendiente\',
+  `fecha_aprobacion` datetime DEFAULT NULL,
   `pagado` tinyint(1) DEFAULT 0,
   `fecha_pago` datetime DEFAULT NULL,
   `voucher_url` varchar(255) DEFAULT NULL,
@@ -612,7 +613,9 @@ try {
   `total` decimal(10,2) DEFAULT 0.00,
   `observaciones` text DEFAULT NULL,
   `aprobado_gerente` tinyint(1) DEFAULT 0,
+  `fecha_aprobacion_gerente` datetime DEFAULT NULL,
   `aprobado_finanzas` tinyint(1) DEFAULT 0,
+  `fecha_aprobacion_finanzas` datetime DEFAULT NULL,
   `motivo_rechazo` text DEFAULT NULL,
   `rechazo_por` varchar(100) DEFAULT NULL,
   `rechazado_gerente` tinyint(1) DEFAULT 0,
@@ -692,10 +695,15 @@ try {
         'definition' => 'enum(\'Pendiente\',\'Aprobada\',\'Rechazada\',\'Recibida\',\'Completada\') NULL DEFAULT \'Pendiente\'',
         'after' => 'monto',
       ),
+      'fecha_aprobacion' => 
+      array (
+        'definition' => 'datetime NULL DEFAULT NULL',
+        'after' => 'estado',
+      ),
       'pagado' => 
       array (
         'definition' => 'tinyint(1) NULL DEFAULT \'0\'',
-        'after' => 'estado',
+        'after' => 'fecha_aprobacion',
       ),
       'fecha_pago' => 
       array (
@@ -807,15 +815,25 @@ try {
         'definition' => 'tinyint(1) NULL DEFAULT \'0\'',
         'after' => 'observaciones',
       ),
+      'fecha_aprobacion_gerente' => 
+      array (
+        'definition' => 'datetime NULL DEFAULT NULL',
+        'after' => 'aprobado_gerente',
+      ),
       'aprobado_finanzas' => 
       array (
         'definition' => 'tinyint(1) NULL DEFAULT \'0\'',
-        'after' => 'aprobado_gerente',
+        'after' => 'fecha_aprobacion_gerente',
+      ),
+      'fecha_aprobacion_finanzas' => 
+      array (
+        'definition' => 'datetime NULL DEFAULT NULL',
+        'after' => 'aprobado_finanzas',
       ),
       'motivo_rechazo' => 
       array (
         'definition' => 'text NULL DEFAULT NULL',
-        'after' => 'aprobado_finanzas',
+        'after' => 'fecha_aprobacion_finanzas',
       ),
       'rechazo_por' => 
       array (
@@ -1002,11 +1020,12 @@ try {
   `usado` tinyint(1) DEFAULT 0,
   `usado_en` datetime DEFAULT NULL,
   `email_destinatario` varchar(255) DEFAULT NULL,
+  `ip_aprobador` varchar(45) DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `token` (`token`),
   KEY `orden_id` (`orden_id`),
   CONSTRAINT `ordenes_compra_tokens_ibfk_1` FOREIGN KEY (`orden_id`) REFERENCES `ordenes_compra` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=233 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci',
+) ENGINE=InnoDB AUTO_INCREMENT=235 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci',
     'columns' => 
     array (
       'id' => 
@@ -1048,6 +1067,11 @@ try {
       array (
         'definition' => 'varchar(255) NULL DEFAULT NULL',
         'after' => 'usado_en',
+      ),
+      'ip_aprobador' => 
+      array (
+        'definition' => 'varchar(45) NULL DEFAULT NULL',
+        'after' => 'email_destinatario',
       ),
     ),
   ),
@@ -1834,6 +1858,20 @@ try {
                 }
             }
         }
+    }
+
+    // Actualizar registros históricos con fecha de creación como fallback si las columnas eran nuevas
+    $stmt1 = $pdo->exec("UPDATE ordenes_compra SET fecha_aprobacion_gerente = created_at WHERE aprobado_gerente = 1 AND fecha_aprobacion_gerente IS NULL");
+    if ($stmt1 > 0) {
+        $logs[] = "Se actualizaron $stmt1 registros históricos de Gerencia con fecha de creación como fallback.";
+    }
+    $stmt2 = $pdo->exec("UPDATE ordenes_compra SET fecha_aprobacion_finanzas = created_at WHERE aprobado_finanzas = 1 AND fecha_aprobacion_finanzas IS NULL");
+    if ($stmt2 > 0) {
+        $logs[] = "Se actualizaron $stmt2 registros históricos de Finanzas con fecha de creación como fallback.";
+    }
+    $stmt3 = $pdo->exec("UPDATE ordenes_compra SET fecha_aprobacion = created_at WHERE aprobado_gerente = 1 AND aprobado_finanzas = 1 AND fecha_aprobacion IS NULL");
+    if ($stmt3 > 0) {
+        $logs[] = "Se actualizaron $stmt3 registros históricos de aprobación total con fecha de creación como fallback.";
     }
 
     // Reactivar revisión de llaves foráneas

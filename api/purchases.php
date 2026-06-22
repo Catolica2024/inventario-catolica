@@ -8,6 +8,23 @@ try {
     $pdo = db();
     switch ($method) {
         case 'GET':
+            // Obtener todos los ítems generados en OC/OS para exportar a Excel
+            if (isset($_GET['all_items'])) {
+                $rows = $pdo->query("
+                    SELECT oci.id as item_id_reg, oci.categoria_nombre, oci.prefijo, oci.descripcion, oci.unidad, oci.cantidad, oci.precio_unitario, oci.total as total_item, oci.factor_conversion,
+                           oc.numero_oc, oc.tipo, oc.fecha, oc.estado, oc.moneda, oc.condicion_pago,
+                           p.razon_social as proveedor_nombre, a.nombre as area_nombre,
+                           oc.aprobado_gerente, oc.aprobado_finanzas, oc.pagado
+                    FROM ordenes_compra_items oci
+                    JOIN ordenes_compra oc ON oci.orden_id = oc.id
+                    JOIN proveedores p ON oc.proveedor_id = p.id
+                    LEFT JOIN areas a ON oc.area_id = a.id
+                    ORDER BY oc.id DESC, oci.id ASC
+                ")->fetchAll();
+                json_response(['items' => $rows]);
+                break;
+            }
+
             // Obtener una OC específica con sus ítems
             if (isset($_GET['id'])) {
                 $stmt = $pdo->prepare("
@@ -408,20 +425,30 @@ try {
 
             if (($b['action'] ?? '') === 'approve') {
                 $rol = $b['rol'] ?? $b['role'] ?? '';
+                $ahora = date('Y-m-d H:i:s');
                 if ($rol === 'admin') {
-                    $stmt = $pdo->prepare("UPDATE ordenes_compra SET aprobado_gerente = 1, aprobado_finanzas = 1 WHERE id = ?");
-                    $stmt->execute([ $id ]);
+                    $stmt = $pdo->prepare("UPDATE ordenes_compra SET aprobado_gerente = 1, aprobado_finanzas = 1, fecha_aprobacion_gerente = ?, fecha_aprobacion_finanzas = ?, fecha_aprobacion = ? WHERE id = ?");
+                    $stmt->execute([ $ahora, $ahora, $ahora, $id ]);
                 } else {
-                    $stmt = $pdo->prepare("UPDATE ordenes_compra SET aprobado_gerente = IF(?, 1, aprobado_gerente), aprobado_finanzas = IF(?, 1, aprobado_finanzas) WHERE id = ?");
-                    $stmt->execute([ $rol === 'gerente_general', $rol === 'jefe_finanzas', $id ]);
+                    if ($rol === 'gerente_general') {
+                        $stmt = $pdo->prepare("UPDATE ordenes_compra SET aprobado_gerente = 1, fecha_aprobacion_gerente = ? WHERE id = ?");
+                        $stmt->execute([ $ahora, $id ]);
+                    } else if ($rol === 'jefe_finanzas') {
+                        $stmt = $pdo->prepare("UPDATE ordenes_compra SET aprobado_finanzas = 1, fecha_aprobacion_finanzas = ? WHERE id = ?");
+                        $stmt->execute([ $ahora, $id ]);
+                    }
                 }
                 
                 // Si ambos aprobaron, cambiar estado a 'Aprobada'
-                $stmtCheck = $pdo->prepare("SELECT aprobado_gerente, aprobado_finanzas FROM ordenes_compra WHERE id = ?");
+                $stmtCheck = $pdo->prepare("SELECT aprobado_gerente, aprobado_finanzas, fecha_aprobacion FROM ordenes_compra WHERE id = ?");
                 $stmtCheck->execute([$id]);
                 $oc = $stmtCheck->fetch();
                 if ($oc['aprobado_gerente'] && $oc['aprobado_finanzas']) {
-                    $pdo->prepare("UPDATE ordenes_compra SET estado = 'Aprobada' WHERE id = ?")->execute([$id]);
+                    if (empty($oc['fecha_aprobacion'])) {
+                        $pdo->prepare("UPDATE ordenes_compra SET estado = 'Aprobada', fecha_aprobacion = ? WHERE id = ?")->execute([$ahora, $id]);
+                    } else {
+                        $pdo->prepare("UPDATE ordenes_compra SET estado = 'Aprobada' WHERE id = ?")->execute([$id]);
+                    }
                     
                     // Notificar al creador
                     $msg = "La " . ($ocInfo['tipo'] === 'servicio' ? 'OS' : 'OC') . " {$ocInfo['numero_oc']} ha sido APROBADA totalmente.";

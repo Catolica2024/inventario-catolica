@@ -8,8 +8,13 @@ if (!$token) {
     die("Token no proporcionado");
 }
 
-// Registrar el momento exacto del clic (el email ya está en email_destinatario del token)
+// Registrar el momento exacto del clic y la IP de quien aprobó
 $usado_en = date('Y-m-d H:i:s');
+$ip_aprobador = $_SERVER['HTTP_X_FORWARDED_FOR']
+    ? trim(explode(',', $_SERVER['HTTP_X_FORWARDED_FOR'])[0])
+    : ($_SERVER['HTTP_CLIENT_IP'] ?? $_SERVER['REMOTE_ADDR'] ?? 'desconocida');
+// Sanitizar: solo IPv4/IPv6 válidas (máx. 45 chars)
+$ip_aprobador = substr(filter_var($ip_aprobador, FILTER_VALIDATE_IP) ?: $ip_aprobador, 0, 45);
 
 try {
     $pdo = db();
@@ -68,8 +73,8 @@ try {
 
         // Procesar rechazo
         $pdo->beginTransaction();
-        $pdo->prepare("UPDATE ordenes_compra_tokens SET usado = 1, usado_en = ? WHERE id = ?")
-            ->execute([$usado_en, $t['id']]);
+        $pdo->prepare("UPDATE ordenes_compra_tokens SET usado = 1, usado_en = ?, ip_aprobador = ? WHERE id = ?")
+            ->execute([$usado_en, $ip_aprobador, $t['id']]);
         
         $quien = ($rol === 'gerente_general' ? 'Gerente General' : 'Jefe de Finanzas');
         $col = ($rol === 'gerente_general' ? 'rechazado_gerente' : 'rechazado_finanzas');
@@ -84,6 +89,14 @@ try {
             ->execute([$res['creado_por'], $msg]);
 
         $pdo->commit();
+
+        // Enviar correo de confirmación al rechazador como constancia
+        try {
+            require_once __DIR__ . '/../includes/mailer.php';
+            Mailer::sendApprovalConfirmation($id, $t['email_destinatario'], $rol, 'rechazó', $ip_aprobador, $usado_en);
+        } catch (Exception $e) {
+            error_log("Error enviando confirmación de rechazo: " . $e->getMessage());
+        }
 
         echo "
         <!DOCTYPE html>
@@ -110,15 +123,17 @@ try {
     // FLUJO DE APROBACIÓN (Acción por defecto)
     $pdo->beginTransaction();
 
-    // 1. Marcar el token como usado (guardando la fecha/hora exacta del clic)
-    $pdo->prepare("UPDATE ordenes_compra_tokens SET usado = 1, usado_en = ? WHERE id = ?")
-        ->execute([$usado_en, $t['id']]);
+    // 1. Marcar el token como usado (guardando la fecha/hora exacta del clic y la IP)
+    $pdo->prepare("UPDATE ordenes_compra_tokens SET usado = 1, usado_en = ?, ip_aprobador = ? WHERE id = ?")
+        ->execute([$usado_en, $ip_aprobador, $t['id']]);
 
-    // 2. Aplicar la firma correspondiente
+    // 2. Aplicar la firma correspondiente y guardar la fecha/hora
     if ($rol === 'gerente_general') {
-        $pdo->prepare("UPDATE ordenes_compra SET aprobado_gerente = 1 WHERE id = ?")->execute([$id]);
+        $pdo->prepare("UPDATE ordenes_compra SET aprobado_gerente = 1, fecha_aprobacion_gerente = ? WHERE id = ?")
+            ->execute([$usado_en, $id]);
     } else if ($rol === 'jefe_finanzas') {
-        $pdo->prepare("UPDATE ordenes_compra SET aprobado_finanzas = 1 WHERE id = ?")->execute([$id]);
+        $pdo->prepare("UPDATE ordenes_compra SET aprobado_finanzas = 1, fecha_aprobacion_finanzas = ? WHERE id = ?")
+            ->execute([$usado_en, $id]);
     }
 
     // 3. Verificar si se completa la orden
@@ -127,7 +142,8 @@ try {
     $status = $check->fetch();
 
     if ($status['aprobado_gerente'] && $status['aprobado_finanzas']) {
-        $pdo->prepare("UPDATE ordenes_compra SET estado = 'Aprobada' WHERE id = ?")->execute([$id]);
+        $pdo->prepare("UPDATE ordenes_compra SET estado = 'Aprobada', fecha_aprobacion = ? WHERE id = ?")
+            ->execute([$usado_en, $id]);
         // Notificar al creador
         $msg = "La " . ($res['tipo'] === 'servicio' ? 'OS' : 'OC') . " {$res['numero_oc']} ha sido APROBADA totalmente.";
         $pdo->prepare("INSERT INTO notificaciones (usuario_id, titulo, mensaje, tipo) VALUES (?, 'Documento Aprobado', ?, 'success')")
@@ -149,6 +165,14 @@ try {
     }
 
     $pdo->commit();
+
+    // Enviar correo de confirmación al aprobador como constancia de su acción
+    try {
+        require_once __DIR__ . '/../includes/mailer.php';
+        Mailer::sendApprovalConfirmation($id, $t['email_destinatario'], $rol, 'aprobó', $ip_aprobador, $usado_en);
+    } catch (Exception $e) {
+        error_log("Error enviando confirmación de aprobación: " . $e->getMessage());
+    }
 
     // Mostrar mensaje de éxito visualmente agradable
     echo "

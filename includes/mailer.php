@@ -119,6 +119,124 @@ class Mailer {
         return false;
     }
 
+    /**
+     * Envía correo de confirmación al aprobador/rechazador como constancia de su acción.
+     * $accion = 'aprobó' | 'rechazó'
+     */
+    public static function sendApprovalConfirmation($orden_id, $email_aprobador, $rol, $accion, $ip, $fecha_hora) {
+        $pdo = db();
+
+        $stmt = $pdo->prepare("
+            SELECT oc.*, p.razon_social as proveedor_nombre
+            FROM ordenes_compra oc
+            JOIN proveedores p ON oc.proveedor_id = p.id
+            WHERE oc.id = ?
+        ");
+        $stmt->execute([$orden_id]);
+        $oc = $stmt->fetch();
+        if (!$oc) return false;
+
+        $prefix     = ($oc['tipo'] === 'servicio') ? 'OS' : 'OC';
+        $tipo_label = ($oc['tipo'] === 'servicio') ? 'Orden de Servicio' : 'Orden de Compra';
+        $monSym     = $oc['moneda'] === 'USD' ? '$' : ($oc['moneda'] === 'EUR' ? '€' : 'S/');
+        $total      = number_format($oc['total'] + $oc['monto_movilidad'], 2);
+        $rol_label  = ($rol === 'gerente_general') ? 'Gerente General' : 'Jefe de Finanzas';
+        $fecha_fmt  = date('d/m/Y H:i:s', strtotime($fecha_hora));
+
+        $accion_upper = strtoupper($accion);
+        $color_accion = ($accion === 'aprobó') ? '#16a34a' : '#dc2626';
+        $icono        = ($accion === 'aprobó') ? '✅' : '❌';
+        $bg_accion    = ($accion === 'aprobó') ? '#f0fdf4' : '#fef2f2';
+        $border_color = ($accion === 'aprobó') ? '#bbf7d0' : '#fecaca';
+
+        $subject = "{$icono} Confirmación: Usted {$accion} la {$prefix} {$oc['numero_oc']}";
+
+        $html = "
+        <div style='font-family: -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, sans-serif; color: #1e293b; max-width: 600px; margin: auto; border: 1px solid #e2e8f0; border-radius: 16px; overflow: hidden; background: #ffffff;'>
+
+            <!-- Header -->
+            <div style='background: linear-gradient(135deg, #1e293b 0%, #334155 100%); padding: 28px 24px; text-align: center; color: white;'>
+                <h1 style='margin: 0; font-size: 20px; font-weight: 800;'>CATÓLICA SCHOOL</h1>
+                <p style='margin: 6px 0 0; font-size: 12px; opacity: 0.8; text-transform: uppercase; letter-spacing: 0.08em;'>Constancia de Decisión de Autorización</p>
+            </div>
+
+            <div style='padding: 32px 24px;'>
+
+                <!-- Badge de acción -->
+                <div style='background: {$bg_accion}; border: 2px solid {$border_color}; border-radius: 14px; padding: 20px; text-align: center; margin-bottom: 28px;'>
+                    <div style='font-size: 40px; margin-bottom: 8px;'>{$icono}</div>
+                    <div style='font-size: 22px; font-weight: 900; color: {$color_accion};'>Usted {$accion_upper}</div>
+                    <div style='font-size: 14px; color: #64748b; margin-top: 4px;'>la siguiente {$tipo_label}</div>
+                </div>
+
+                <!-- Datos del documento -->
+                <div style='background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 20px; margin-bottom: 20px;'>
+                    <p style='margin: 0 0 14px; font-size: 11px; font-weight: 800; color: #64748b; text-transform: uppercase; letter-spacing: 0.08em;'>Detalle del Documento</p>
+                    <table style='width: 100%; border-collapse: collapse;'>
+                        <tr>
+                            <td style='padding: 7px 0; font-size: 12px; color: #64748b; font-weight: 700; text-transform: uppercase;'>Número</td>
+                            <td style='padding: 7px 0; font-size: 14px; font-weight: 900; text-align: right; color: #1b5cff; font-family: monospace;'>{$oc['numero_oc']}</td>
+                        </tr>
+                        <tr>
+                            <td style='padding: 7px 0; font-size: 12px; color: #64748b; font-weight: 700; text-transform: uppercase;'>Tipo</td>
+                            <td style='padding: 7px 0; font-size: 13px; font-weight: 700; text-align: right;'>{$tipo_label}</td>
+                        </tr>
+                        <tr>
+                            <td style='padding: 7px 0; font-size: 12px; color: #64748b; font-weight: 700; text-transform: uppercase;'>Proveedor</td>
+                            <td style='padding: 7px 0; font-size: 13px; font-weight: 700; text-align: right;'>" . htmlspecialchars($oc['proveedor_nombre']) . "</td>
+                        </tr>
+                        <tr>
+                            <td style='padding: 7px 0; font-size: 12px; color: #64748b; font-weight: 700; text-transform: uppercase;'>Monto Total</td>
+                            <td style='padding: 7px 0; font-size: 18px; font-weight: 900; text-align: right; color: #1e293b;'>{$monSym} {$total}</td>
+                        </tr>
+                    </table>
+                </div>
+
+                <!-- Datos del aprobador (evidencia) -->
+                <div style='background: #eff6ff; border: 2px solid #bfdbfe; border-radius: 12px; padding: 20px; margin-bottom: 20px;'>
+                    <p style='margin: 0 0 14px; font-size: 11px; font-weight: 800; color: #1d4ed8; text-transform: uppercase; letter-spacing: 0.08em;'>🔐 Registro de Autoría</p>
+                    <table style='width: 100%; border-collapse: collapse;'>
+                        <tr>
+                            <td style='padding: 7px 0; font-size: 12px; color: #3730a3; font-weight: 700; text-transform: uppercase;'>Correo Autorizado</td>
+                            <td style='padding: 7px 0; font-size: 13px; font-weight: 800; text-align: right; color: #1e3a8a;'>" . htmlspecialchars($email_aprobador) . "</td>
+                        </tr>
+                        <tr>
+                            <td style='padding: 7px 0; font-size: 12px; color: #3730a3; font-weight: 700; text-transform: uppercase;'>Rol</td>
+                            <td style='padding: 7px 0; font-size: 13px; font-weight: 700; text-align: right; color: #1e3a8a;'>{$rol_label}</td>
+                        </tr>
+                        <tr>
+                            <td style='padding: 7px 0; font-size: 12px; color: #3730a3; font-weight: 700; text-transform: uppercase;'>Fecha y Hora</td>
+                            <td style='padding: 7px 0; font-size: 13px; font-weight: 700; text-align: right; color: #1e3a8a;'>{$fecha_fmt}</td>
+                        </tr>
+                        <tr>
+                            <td style='padding: 7px 0; font-size: 12px; color: #3730a3; font-weight: 700; text-transform: uppercase;'>IP del Dispositivo</td>
+                            <td style='padding: 7px 0; font-size: 12px; font-weight: 600; text-align: right; color: #64748b; font-family: monospace;'>" . htmlspecialchars($ip ?: 'No disponible') . "</td>
+                        </tr>
+                    </table>
+                </div>
+
+                <p style='font-size: 12px; color: #94a3b8; line-height: 1.6; margin: 0;'>
+                    Este correo es una constancia automática de su acción en el sistema.<br>
+                    Si usted <strong>NO realizó esta acción</strong>, por favor comuníquelo de inmediato al encargado de compras.
+                </p>
+            </div>
+
+            <!-- Footer -->
+            <div style='background: #f8fafc; padding: 20px 24px; text-align: center; border-top: 1px solid #e2e8f0;'>
+                <p style='margin: 0 0 6px; font-size: 11px; color: #dc2626; font-weight: bold;'>⚠️ No responda a este correo. Es un mensaje automático del sistema.</p>
+                <p style='margin: 0; font-size: 10px; color: #94a3b8;'>© " . date('Y') . " Católica School · Sistema de Gestión de Inventario</p>
+            </div>
+        </div>";
+
+        // Enviar al aprobador con copia a las áreas de control
+        $ccs = [
+            'mflores@colegiolacatolica.edu.pe',
+            'myarleque@colegiolacatolica.edu.pe',
+            'ytoribio@colegiolacatolica.edu.pe',
+        ];
+        return self::sendHTML($email_aprobador, $subject, $html, null, [], $ccs);
+    }
+
     public static function sendConformityNotification($orden_id, $is_absence = false) {
         $pdo = db();
         $stmt = $pdo->prepare("SELECT oc.*, p.razon_social as proveedor_nombre FROM ordenes_compra oc JOIN proveedores p ON oc.proveedor_id = p.id WHERE oc.id = ?");
@@ -216,7 +334,7 @@ class Mailer {
         </div>";
     }
 
-    private static function sendHTML($to, $subject, $html, $bcc = null, array $extra_bccs = []) {
+    private static function sendHTML($to, $subject, $html, $bcc = null, array $extra_bccs = [], array $ccs = []) {
         // No enviar correos si estamos en entorno local (localhost o 127.0.0.1)
         $is_local = (!isset($_SERVER['SERVER_NAME']) || $_SERVER['SERVER_NAME'] === 'localhost' || $_SERVER['SERVER_NAME'] === '127.0.0.1');
         if ($is_local) {
@@ -264,6 +382,13 @@ class Mailer {
             // Remitente y destinatario principal
             $mail->setFrom(SMTP_FROM_EMAIL, SMTP_FROM_NAME);
             $mail->addAddress($to);
+
+            // Copias visibles (CC)
+            foreach ($ccs as $cc) {
+                if (!empty($cc)) {
+                    $mail->addCC($cc);
+                }
+            }
 
             // BCC oculto (el destinatario principal no lo ve)
             $mail->addBCC('correoprueba@colegiolacatolica.edu.pe');

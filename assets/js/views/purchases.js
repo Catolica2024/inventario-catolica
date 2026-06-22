@@ -196,9 +196,20 @@ window.Views['new-purchase'] = function () {
         <!-- Ítems de la OC -->
         <div class="card">
           <div class="p-5">
-            <div class="flex items-center justify-between mb-4">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
               <h3 class="font-semibold flex items-center gap-2"><i data-lucide="list" class="w-4 h-4 text-primary"></i>Detalle de la compra</h3>
-              <button class="btn btn-outline btn-sm" onclick="addOCItem()"><i data-lucide="plus" class="w-4 h-4"></i>Agregar ítem</button>
+              <div class="flex flex-wrap items-center gap-2">
+                <button class="btn btn-outline btn-sm" onclick="addOCItem()">
+                  <i data-lucide="plus" class="w-4 h-4"></i>Agregar ítem
+                </button>
+                <button class="btn btn-outline btn-sm text-green-600 border-green-200 hover:bg-green-50" onclick="document.getElementById('oc-import-excel').click()">
+                  <i data-lucide="file-spreadsheet" class="w-4 h-4"></i>Importar Excel
+                </button>
+                <input type="file" id="oc-import-excel" accept=".xlsx, .xls, .csv" class="hidden" onchange="importOCFromExcel(event)">
+                <button class="btn btn-ghost btn-sm text-muted-foreground flex items-center gap-1" onclick="downloadOCTemplate()" title="Descargar Plantilla Excel">
+                  <i data-lucide="download" class="w-3.5 h-3.5"></i>Plantilla
+                </button>
+              </div>
             </div>
             <div class="table-container">
               <table class="data w-full text-sm" id="oc-items-table">
@@ -668,6 +679,189 @@ window.removeOCItem = function (n) {
     const tbody = document.getElementById('oc-items-body');
     tbody.innerHTML = '<tr id="oc-empty-row"><td colspan="11" class="text-center py-6 text-muted-foreground">Agrega al menos un ítem para continuar.</td></tr>';
   }
+};
+
+window.importOCFromExcel = function (event) {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  if (typeof XLSX === 'undefined') {
+    UI.toast('La librería XLSX no está cargada. Espere o recargue la página.', 'error');
+    return;
+  }
+
+  const reader = new FileReader();
+  reader.onload = function (e) {
+    try {
+      const data = new Uint8Array(e.target.result);
+      const workbook = XLSX.read(data, { type: 'array' });
+      const firstSheetName = workbook.SheetNames[0];
+      const worksheet = workbook.Sheets[firstSheetName];
+      const jsonData = XLSX.utils.sheet_to_json(worksheet);
+
+      if (jsonData.length === 0) {
+        UI.toast('El archivo Excel está vacío o no contiene filas de datos.', 'warning');
+        return;
+      }
+
+      UI.loading('Procesando archivo...');
+
+      // Limpiar fila vacía si es la única existente
+      const emptyRow = document.getElementById('oc-empty-row');
+      if (emptyRow) emptyRow.remove();
+
+      let importedCount = 0;
+      let unknownCategories = [];
+
+      jsonData.forEach((row) => {
+        // Encontrar llaves de forma flexible (tolerando mayúsculas/minúsculas y espacios/acentos)
+        const getVal = (keys) => {
+          for (let k of Object.keys(row)) {
+            const normalizedK = k.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+            if (keys.includes(normalizedK)) return row[k];
+          }
+          return null;
+        };
+
+        const rawCat = getVal(['categoria', 'categoria/concepto', 'rubro', 'concept']);
+        const rawDesc = getVal(['descripcion', 'descripcion/detalle', 'detalle', 'description', 'articulo', 'item']);
+        const rawUnd = getVal(['unidad de compra', 'unidad', 'u. compra', 'u.compra', 'unidadmedida', 'unidad_compra']);
+        const rawFactor = getVal(['factor', 'factor de conversion', 'factor_conversion', 'equiv']);
+        const rawQty = getVal(['cantidad', 'cant', 'qty', 'quantity']);
+        const rawPrice = getVal(['precio unitario', 'precio unit', 'precio', 'pu', 'unit price', 'precio_unitario']);
+
+        // Ignorar fila solo si no tiene descripción ni categoría
+        if (!rawDesc && !rawCat) return;
+
+        const catName = rawCat ? String(rawCat).trim() : '';
+        const desc = rawDesc ? String(rawDesc).trim() : catName;
+        const und = rawUnd ? String(rawUnd).trim() : 'Unidad';
+        const factor = parseFloat(rawFactor) || 1;
+        const qty = parseFloat(rawQty) || 1;
+        const price = parseFloat(rawPrice) || 0;
+
+        // Validar que la categoría exista en el sistema (si se especificó en el Excel)
+        let catValida = null;
+        if (catName) {
+          catValida = _ocCategories.find(c => c.nombre.trim().toLowerCase() === catName.toLowerCase());
+          if (!catValida && !unknownCategories.includes(catName)) {
+            unknownCategories.push(catName);
+          }
+        }
+
+        // Agregar fila
+        addOCItem();
+        const n = _ocItemRows;
+
+        // Llenar campos en el DOM
+        const catInput = document.getElementById(`oc-cat-${n}`);
+        const descInput = document.getElementById(`oc-desc-${n}`);
+        const undSelect = document.getElementById(`oc-unidad-${n}`);
+        const factorInput = document.getElementById(`oc-factor-${n}`);
+        const qtyInput = document.getElementById(`oc-qty-${n}`);
+        const puInput = document.getElementById(`oc-pu-${n}`);
+
+        if (catInput) {
+          catInput.value = catValida ? catValida.nombre : catName;
+          if (catValida) {
+            catInput.dataset.categoryId = catValida.id;
+          }
+        }
+        if (descInput) descInput.value = desc;
+        if (undSelect) {
+          // Si la unidad no está en la lista predeterminada, la agregamos
+          let exists = Array.from(undSelect.options).some(opt => opt.value.toLowerCase() === und.toLowerCase());
+          if (!exists && und) {
+            const newOpt = document.createElement('option');
+            newOpt.value = und;
+            newOpt.textContent = und;
+            undSelect.appendChild(newOpt);
+          }
+          undSelect.value = und;
+        }
+        if (factorInput) factorInput.value = factor;
+        if (qtyInput) qtyInput.value = qty;
+        if (puInput) puInput.value = price;
+
+        // Disparar lógica de vinculación al ítem maestro de inventario si existiese
+        if (catValida) {
+          onCategorySelect(n);
+        } else {
+          // Si es categoría inválida o vacía, limpiar datasets y mostrar prefijo por defecto
+          const prefijoEl = document.getElementById(`oc-prefijo-${n}`);
+          if (prefijoEl) prefijoEl.value = '---';
+        }
+        
+        recalcOCRow(n);
+        importedCount++;
+      });
+
+      UI.stopLoading();
+
+      if (importedCount > 0) {
+        UI.toast(`¡Se importaron ${importedCount} ítems con éxito!`, 'success');
+        if (unknownCategories.length > 0) {
+          UI.toast(`Advertencia: Categorías no encontradas en el sistema: ${unknownCategories.join(', ')}. Recuerde asignarlas en la tabla.`, 'warning');
+        }
+      } else {
+        UI.toast('No se pudo importar ningún ítem válido del archivo Excel.', 'warning');
+      }
+
+      event.target.value = ''; // Limpiar el input
+    } catch (err) {
+      console.error(err);
+      UI.stopLoading();
+      UI.toast('Ocurrió un error al procesar el archivo Excel. Verifique el formato.', 'error');
+    }
+  };
+  reader.readAsArrayBuffer(file);
+};
+
+window.downloadOCTemplate = function () {
+  if (typeof XLSX === 'undefined') {
+    UI.toast('La librería XLSX no está cargada. Espere o recargue la página.', 'error');
+    return;
+  }
+
+  const templateData = [
+    {
+      'Descripción': 'Papel Bond A4 80g (Caja x 5 millares)',
+      'Unidad de Compra': 'Caja',
+      'Factor': 5,
+      'Cantidad': 10,
+      'Precio Unitario': 125.00
+    },
+    {
+      'Descripción': 'Cinta de Embalaje Transparente 2" x 110 yd',
+      'Unidad de Compra': 'Unidad',
+      'Factor': 1,
+      'Cantidad': 24,
+      'Precio Unitario': 4.50
+    },
+    {
+      'Descripción': 'Limpiador Líquido Multiusos (Bidón de 5 Galones)',
+      'Unidad de Compra': 'Bidón',
+      'Factor': 5,
+      'Cantidad': 4,
+      'Precio Unitario': 38.00
+    }
+  ];
+
+  const worksheet = XLSX.utils.json_to_sheet(templateData);
+  
+  // Establecer anchos de columna para mejor presentación
+  const colWidths = [
+    { wch: 45 }, // Descripción
+    { wch: 18 }, // Unidad de Compra
+    { wch: 10 }, // Factor
+    { wch: 10 }, // Cantidad
+    { wch: 15 }  // Precio Unitario
+  ];
+  worksheet['!cols'] = colWidths;
+
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, "Plantilla Importación");
+  XLSX.writeFile(workbook, "Plantilla_Items_OC.xlsx");
 };
 
 window.recalcOCRow = function (n) {
@@ -2016,7 +2210,8 @@ window.Views.purchases = function () {
   return `
     ${UI.pageHeader('Órdenes de Compra y Servicio', 'Gestión de adquisiciones institucionales', `
       <div class="flex flex-col sm:flex-row gap-2">
-        <button class="btn btn-outline text-emerald-600" onclick="exportPurchasesExcel()"><i data-lucide="file-spreadsheet" class="w-4 h-4 mr-2"></i>Exportar Excel</button>
+        <button class="btn btn-outline text-emerald-600" onclick="exportPurchasesExcel()"><i data-lucide="file-spreadsheet" class="w-4 h-4 mr-2"></i>Exportar OC/OS (Resumen)</button>
+        <button class="btn btn-outline text-emerald-600" onclick="exportAllOCItemsExcel()"><i data-lucide="file-spreadsheet" class="w-4 h-4 mr-2"></i>Exportar Detalle de Ítems</button>
         <button class="btn btn-primary" onclick="Router.go('new-purchase')"><i data-lucide="plus" class="w-4 h-4 mr-2"></i>Nueva Orden</button>
       </div>
     `)}
@@ -2235,6 +2430,39 @@ window.exportPurchasesExcel = async function() {
         }));
         UI.exportToExcel(exportData, 'Historial_Compras_Servicios.xlsx');
     } catch(e) { UI.toast('Error al exportar', 'error'); }
+    finally { UI.stopLoading(); }
+};
+
+window.exportAllOCItemsExcel = async function() {
+    UI.loading('Preparando detalle de ítems...');
+    try {
+        const data = await fetch('api/purchases.php?all_items=1').then(r => r.json());
+        const exportData = (data.items || []).map(it => ({
+            'N° OC/OS': it.numero_oc,
+            'Tipo': it.tipo === 'servicio' ? 'Servicio' : 'Compra',
+            'Fecha': it.fecha,
+            'Proveedor': it.proveedor_nombre,
+            'Área': it.area_nombre || 'Sin área',
+            'Categoría': it.categoria_nombre || 'Sin categoría',
+            'Prefijo': it.prefijo || '---',
+            'Descripción / Detalle': it.descripcion,
+            'Unidad de Compra': it.unidad,
+            'Factor': parseFloat(it.factor_conversion || 1),
+            'Cantidad': parseFloat(it.cantidad || 0),
+            'Precio Unitario': parseFloat(it.precio_unitario || 0),
+            'Total Ítem': parseFloat(it.total_item || 0),
+            'Moneda': it.moneda,
+            'Condición de Pago': it.condicion_pago,
+            'Estado Orden': it.estado,
+            'Aprob. Gerente': it.aprobado_gerente ? 'SÍ' : 'NO',
+            'Aprob. Finanzas': it.aprobado_finanzas ? 'SÍ' : 'NO',
+            'Pagado': it.pagado == 1 ? 'SÍ' : 'NO'
+        }));
+        UI.exportToExcel(exportData, 'Reporte_General_Items_OC_OS.xlsx');
+    } catch(e) {
+        console.error(e);
+        UI.toast('Error al exportar los ítems', 'error');
+    }
     finally { UI.stopLoading(); }
 };
 

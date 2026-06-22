@@ -84,6 +84,17 @@ window.viewOrderDetails = async function(id) {
     const data = await fetch(`api/purchases.php?id=${id}`).then(r => r.json());
     const oc = data.purchase;
     if (!oc) return;
+    window._detailOC = oc; // disponible globalmente para exportar
+
+    const formatDateTimeStr = (dtStr) => {
+      if (!dtStr) return '';
+      const parts = dtStr.split(' ');
+      if (parts.length < 1) return dtStr;
+      const dateParts = parts[0].split('-');
+      if (dateParts.length !== 3) return dtStr;
+      const timeStr = parts[1] ? parts[1].substring(0, 5) : '';
+      return `${dateParts[2]}/${dateParts[1]}/${dateParts[0]}${timeStr ? ' ' + timeStr : ''}`;
+    };
 
     const monSym = oc.moneda === 'USD' ? '$' : (oc.moneda === 'EUR' ? '€' : 'S/');
     const firstCuotaDate = (oc.cuotas && oc.cuotas.length > 0) ? oc.cuotas[0].fecha_vencimiento : (oc.fecha_vencimiento || '');
@@ -199,6 +210,15 @@ window.viewOrderDetails = async function(id) {
               }
             </p>
           </div>
+          ${oc.fecha_aprobacion ? `
+          <div>
+            <p class="text-muted-foreground">Aprobación Total</p>
+            <p class="font-bold text-green-700 flex items-center gap-1">
+              <i data-lucide="check-check" class="w-4 h-4 text-green-600"></i>
+              ${formatDateTimeStr(oc.fecha_aprobacion)}
+            </p>
+          </div>
+          ` : ''}
         </div>
 
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -213,6 +233,7 @@ window.viewOrderDetails = async function(id) {
                             <i data-lucide="${oc.aprobado_gerente ? 'check-circle' : 'circle'}" class="w-3.5 h-3.5 ${oc.aprobado_gerente ? 'text-green-500' : 'text-gray-300'}"></i>
                             <span class="text-xs font-bold ${oc.aprobado_gerente ? 'text-green-700' : 'text-gray-500'}">${oc.aprobado_gerente ? 'Aprobado' : 'Pendiente'}</span>
                         </div>
+                        ${oc.fecha_aprobacion_gerente ? `<div class="text-[9px] text-muted-foreground mt-1 font-mono font-medium bg-slate-100 px-1.5 py-0.5 rounded w-fit">${formatDateTimeStr(oc.fecha_aprobacion_gerente)}</div>` : ''}
                     </div>
                     <div class="flex-1 border-l pl-4">
                         <div class="text-[9px] text-muted-foreground uppercase font-bold mb-1">Finanzas</div>
@@ -220,6 +241,7 @@ window.viewOrderDetails = async function(id) {
                             <i data-lucide="${oc.aprobado_finanzas ? 'check-circle' : 'circle'}" class="w-3.5 h-3.5 ${oc.aprobado_finanzas ? 'text-green-500' : 'text-gray-300'}"></i>
                             <span class="text-xs font-bold ${oc.aprobado_finanzas ? 'text-green-700' : 'text-gray-500'}">${oc.aprobado_finanzas ? 'Aprobado' : 'Pendiente'}</span>
                         </div>
+                        ${oc.fecha_aprobacion_finanzas ? `<div class="text-[9px] text-muted-foreground mt-1 font-mono font-medium bg-slate-100 px-1.5 py-0.5 rounded w-fit">${formatDateTimeStr(oc.fecha_aprobacion_finanzas)}</div>` : ''}
                     </div>
                 </div>
             </div>
@@ -593,10 +615,20 @@ window.viewOrderDetails = async function(id) {
         ${docSectionHTML}
 
         <div>
-          <p class="text-sm font-semibold mb-2 flex items-center gap-2">
-            <i data-lucide="list" class="w-3.5 h-3.5 text-primary"></i>
-            Detalle de Ítems
-          </p>
+          <div class="flex items-center justify-between mb-2">
+            <p class="text-sm font-semibold flex items-center gap-2">
+              <i data-lucide="list" class="w-3.5 h-3.5 text-primary"></i>
+              Detalle de Ítems
+            </p>
+            <button
+              onclick="exportSingleOCItemsExcel(window._detailOC)"
+              class="btn btn-outline btn-sm text-emerald-600 border-emerald-200 hover:bg-emerald-50 flex items-center gap-1.5 text-xs py-1 px-2.5"
+              title="Exportar ítems de esta OC/OS a Excel"
+            >
+              <i data-lucide="file-spreadsheet" class="w-3.5 h-3.5"></i>
+              Exportar Excel
+            </button>
+          </div>
           <div class="max-h-72 overflow-y-auto border rounded-lg">
             <table class="w-full text-xs">
               <thead class="bg-muted sticky top-0 z-10">
@@ -810,4 +842,76 @@ window.resendPaymentEmail = async function(ordenId, type, cuotaId = null) {
     UI.stopLoading();
     UI.toast('Error de red al intentar reenviar el correo', 'error');
   }
+};
+
+/* ═══════════════════════════════════════════════════════════
+   EXPORTAR ÍTEMS DE UNA OC/OS INDIVIDUAL A EXCEL
+   Función global accesible desde el modal de detalle
+   ═══════════════════════════════════════════════════════════ */
+window.exportSingleOCItemsExcel = function(oc) {
+  if (!window.XLSX) {
+    UI.toast('La librería de Excel no está disponible. Recarga la página e intenta de nuevo.', 'error');
+    return;
+  }
+
+  const monSym = oc.moneda === 'USD' ? '$' : 'S/.';
+  const docNum  = oc.numero_oc || oc.id || 'SN';
+  const tipo    = oc.tipo === 'OS' ? 'Orden de Servicio' : 'Orden de Compra';
+
+  // ── Encabezado informativo ──
+  const headerRows = [
+    [tipo, '', '', '', '', ''],
+    ['N° Documento:', docNum, '', 'Moneda:', monSym, ''],
+    ['Proveedor:', oc.proveedor_nombre || '—', '', 'Estado:', oc.estado || '—', ''],
+    ['Solicitante:', oc.solicitante_nombre || '—', '', 'Fecha:', oc.fecha_emision || '—', ''],
+    [],
+    // cabecera de columnas
+    ['Categoría', 'Descripción / Detalle', 'Unidad de Compra', 'Precio Unitario', 'Cantidad', 'Total'],
+  ];
+
+  // ── Filas de ítems ──
+  const itemRows = (oc.items || []).map(it => [
+    it.categoria_nombre || '—',
+    (it.descripcion && it.descripcion !== it.categoria_nombre) ? it.descripcion : '—',
+    it.unidad_compra || '—',
+    parseFloat(it.precio_unitario || 0),
+    parseFloat(it.cantidad || 0),
+    parseFloat(it.total || 0),
+  ]);
+
+  // ── Fila subtotal ──
+  const subtotal = parseFloat(oc.total || 0);
+  const movilidad = parseFloat(oc.monto_movilidad || 0);
+  const totalOp = subtotal + movilidad;
+
+  const footerRows = [
+    [],
+    ['', '', '', '', 'Subtotal:', subtotal],
+  ];
+  if (movilidad > 0) {
+    footerRows.push(['', '', '', '', 'Movilidad (Sep.):', movilidad]);
+    footerRows.push(['', '', '', '', 'TOTAL OPERACIÓN:', totalOp]);
+  }
+
+  const allRows = [...headerRows, ...itemRows, ...footerRows];
+
+  // ── Crear workbook ──
+  const ws = XLSX.utils.aoa_to_sheet(allRows);
+
+  // Ancho de columnas
+  ws['!cols'] = [
+    { wch: 28 }, // Categoría
+    { wch: 40 }, // Descripción
+    { wch: 16 }, // Unidad
+    { wch: 16 }, // P. Unit
+    { wch: 10 }, // Cant.
+    { wch: 16 }, // Total
+  ];
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Items');
+
+  const fileName = `${oc.tipo || 'OC'}_${docNum}_items.xlsx`;
+  XLSX.writeFile(wb, fileName);
+  UI.toast(`Archivo "${fileName}" descargado correctamente.`, 'success');
 };

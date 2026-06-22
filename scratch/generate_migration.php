@@ -118,6 +118,20 @@ try {
         }
     }
 
+    // Actualizar registros históricos con fecha de creación como fallback si las columnas eran nuevas
+    \$stmt1 = \$pdo->exec("UPDATE ordenes_compra SET fecha_aprobacion_gerente = created_at WHERE aprobado_gerente = 1 AND fecha_aprobacion_gerente IS NULL");
+    if (\$stmt1 > 0) {
+        \$logs[] = "Se actualizaron \$stmt1 registros históricos de Gerencia con fecha de creación como fallback.";
+    }
+    \$stmt2 = \$pdo->exec("UPDATE ordenes_compra SET fecha_aprobacion_finanzas = created_at WHERE aprobado_finanzas = 1 AND fecha_aprobacion_finanzas IS NULL");
+    if (\$stmt2 > 0) {
+        \$logs[] = "Se actualizaron \$stmt2 registros históricos de Finanzas con fecha de creación como fallback.";
+    }
+    \$stmt3 = \$pdo->exec("UPDATE ordenes_compra SET fecha_aprobacion = created_at WHERE aprobado_gerente = 1 AND aprobado_finanzas = 1 AND fecha_aprobacion IS NULL");
+    if (\$stmt3 > 0) {
+        \$logs[] = "Se actualizaron \$stmt3 registros históricos de aprobación total con fecha de creación como fallback.";
+    }
+
     // Reactivar revisión de llaves foráneas
     \$pdo->exec("SET FOREIGN_KEY_CHECKS = 1;");
     
