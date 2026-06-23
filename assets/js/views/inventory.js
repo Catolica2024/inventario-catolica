@@ -100,11 +100,22 @@ function renderInventoryRows(data) {
         tbody.innerHTML = '<tr><td colspan="7" class="text-center py-24 text-muted-foreground font-medium italic">No se han encontrado registros que coincidan con los criterios.</td></tr>';
         return;
     }
+    const user = window.Auth.getUser();
+    const isAdmin = user && user.role === 'admin';
+
     tbody.innerHTML = data.map(d => {
         const isUnit = d._type === 'unit';
+        const rawCode = isUnit ? (d.codigo_patrimonial || '—') : (d.codigo || '—');
+        const isTemp = rawCode.startsWith('TEMP-');
+        const codeHtml = isTemp
+            ? `<span class="inline-flex items-center gap-1">
+                 <span class="font-mono text-[11px] font-black text-amber-500 tracking-tighter">${rawCode}</span>
+                 <span title="Código temporal — requiere corrección" class="text-[9px] font-black bg-amber-100 text-amber-600 border border-amber-200 rounded px-1 py-0.5 uppercase">TEMP</span>
+               </span>`
+            : `<span class="font-mono text-[11px] font-black text-primary tracking-tighter">${rawCode}</span>`;
         return `
             <tr class="hover:bg-primary/5 transition-all group">
-                <td class="font-mono text-[11px] font-black text-primary tracking-tighter">${isUnit ? (d.codigo_patrimonial || '—') : (d.codigo || '—')}</td>
+                <td>${codeHtml}</td>
                 <td>
                     <div class="font-bold text-slate-800">${isUnit ? d.item_nombre : d.nombre}</div>
                     <div class="text-[9px] font-black text-muted-foreground uppercase tracking-wider mt-0.5">${isUnit ? (d.numero_serie ? 'S/N: '+d.numero_serie : 'SIN SERIE') : (d.marca || 'GENÉRICO')}</div>
@@ -143,6 +154,10 @@ function renderInventoryRows(data) {
                     <div class="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                         <button class="btn btn-ghost p-2 rounded-xl" onclick="UI.showQR('${isUnit ? (d.codigo_patrimonial || '—') : (d.codigo || '—')}', '${isUnit ? 'EQUIPO' : (d.categoria_nombre || '—')}')" title="Ver QR"><i data-lucide="qr-code" class="w-4 h-4"></i></button>
                         <button class="btn btn-ghost p-2 rounded-xl" onclick="${isUnit ? `viewAssetDetails(${d.id})` : `viewCatalogItem(${d.id})`}" title="Ver detalle"><i data-lucide="eye" class="w-4 h-4"></i></button>
+                        ${isAdmin && !isUnit ? 
+                            `<button class="btn btn-ghost p-2 rounded-xl text-indigo-600" onclick="editInventoryItem(${d.id})" title="Editar (Solo Admin)"><i data-lucide="pencil" class="w-4 h-4"></i></button>` : 
+                            ''
+                        }
                         ${isUnit ? 
                             `<button class="btn btn-ghost p-2 rounded-xl text-primary" onclick="loadTraceResources().then(() => openAssignmentModal(${d.id}))" title="Asignar"><i data-lucide="user-plus" class="w-4 h-4"></i></button>` : 
                             (d.categoria_tipo === 'mobiliario' ? 
@@ -294,6 +309,138 @@ window.deleteInventoryItem = function(type, id, nombre) {
             }
         }
     });
+};
+
+window.editInventoryItem = async function(itemId) {
+    const user = window.Auth.getUser();
+    if (!user || user.role !== 'admin') {
+        UI.toast('Solo el Administrador puede editar registros del inventario', 'error');
+        return;
+    }
+
+    // Cargar datos del item y categorías en paralelo
+    UI.loading('Cargando datos...');
+    const [itemsResp, catsResp] = await Promise.all([
+        fetch('api/items.php').then(r => r.json()),
+        fetch('api/categories_inventario.php').then(r => r.json())
+    ]);
+    UI.stopLoading();
+
+    const item = (itemsResp.items || []).find(i => i.id == itemId);
+    if (!item) { UI.toast('Item no encontrado', 'error'); return; }
+
+    const cats = catsResp.categories || [];
+    const catsOptions = cats.map(c =>
+        `<option value="${c.id}" ${item.categoria_inventario_id == c.id ? 'selected' : ''}>${c.nombre}</option>`
+    ).join('');
+
+    const isTemp = (item.codigo || '').startsWith('TEMP-');
+
+    UI.modal({
+        title: '<span class="flex items-center gap-2"><i data-lucide="pencil" class="w-5 h-5 text-indigo-600"></i> Editar Bien del Inventario</span>',
+        body: `
+            <div class="space-y-4">
+                ${isTemp ? `
+                <div class="flex items-center gap-3 p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-700 text-xs font-bold">
+                    <i data-lucide="alert-triangle" class="w-4 h-4 shrink-0"></i>
+                    Este item tiene un código temporal (TEMP). Asigna una categoría y guarda para generar el código definitivo automáticamente.
+                </div>` : ''}
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="col-span-2">
+                        <label class="label">Nombre del Bien</label>
+                        <input id="edit-item-nombre" class="input w-full" value="${(item.nombre || '').replace(/"/g, '&quot;')}">
+                    </div>
+                    <div>
+                        <label class="label">Código <span class="text-[10px] text-muted-foreground font-normal">(Auto-generado)</span></label>
+                        <input id="edit-item-codigo" class="input w-full font-mono bg-slate-100 border-slate-200 text-slate-500 cursor-not-allowed" value="${isTemp ? 'Auto-generado al guardar' : (item.codigo || '')}" readonly disabled>
+                    </div>
+                    <div>
+                        <label class="label">Categoría</label>
+                        <select id="edit-item-cat" class="select w-full" onchange="editItemPreviewCode(${itemId})">
+                            <option value="">Sin categoría</option>
+                            ${catsOptions}
+                        </select>
+                    </div>
+                    <div>
+                        <label class="label">Marca</label>
+                        <input id="edit-item-marca" class="input w-full" value="${(item.marca || '').replace(/"/g, '&quot;')}" placeholder="Opcional">
+                    </div>
+                    <div>
+                        <label class="label">Modelo</label>
+                        <input id="edit-item-modelo" class="input w-full" value="${(item.modelo || '').replace(/"/g, '&quot;')}" placeholder="Opcional">
+                    </div>
+                    <div>
+                        <label class="label">Unidad de Medida</label>
+                        <input id="edit-item-unidad" class="input w-full" value="${item.unidad_medida || 'Unidad'}">
+                    </div>
+                    <div>
+                        <label class="label">Stock Mínimo</label>
+                        <input id="edit-item-stock-min" type="number" class="input w-full" value="${item.stock_minimo || 0}" min="0">
+                    </div>
+                </div>
+                <div id="edit-item-code-preview" class="text-[11px] font-bold text-indigo-600 font-mono bg-indigo-50 border border-indigo-100 rounded-lg px-3 py-2 hidden"></div>
+            </div>
+        `,
+        confirmText: 'Guardar Cambios',
+        onConfirm: async () => {
+            const nombre = document.getElementById('edit-item-nombre').value.trim();
+            const catId = document.getElementById('edit-item-cat').value || null;
+            const marca = document.getElementById('edit-item-marca').value.trim() || null;
+            const modelo = document.getElementById('edit-item-modelo').value.trim() || null;
+            const unidad = document.getElementById('edit-item-unidad').value.trim() || 'Unidad';
+            const stockMin = parseInt(document.getElementById('edit-item-stock-min').value) || 0;
+
+            if (!nombre) { UI.toast('El nombre es obligatorio', 'error'); return; }
+
+            // Si es temporal o no tiene código, y hay categoría, auto-generar
+            let codigoFinal = item.codigo;
+            if (catId && (isTemp || !item.codigo)) {
+                const nc = await fetch(`api/items.php?action=next_code&categoria_id=${catId}`).then(r => r.json());
+                codigoFinal = nc.next_code || item.codigo;
+            }
+
+            UI.loading('Guardando...');
+            const r = await fetch('api/items.php', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    id: itemId,
+                    codigo: codigoFinal,
+                    nombre,
+                    marca,
+                    modelo,
+                    categoria_inventario_id: catId,
+                    stock_minimo: stockMin,
+                    unidad_medida: unidad,
+                    unidad_compra: item.unidad_compra || unidad,
+                    factor_conversion: item.factor_conversion || 1
+                })
+            }).then(x => x.json());
+            UI.stopLoading();
+
+            if (r.ok) {
+                UI.toast(`Bien actualizado correctamente${codigoFinal !== item.codigo ? ' — Código: ' + codigoFinal : ''}`, 'success');
+                loadInventory();
+            } else {
+                UI.toast('Error: ' + (r.error || 'Error del servidor'), 'error');
+            }
+        }
+    });
+    // Render lucide icons inside modal
+    setTimeout(() => lucide.createIcons(), 50);
+};
+
+window.editItemPreviewCode = async function(itemId) {
+    const catId = document.getElementById('edit-item-cat')?.value;
+    const manualCode = document.getElementById('edit-item-codigo')?.value.trim();
+    const preview = document.getElementById('edit-item-code-preview');
+    if (!preview) return;
+    if (!catId || manualCode) { preview.classList.add('hidden'); return; }
+    const nc = await fetch(`api/items.php?action=next_code&categoria_id=${catId}`).then(r => r.json());
+    if (nc.next_code) {
+        preview.textContent = `→ Código a asignar: ${nc.next_code}`;
+        preview.classList.remove('hidden');
+    }
 };
 
 window.openInventoryScanner = function() {

@@ -55,14 +55,15 @@ try {
                 }
 
                 // 1. Registrar la asignación
-                $sql = "INSERT INTO asignaciones (activo_id, personal_id, fecha_asignacion, condicion_entrega, observaciones) VALUES (?,?,?,?,?)";
+                $sql = "INSERT INTO asignaciones (activo_id, personal_id, fecha_asignacion, condicion_entrega, observaciones, foto_url) VALUES (?,?,?,?,?,?)";
                 $stmt = $pdo->prepare($sql);
                 $stmt->execute([
                     $b['activo_id'],
                     $b['personal_id'],
                     $b['fecha_asignacion'],
                     $b['condicion_entrega'] ?? 'Bueno',
-                    (!empty($b['observaciones'])) ? $b['observaciones'] : null
+                    (!empty($b['observaciones'])) ? $b['observaciones'] : null,
+                    $b['foto_url'] ?? null
                 ]);
 
                 // 2. Actualizar el personal_id en la tabla activos para referencia rápida
@@ -89,8 +90,13 @@ try {
                 $pers = $stmtPers->fetch();
                 $p_nombre = $pers ? $pers['nombre'] : 'Personal ID ' . $personal_id;
 
-                // Insertar el movimiento de SALIDA desde Almacén (ID 13)
-                $ALMACEN_ID = 13;
+                // Insertar el movimiento de SALIDA desde Almacén (buscar dinámicamente)
+                $stmtAlm = $pdo->query("SELECT id FROM ubicaciones WHERE nombre LIKE '%Almacén%' OR nombre LIKE '%Almacen%' LIMIT 1");
+                $almacen = $stmtAlm->fetch();
+                if (!$almacen) {
+                    throw new Exception("No se encontró la ubicación 'Almacén' en la base de datos. Por favor créela primero.");
+                }
+                $ALMACEN_ID = $almacen['id'];
                 $stmtMov = $pdo->prepare("INSERT INTO movimientos (item_id, tipo, cantidad, ubicacion_id, personal_destinatario_id, observacion) VALUES (?, 'Salida', 1, ?, ?, ?)");
                 $stmtMov->execute([
                     $asset['item_id'], 
@@ -146,8 +152,13 @@ try {
                     $movType = $isBaja ? 'Baja' : 'Entrada';
                     $movObs = $isBaja ? "BAJA POR DAÑO/OBSOLESCENCIA: " : "Devolución de equipo: ";
                     
-                    // Registrar entrada o baja de vuelta al stock (Almacén ID 13)
-                    $ALMACEN_ID = 13;
+                    // Registrar entrada o baja de vuelta al stock (Almacén buscado dinámicamente)
+                    $stmtAlm = $pdo->query("SELECT id FROM ubicaciones WHERE nombre LIKE '%Almacén%' OR nombre LIKE '%Almacen%' LIMIT 1");
+                    $almacen = $stmtAlm->fetch();
+                    if (!$almacen) {
+                        throw new Exception("No se encontró la ubicación 'Almacén' en la base de datos. Por favor créela primero.");
+                    }
+                    $ALMACEN_ID = $almacen['id'];
                     $stmtMov = $pdo->prepare("INSERT INTO movimientos (item_id, tipo, cantidad, ubicacion_id, observacion) VALUES (?, ?, 1, ?, ?)");
                     $stmtMov->execute([$asset['item_id'], $movType, $ALMACEN_ID, $movObs . ($asset['codigo_interno'] ?? 'S/N')]);
                     

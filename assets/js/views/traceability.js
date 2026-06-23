@@ -81,9 +81,10 @@ async function loadAssignments() {
             <td><span class="badge ${a.estado === 'Activo' ? 'badge-blue' : 'badge-green'}">${a.estado}</span></td>
             <td class="italic text-muted-foreground">${a.fecha_devolucion || '—'}</td>
             <td class="text-right whitespace-nowrap">
+                <button class="btn btn-ghost p-1.5 text-primary" onclick="viewAssignmentNote(${a.id})" title="Ver detalles"><i data-lucide="info" class="w-4 h-4"></i></button>
                 ${a.estado === 'Activo' ?
             `<button class="btn btn-outline btn-sm mr-2" onclick="returnAsset(${a.id}, '${a.activo_nombre}')">Devolver</button>` :
-            `<button class="btn btn-ghost p-1.5" onclick="viewAssignmentNote(${a.id})" title="Ver detalles"><i data-lucide="info" class="w-4 h-4"></i></button>`
+            ''
         }
                 ${window.canDelete(window.Auth.getUser()) ? 
                     `<button class="btn btn-ghost p-1.5 text-destructive" onclick="deleteTraceRecord('assignments', ${a.id}, 'esta asignación')" title="Eliminar"><i data-lucide="trash-2" class="w-4 h-4"></i></button>` : 
@@ -141,6 +142,17 @@ window.viewAssignmentNote = async function (id) {
                         <div class="text-[10px] uppercase font-bold text-muted-foreground mb-1">Observaciones / Notas</div>
                         <div class="text-xs p-3 bg-white border rounded whitespace-pre-line">${asig.observaciones || 'Sin observaciones registradas.'}</div>
                     </div>
+
+                    ${asig.foto_url ? `
+                    <div>
+                        <div class="text-[10px] uppercase font-bold text-muted-foreground mb-1">Evidencia / Foto de Entrega</div>
+                        <div class="relative group rounded-xl overflow-hidden border border-slate-200 bg-slate-50 flex items-center justify-center max-h-48 cursor-pointer" onclick="window.open('${asig.foto_url}', '_blank')">
+                            <img src="${asig.foto_url}" class="max-h-48 object-contain w-full hover:scale-105 transition-transform duration-300">
+                            <div class="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                                <span class="text-white text-xs font-semibold flex items-center gap-1"><i data-lucide="external-link" class="w-3.5 h-3.5"></i> Ver pantalla completa</span>
+                            </div>
+                        </div>
+                    </div>` : ''}
                 </div>
             `,
             hideConfirm: true,
@@ -206,21 +218,51 @@ window.openAssignmentModal = function (preselectedId = null) {
                 </div>
                 <div>
                     <label class="text-xs font-bold mb-1 block uppercase text-muted-foreground">Observaciones</label>
-                    <textarea id="asig-obs" class="input w-full h-20" placeholder="Detalles adicionales..."></textarea>
+                    <textarea id="asig-obs" class="input w-full h-20 shadow-sm" placeholder="Detalles adicionales..."></textarea>
+                </div>
+                <div class="space-y-1">
+                    <label class="text-xs font-bold block uppercase text-muted-foreground">Foto de Entrega (Opcional)</label>
+                    <div id="asig-photo-container" class="relative border-2 border-dashed border-slate-200 rounded-xl p-4 text-center hover:bg-slate-50 transition-all cursor-pointer" onclick="document.getElementById('asig-file').click()">
+                        <input type="file" id="asig-file" accept="image/*" class="hidden" onchange="window.handleTracePhotoChange('asig')">
+                        <div id="asig-photo-placeholder" class="flex flex-col items-center justify-center py-2 text-slate-400">
+                            <i data-lucide="camera" class="w-8 h-8 mb-2 text-slate-400"></i>
+                            <span class="text-xs font-semibold text-slate-600">Tomar foto o subir imagen</span>
+                            <span class="text-[10px] text-muted-foreground">Click para usar la cámara o elegir archivo</span>
+                        </div>
+                        <div id="asig-photo-preview-wrapper" class="hidden flex flex-col items-center justify-center relative">
+                            <img id="asig-photo-preview" class="max-h-32 rounded-lg object-contain shadow-sm border border-slate-100 mb-2">
+                            <button type="button" class="btn btn-ghost btn-xs text-destructive flex items-center justify-center gap-1 py-1 px-2.5 rounded-lg border border-destructive/10 bg-destructive/5 hover:bg-destructive hover:text-white transition-all text-xs" onclick="event.stopPropagation(); window.removeTracePhoto('asig')">
+                                <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> Quitar Foto
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
         `,
         confirmText: 'Confirmar Asignación',
         onConfirm: async () => {
             const asset_id = document.getElementById('asig-activo-id').value;
+            const personal_id = document.getElementById('asig-personal').value;
+            if (!asset_id || !personal_id) { UI.toast('Debe identificar un equipo válido y seleccionar el personal', 'error'); return false; }
+
+            UI.loading('Subiendo imagen...');
+            let foto_url = null;
+            try {
+                foto_url = await window.uploadTracePhoto('asig');
+            } catch (e) {
+                UI.stopLoading();
+                UI.toast('Error al subir la imagen: ' + e.message, 'error');
+                return false;
+            }
+
             const data = {
                 activo_id: asset_id,
-                personal_id: document.getElementById('asig-personal').value,
+                personal_id: personal_id,
                 fecha_asignacion: document.getElementById('asig-fecha').value,
                 condicion_entrega: document.getElementById('asig-cond').value,
-                observaciones: document.getElementById('asig-obs').value
+                observaciones: document.getElementById('asig-obs').value,
+                foto_url: foto_url
             };
-            if (!data.activo_id || !data.personal_id) { UI.toast('Debe identificar un equipo válido y seleccionar el personal', 'error'); return false; }
 
             UI.loading('Registrando asignación...');
             const r = await fetch('api/assignments.php', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }).then(x => x.json());
@@ -571,6 +613,19 @@ window.viewTransferNote = async function(id) {
                           t.tipo === 'Entrada' ? '<span class="badge badge-success">RETORNO</span>' :
                           '<span class="badge badge-info">TRASLADO</span>';
 
+        // Format created_at for display
+        let registradoEl = '';
+        if (t.created_at) {
+            const dt = new Date(t.created_at);
+            const fecha = dt.toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric' });
+            const hora  = dt.toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            registradoEl = `<div class="p-3 bg-slate-50 rounded-lg border border-slate-100">
+                <div class="text-[10px] uppercase font-bold text-muted-foreground mb-1">Fecha y Hora de Registro</div>
+                <div class="text-sm font-mono font-bold text-slate-700">${fecha}</div>
+                <div class="text-xs text-slate-500 font-mono">${hora} hrs</div>
+            </div>`;
+        }
+
         UI.modal({
             title: 'Detalles del Traslado',
             body: `
@@ -594,23 +649,41 @@ window.viewTransferNote = async function(id) {
                         </div>
                     </div>
                     <div class="grid grid-cols-2 gap-4">
-                        <div>
-                            <div class="text-[10px] uppercase font-bold text-muted-foreground mb-1">Fecha</div>
+                        <div class="p-3 bg-muted rounded-lg">
+                            <div class="text-[10px] uppercase font-bold text-muted-foreground mb-1">Fecha del Traslado</div>
                             <div class="text-sm font-medium">${t.fecha}</div>
                         </div>
-                        <div>
+                        <div class="p-3 bg-muted rounded-lg">
                             <div class="text-[10px] uppercase font-bold text-muted-foreground mb-1">Responsable</div>
                             <div class="text-sm font-medium">${t.responsable_nombre || 'No especificado'}</div>
                         </div>
                     </div>
+                    ${registradoEl}
                     <div>
                         <div class="text-[10px] uppercase font-bold text-muted-foreground mb-1">Motivo / Observaciones</div>
                         <div class="text-xs p-3 bg-white border rounded whitespace-pre-line">${t.motivo || 'Sin observaciones.'}</div>
                     </div>
+                    ${t.observaciones ? `
+                    <div>
+                        <div class="text-[10px] uppercase font-bold text-muted-foreground mb-1">Notas Adicionales</div>
+                        <div class="text-xs p-3 bg-white border rounded whitespace-pre-line">${t.observaciones}</div>
+                    </div>` : ''}
+                    ${t.foto_url ? `
+                    <div>
+                        <div class="text-[10px] uppercase font-bold text-muted-foreground mb-1">Evidencia Fotográfica</div>
+                        <div class="relative group rounded-xl overflow-hidden border border-slate-200 bg-slate-50 flex items-center justify-center max-h-48 cursor-pointer" onclick="window.open('${t.foto_url}', '_blank')">
+                            <img src="${t.foto_url}" class="max-h-48 object-contain w-full hover:scale-105 transition-transform duration-300" alt="Evidencia de traslado">
+                            <div class="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                                <span class="text-white text-xs font-semibold flex items-center gap-1"><i data-lucide="external-link" class="w-3.5 h-3.5"></i> Ver pantalla completa</span>
+                            </div>
+                        </div>
+                    </div>` : ''}
                 </div>
             `,
             hideConfirm: true,
+            cancelText: 'Cerrar'
         });
+        lucide.createIcons();
     } catch (e) { UI.stopLoading(); }
 };
 
@@ -788,6 +861,23 @@ window.openTransferModal = function (preselectedId = null) {
                         <p class="text-[10px] text-red-600">La cantidad indicada se descontará permanentemente del stock por estar malograda.</p>
                     </div>
                 </div>
+                <div class="space-y-1">
+                    <label class="text-xs font-bold block uppercase text-muted-foreground">Foto del Traslado (Opcional)</label>
+                    <div id="tr-photo-container" class="relative border-2 border-dashed border-slate-200 rounded-xl p-4 text-center hover:bg-slate-50 transition-all cursor-pointer" onclick="document.getElementById('tr-file').click()">
+                        <input type="file" id="tr-file" accept="image/*" class="hidden" onchange="window.handleTracePhotoChange('tr')">
+                        <div id="tr-photo-placeholder" class="flex flex-col items-center justify-center py-2 text-slate-400">
+                            <i data-lucide="camera" class="w-8 h-8 mb-2 text-slate-400"></i>
+                            <span class="text-xs font-semibold text-slate-600">Tomar foto o subir imagen</span>
+                            <span class="text-[10px] text-muted-foreground">Click para usar la cámara o elegir archivo</span>
+                        </div>
+                        <div id="tr-photo-preview-wrapper" class="hidden flex flex-col items-center justify-center relative">
+                            <img id="tr-photo-preview" class="max-h-32 rounded-lg object-contain shadow-sm border border-slate-100 mb-2">
+                            <button type="button" class="btn btn-ghost btn-xs text-destructive flex items-center justify-center gap-1 py-1 px-2.5 rounded-lg border border-destructive/10 bg-destructive/5 hover:bg-destructive hover:text-white transition-all text-xs" onclick="event.stopPropagation(); window.removeTracePhoto('tr')">
+                                <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> Quitar Foto
+                            </button>
+                        </div>
+                    </div>
+                </div>
             </div>
         `,
         confirmText: 'Registrar Movimiento',
@@ -804,6 +894,17 @@ window.openTransferModal = function (preselectedId = null) {
                 tipo: isBaja ? 'Baja' : 'Salida'
             };
             if (!data.item_id || (!isBaja && !data.ubicacion_destino_id) || !data.cantidad) { UI.toast('Complete los campos obligatorios', 'error'); return false; }
+
+            UI.loading('Subiendo imagen...');
+            let foto_url = null;
+            try {
+                foto_url = await window.uploadTracePhoto('tr');
+            } catch (e) {
+                UI.stopLoading();
+                UI.toast('Error al subir la imagen: ' + e.message, 'error');
+                return false;
+            }
+            data.foto_url = foto_url;
 
             UI.loading(isBaja ? 'Registrando baja...' : 'Registrando traslado...');
             const r = await fetch('api/transfers.php', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }).then(x => x.json());
@@ -934,13 +1035,14 @@ async function loadDispatches() {
 
     tbody.innerHTML = data.map(m => `
         <tr>
-            <td class="text-xs">${m.fecha}</td>
+            <td class="text-xs">${m.fecha ? new Date(m.fecha).toLocaleDateString('es-PE') : '—'}</td>
             <td class="font-bold">${m.item_nombre}</td>
             <td class="font-medium text-primary">${m.destinatario_nombre || '—'}</td>
             <td class="text-xs font-semibold uppercase text-amber-700">${m.ubicacion_nombre || '—'}</td>
             <td class="text-center font-bold">${m.cantidad}</td>
             <td class="text-xs italic">${m.despachado_por_nombre || 'Admin'}</td>
             <td class="text-right whitespace-nowrap">
+                <button class="btn btn-ghost p-1.5 text-primary" onclick="viewDispatchNote(${m.id})" title="Ver detalles"><i data-lucide="info" class="w-4 h-4"></i></button>
                 ${window.canDelete(window.Auth.getUser()) ? 
                     `<button class="btn btn-ghost p-1.5 text-destructive" onclick="deleteTraceRecord('dispatch', ${m.id}, 'este despacho')" title="Eliminar"><i data-lucide="trash-2" class="w-4 h-4"></i></button>` : 
                     ''
@@ -948,7 +1050,108 @@ async function loadDispatches() {
             </td>
         </tr>
     `).join('');
+    lucide.createIcons();
 }
+
+window.viewDispatchNote = async function(id) {
+    UI.loading('Cargando detalles...');
+    try {
+        const resp = await fetch('api/movements.php').then(r => r.json());
+        const m = (resp.movements || []).find(x => x.id == id);
+        UI.stopLoading();
+        if (!m) { UI.toast('Registro no encontrado', 'error'); return; }
+
+        // Format datetime for display
+        let fechaStr = '—';
+        let horaStr = '';
+        if (m.fecha) {
+            const dt = new Date(m.fecha);
+            fechaStr = dt.toLocaleDateString('es-PE', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' });
+            horaStr  = dt.toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        }
+
+        UI.modal({
+            title: 'Detalles del Despacho',
+            body: `
+                <div class="space-y-4">
+                    <!-- Header: Item info -->
+                    <div class="p-4 bg-amber-50 rounded-xl border border-amber-100">
+                        <div class="text-[10px] uppercase font-bold text-amber-700 mb-1">Insumo Despachado</div>
+                        <div class="font-bold text-lg">${m.item_nombre}</div>
+                        <div class="flex items-center gap-3 mt-1">
+                            <span class="badge badge-warning">SALIDA</span>
+                            <span class="text-xs font-bold text-amber-700">Cantidad: ${m.cantidad}</span>
+                        </div>
+                    </div>
+
+                    <!-- Timestamp block -->
+                    <div class="p-3 rounded-xl bg-slate-50 border border-slate-100 flex items-start gap-4">
+                        <div class="flex-1">
+                            <div class="text-[10px] uppercase font-bold text-muted-foreground mb-1">Fecha del Despacho</div>
+                            <div class="text-sm font-semibold capitalize">${fechaStr}</div>
+                        </div>
+                        <div class="text-right">
+                            <div class="text-[10px] uppercase font-bold text-muted-foreground mb-1">Hora</div>
+                            <div class="text-sm font-mono font-bold text-primary">${horaStr} hrs</div>
+                        </div>
+                    </div>
+
+                    <!-- Partes involucradas -->
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="p-3 bg-primary/5 rounded-lg border border-primary/10">
+                            <div class="text-[10px] uppercase font-bold text-primary mb-1">Entregado a</div>
+                            <div class="text-sm font-semibold">${m.destinatario_nombre || 'No especificado'}</div>
+                        </div>
+                        <div class="p-3 bg-muted rounded-lg">
+                            <div class="text-[10px] uppercase font-bold text-muted-foreground mb-1">Entregado por</div>
+                            <div class="text-sm font-medium">${m.despachado_por_nombre || 'Administrador'}</div>
+                        </div>
+                    </div>
+
+                    <!-- Destino -->
+                    <div class="p-3 bg-muted rounded-lg">
+                        <div class="text-[10px] uppercase font-bold text-muted-foreground mb-1">Destino / Aula o Espacio</div>
+                        <div class="text-sm font-semibold uppercase text-amber-700">${m.ubicacion_nombre || 'No especificado'}</div>
+                    </div>
+
+                    <!-- Observaciones -->
+                    ${m.observacion ? `
+                    <div>
+                        <div class="text-[10px] uppercase font-bold text-muted-foreground mb-1">Observaciones</div>
+                        <div class="text-xs p-3 bg-white border rounded whitespace-pre-line">${m.observacion}</div>
+                    </div>` : ''}
+
+                    <!-- Foto evidencia -->
+                    ${m.foto_url ? `
+                    <div>
+                        <div class="text-[10px] uppercase font-bold text-muted-foreground mb-1 flex items-center gap-1">
+                            <i data-lucide="camera" class="w-3.5 h-3.5"></i>
+                            Evidencia Fotográfica
+                        </div>
+                        <div class="relative group rounded-xl overflow-hidden border border-slate-200 bg-slate-50 flex items-center justify-center max-h-52 cursor-pointer" onclick="window.open('${m.foto_url}', '_blank')">
+                            <img src="${m.foto_url}" class="max-h-52 object-contain w-full hover:scale-105 transition-transform duration-300" alt="Evidencia del despacho">
+                            <div class="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                                <span class="text-white text-xs font-semibold flex items-center gap-1"><i data-lucide="external-link" class="w-3.5 h-3.5"></i> Ver en pantalla completa</span>
+                            </div>
+                        </div>
+                        <p class="text-[10px] text-muted-foreground mt-1 text-center italic">Click en la imagen para ampliarla</p>
+                    </div>` : `
+                    <div class="p-3 rounded-lg border border-dashed border-slate-200 flex items-center gap-2 text-slate-400">
+                        <i data-lucide="image-off" class="w-4 h-4"></i>
+                        <span class="text-xs italic">Sin evidencia fotográfica para este despacho.</span>
+                    </div>`}
+                </div>
+            `,
+            hideConfirm: true,
+            cancelText: 'Cerrar'
+        });
+        lucide.createIcons();
+    } catch (e) {
+        UI.stopLoading();
+        UI.toast('Error al cargar los detalles', 'error');
+        console.error(e);
+    }
+};
 
 window.openDispatchModal = function (preselectedId = null) {
     let selectedItem = preselectedId ? _traceResources.items.find(i => i.id == preselectedId) : null;
@@ -1021,44 +1224,78 @@ window.openDispatchModal = function (preselectedId = null) {
                 <div id="disp-error-container" class="hidden p-3 rounded-lg border border-red-200 bg-red-50 text-xs text-red-600 font-semibold transition-all"></div>
                 <div>
                     <label class="text-xs font-bold mb-1 block uppercase text-muted-foreground">Observaciones</label>
-                    <textarea id="disp-obs" class="input w-full h-20 resize-none py-2 px-3" placeholder="Ej: Entrega semanal para limpieza..."></textarea>
+                    <textarea id="disp-obs" class="input w-full h-20 resize-none py-2 px-3 shadow-sm" placeholder="Ej: Entrega semanal para limpieza..."></textarea>
+                </div>
+                <div class="space-y-1">
+                    <label class="text-xs font-bold block uppercase text-muted-foreground">Foto del Insumo Despachado (Opcional)</label>
+                    <div id="disp-photo-container" class="relative border-2 border-dashed border-slate-200 rounded-xl p-4 text-center hover:bg-slate-50 transition-all cursor-pointer" onclick="document.getElementById('disp-file').click()">
+                        <input type="file" id="disp-file" accept="image/*" class="hidden" onchange="window.handleTracePhotoChange('disp')">
+                        <div id="disp-photo-placeholder" class="flex flex-col items-center justify-center py-2 text-slate-400">
+                            <i data-lucide="camera" class="w-8 h-8 mb-2 text-slate-400"></i>
+                            <span class="text-xs font-semibold text-slate-600">Tomar foto o subir imagen</span>
+                            <span class="text-[10px] text-muted-foreground">Click para usar la cámara o elegir archivo</span>
+                        </div>
+                        <div id="disp-photo-preview-wrapper" class="hidden flex flex-col items-center justify-center relative">
+                            <img id="disp-photo-preview" class="max-h-32 rounded-lg object-contain shadow-sm border border-slate-100 mb-2">
+                            <button type="button" class="btn btn-ghost btn-xs text-destructive flex items-center justify-center gap-1 py-1 px-2.5 rounded-lg border border-destructive/10 bg-destructive/5 hover:bg-destructive hover:text-white transition-all text-xs" onclick="event.stopPropagation(); window.removeTracePhoto('disp')">
+                                <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> Quitar Foto
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
         `,
         confirmText: 'Confirmar Despacho',
         onConfirm: async () => {
-            const data = {
-                item_id: document.getElementById('disp-item').value,
-                personal_destinatario_id: document.getElementById('disp-dest').value,
-                despachado_por_id: document.getElementById('disp-admin').value,
-                cantidad: document.getElementById('disp-qty').value,
-                tipo: 'Salida',
-                ubicacion_id: document.getElementById('disp-dest-loc').value,
-                observacion: document.getElementById('disp-obs').value
-            };
+            const item_id = document.getElementById('disp-item').value;
+            const dest_id = document.getElementById('disp-dest').value;
+            const qty = document.getElementById('disp-qty').value;
+            const dest_loc = document.getElementById('disp-dest-loc').value;
 
             const errContainer = document.getElementById('disp-error-container');
             errContainer.classList.add('hidden');
             document.getElementById('disp-qty').classList.remove('border-red-500', 'ring-red-400', 'ring-2');
 
-            if (!data.item_id || !data.personal_destinatario_id || !data.cantidad || !data.ubicacion_id) { 
+            if (!item_id || !dest_id || !qty || !dest_loc) { 
                 errContainer.innerHTML = '⚠️ Complete todos los campos obligatorios (Insumo, Personal, Destino y Cantidad).';
                 errContainer.classList.remove('hidden');
                 return false; 
             }
 
             // Validar stock antes de enviar
-            const item = _traceResources.items.find(i => i.id == data.item_id);
+            const item = _traceResources.items.find(i => i.id == item_id);
             if (item) {
                 const stock = parseInt(item.stock_actual);
-                const qty = parseInt(data.cantidad);
-                if (qty > stock) {
-                    errContainer.innerHTML = `⚠️ <strong>Error: Stock insuficiente.</strong> No se puede registrar porque la cantidad ingresada (${qty}) supera el stock disponible (${stock}). Sería información engañosa.`;
+                const qtyVal = parseInt(qty);
+                if (qtyVal > stock) {
+                    errContainer.innerHTML = `⚠️ <strong>Error: Stock insuficiente.</strong> No se puede registrar porque la cantidad ingresada (${qtyVal}) supera el stock disponible (${stock}). Sería información engañosa.`;
                     errContainer.classList.remove('hidden');
                     document.getElementById('disp-qty').classList.add('border-red-500', 'ring-red-400', 'ring-2');
                     return false;
                 }
             }
+
+            UI.loading('Subiendo imagen...');
+            let foto_url = null;
+            try {
+                foto_url = await window.uploadTracePhoto('disp');
+            } catch (e) {
+                UI.stopLoading();
+                errContainer.innerHTML = '⚠️ Error al subir la imagen: ' + e.message;
+                errContainer.classList.remove('hidden');
+                return false;
+            }
+
+            const data = {
+                item_id: item_id,
+                personal_destinatario_id: dest_id,
+                despachado_por_id: document.getElementById('disp-admin').value,
+                cantidad: qty,
+                tipo: 'Salida',
+                ubicacion_id: dest_loc,
+                observacion: document.getElementById('disp-obs').value,
+                foto_url: foto_url
+            };
 
             UI.loading('Registrando despacho...');
             const r = await fetch('api/movements.php', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }).then(x => x.json());
@@ -1557,3 +1794,62 @@ window.exportDispatchesExcel = async function() {
     } catch(e) { UI.toast('Error al exportar', 'error'); }
     finally { UI.stopLoading(); }
 };
+
+// ==========================================
+// CONTROLADORES DE SUBIDA DE IMAGEN / FOTO
+// ==========================================
+window.handleTracePhotoChange = function(prefix) {
+    const fileInput = document.getElementById(`${prefix}-file`);
+    const placeholder = document.getElementById(`${prefix}-photo-placeholder`);
+    const previewWrapper = document.getElementById(`${prefix}-photo-preview-wrapper`);
+    const previewImg = document.getElementById(`${prefix}-photo-preview`);
+    
+    if (fileInput && fileInput.files && fileInput.files[0]) {
+        const file = fileInput.files[0];
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            previewImg.src = e.target.result;
+            placeholder.classList.add('hidden');
+            previewWrapper.classList.remove('hidden');
+        }
+        reader.readAsDataURL(file);
+    }
+};
+
+window.removeTracePhoto = function(prefix) {
+    const fileInput = document.getElementById(`${prefix}-file`);
+    const placeholder = document.getElementById(`${prefix}-photo-placeholder`);
+    const previewWrapper = document.getElementById(`${prefix}-photo-preview-wrapper`);
+    const previewImg = document.getElementById(`${prefix}-photo-preview`);
+    
+    if (fileInput) fileInput.value = '';
+    if (previewImg) previewImg.src = '';
+    if (placeholder) placeholder.classList.remove('hidden');
+    if (previewWrapper) previewWrapper.classList.add('hidden');
+};
+
+window.uploadTracePhoto = async function(prefix) {
+    const fileInput = document.getElementById(`${prefix}-file`);
+    if (!fileInput || !fileInput.files || fileInput.files.length === 0) {
+        return null;
+    }
+    
+    const formData = new FormData();
+    formData.append('file', fileInput.files[0]);
+    
+    const r = await fetch('api/upload.php', {
+        method: 'POST',
+        body: formData
+    }).then(x => x.json()).catch(() => ({}));
+    
+    if (r.ok) {
+        if (r.error_drive) {
+            console.warn('Subida a Google Drive falló, guardado localmente:', r.error_drive);
+        }
+        return r.url;
+    } else {
+        throw new Error(r.error || 'Fallo la subida de imagen');
+    }
+};
+
+

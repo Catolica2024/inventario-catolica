@@ -36,7 +36,7 @@ try {
                 json_response(['error' => 'Datos incompletos'], 400);
             }
             
-            $sql = "INSERT INTO movimientos (item_id, tipo, cantidad, ubicacion_id, personal_destinatario_id, despachado_por_id, responsable_id, observacion) VALUES (?,?,?,?,?,?,?,?)";
+            $sql = "INSERT INTO movimientos (item_id, tipo, cantidad, ubicacion_id, personal_destinatario_id, despachado_por_id, responsable_id, observacion, foto_url) VALUES (?,?,?,?,?,?,?,?,?)";
             $stmt = $pdo->prepare($sql);
             $stmt->execute([
                 $b['item_id'],
@@ -46,7 +46,8 @@ try {
                 (!empty($b['personal_destinatario_id'])) ? $b['personal_destinatario_id'] : null,
                 (!empty($b['despachado_por_id'])) ? $b['despachado_por_id'] : null,
                 (!empty($b['responsable_id'])) ? $b['responsable_id'] : null,
-                (!empty($b['observacion'])) ? $b['observacion'] : null
+                (!empty($b['observacion'])) ? $b['observacion'] : null,
+                (!empty($b['foto_url'])) ? $b['foto_url'] : null
             ]);
             
             ob_clean();

@@ -10,7 +10,8 @@ try {
             $stmt = $pdo->query("
                 SELECT t.*, i.nombre as item_nombre, 
                        u1.nombre as origen_nombre, u2.nombre as destino_nombre,
-                       p.nombre as responsable_nombre
+                       p.nombre as responsable_nombre,
+                       t.foto_url, t.created_at
                 FROM traslados t
                 JOIN items i ON t.item_id = i.id
                 LEFT JOIN ubicaciones u1 ON t.ubicacion_origen_id = u1.id
@@ -33,7 +34,7 @@ try {
             $pdo->beginTransaction();
             try {
                 // 1. Registrar traslado con tipo
-                $sql = "INSERT INTO traslados (item_id, ubicacion_origen_id, ubicacion_destino_id, cantidad, fecha, responsable_id, motivo, observaciones, tipo) VALUES (?,?,?,?,?,?,?,?,?)";
+                $sql = "INSERT INTO traslados (item_id, ubicacion_origen_id, ubicacion_destino_id, cantidad, fecha, responsable_id, motivo, observaciones, tipo, foto_url) VALUES (?,?,?,?,?,?,?,?,?,?)";
                 $stmt = $pdo->prepare($sql);
                 $stmt->execute([
                     $b['item_id'],
@@ -44,7 +45,8 @@ try {
                     (!empty($b['responsable_id'])) ? $b['responsable_id'] : null,
                     $b['motivo'] ?? ($isBaja ? 'BAJA DEFINITIVA' : null),
                     $b['observaciones'] ?? null,
-                    $b['tipo'] ?? 'Salida'
+                    $b['tipo'] ?? 'Salida',
+                    (!empty($b['foto_url'])) ? $b['foto_url'] : null
                 ]);
 
                 // 2. REGISTRAR MOVIMIENTOS DE STOCK (DINÁMICO SEGÚN TIPO DE UBICACIÓN)

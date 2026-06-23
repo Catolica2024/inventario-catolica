@@ -122,7 +122,7 @@ try {
             $force = isset($_GET['force']) && $_GET['force'] == '1';
             if (!$id) json_response(['error' => 'ID requerido'], 400);
 
-            // Modo force: eliminación en cascada (usado solo para rollback automático)
+            // Modo force: eliminación en cascada (solo admin desde UI)
             if ($force) {
                 $pdo->prepare("DELETE FROM movimientos WHERE item_id = ?")->execute([$id]);
                 $pdo->prepare("DELETE FROM activos WHERE item_id = ?")->execute([$id]);
