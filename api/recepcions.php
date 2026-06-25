@@ -136,9 +136,26 @@ try {
                     $finalItemId = $found['id'];
                 } else {
                     // Si no existe ni siquiera un ítem para esa categoría, LO CREAMOS DE OFICIO
-                    // Esto evita el error de llave foránea en movimientos y asegura el flujo.
+                    // Generamos el código correcto usando el prefijo de la categoría (igual que items.php?action=next_code)
+                    $stmtPrefijo = $pdo->prepare("SELECT prefijo FROM categorias_inventario WHERE id = ?");
+                    $stmtPrefijo->execute([$item['item_id']]);
+                    $catPrefRow = $stmtPrefijo->fetch();
+                    $prefix = ($catPrefRow && $catPrefRow['prefijo']) ? $catPrefRow['prefijo'] : 'ITM';
+
+                    // Buscar el primer número libre para este prefijo
+                    $stmtExistCodes = $pdo->prepare("SELECT codigo FROM items WHERE codigo LIKE ?");
+                    $stmtExistCodes->execute([$prefix . '-%']);
+                    $usedNums = [];
+                    foreach ($stmtExistCodes->fetchAll(PDO::FETCH_COLUMN) as $ec) {
+                        $parts = explode('-', $ec);
+                        $n = intval(end($parts));
+                        if ($n > 0) $usedNums[] = $n;
+                    }
+                    $nextNum = 1;
+                    while (in_array($nextNum, $usedNums)) $nextNum++;
+                    $newCode = $prefix . '-' . str_pad($nextNum, 4, '0', STR_PAD_LEFT);
+
                     $stmtNewItem = $pdo->prepare("INSERT INTO items (nombre, categoria_inventario_id, codigo) VALUES (?, ?, ?)");
-                    $newCode = 'TEMP-' . time() . '-' . $finalItemId; // Código temporal, se sobreescribe en onboarding
                     $stmtNewItem->execute([
                         $item['item_nombre'] ?: ($item['backup_nombre'] ?: 'Artículo Nuevo'),
                         $item['item_id'], // El item_id de la OC es el category_id en este caso

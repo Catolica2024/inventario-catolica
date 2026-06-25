@@ -144,14 +144,30 @@ window.viewAssignmentNote = async function (id) {
                     </div>
 
                     ${asig.foto_url ? `
-                    <div>
-                        <div class="text-[10px] uppercase font-bold text-muted-foreground mb-1">Evidencia / Foto de Entrega</div>
-                        <div class="relative group rounded-xl overflow-hidden border border-slate-200 bg-slate-50 flex items-center justify-center max-h-48 cursor-pointer" onclick="window.open('${asig.foto_url}', '_blank')">
-                            <img src="${asig.foto_url}" class="max-h-48 object-contain w-full hover:scale-105 transition-transform duration-300">
-                            <div class="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                                <span class="text-white text-xs font-semibold flex items-center gap-1"><i data-lucide="external-link" class="w-3.5 h-3.5"></i> Ver pantalla completa</span>
+                    <div class="mt-1">
+                        <div class="flex items-center gap-2 mb-2">
+                            <div class="flex items-center gap-1.5 text-[10px] uppercase font-black text-indigo-700 tracking-widest">
+                                <i data-lucide="camera" class="w-3.5 h-3.5"></i>
+                                Evidencia Fotográfica
                             </div>
+                            <span class="relative flex h-2 w-2">
+                                <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
+                                <span class="relative inline-flex rounded-full h-2 w-2 bg-indigo-500"></span>
+                            </span>
                         </div>
+                        <button onclick="window.open('${asig.foto_url}', '_blank')" class="w-full group relative rounded-2xl overflow-hidden border-2 border-indigo-100 bg-gradient-to-br from-indigo-50 to-slate-50 shadow-sm hover:shadow-lg hover:border-indigo-300 transition-all duration-300 cursor-pointer block">
+                            <img src="${asig.foto_url}" class="w-full max-h-48 object-contain group-hover:scale-[1.03] transition-transform duration-500" alt="Evidencia de entrega">
+                            <div class="absolute inset-0 bg-gradient-to-t from-indigo-900/70 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col items-center justify-end pb-4 gap-1">
+                                <div class="bg-white/20 backdrop-blur-sm border border-white/30 rounded-xl px-4 py-2 flex items-center gap-2">
+                                    <i data-lucide="zoom-in" class="w-4 h-4 text-white"></i>
+                                    <span class="text-white text-xs font-bold">Ver foto completa</span>
+                                </div>
+                            </div>
+                            <div class="absolute top-2 right-2 bg-white/90 backdrop-blur-sm rounded-lg px-2 py-1 flex items-center gap-1 shadow-sm opacity-100 group-hover:opacity-0 transition-opacity">
+                                <i data-lucide="maximize-2" class="w-3 h-3 text-indigo-600"></i>
+                                <span class="text-[10px] font-bold text-indigo-700">Click para ampliar</span>
+                            </div>
+                        </button>
                     </div>` : ''}
                 </div>
             `,
@@ -464,6 +480,9 @@ async function loadTransfers() {
         return;
     }
 
+    const user = window.Auth.getUser();
+    const isAdmin = user && user.role === 'admin';
+
     tbody.innerHTML = data.map(t => `
         <tr>
             <td class="text-xs font-medium">${t.fecha}</td>
@@ -475,6 +494,7 @@ async function loadTransfers() {
             <td class="text-right whitespace-nowrap">
                 ${(!t.tipo || t.tipo === 'Salida') ? `<button class="btn btn-outline text-xs px-2 py-1 mr-1" onclick="returnFurnitureTransfer(${t.id})" title="Retornar o Dar de Baja">Retornar</button>` : ''}
                 <button class="btn btn-ghost p-1.5" onclick="viewTransferNote(${t.id})" title="Ver detalles"><i data-lucide="info" class="w-4 h-4"></i></button>
+                ${isAdmin ? `<button class="btn btn-ghost p-1.5 text-indigo-600" onclick="editTransfer(${t.id})" title="Editar"><i data-lucide="pencil" class="w-4 h-4"></i></button>` : ''}
                 ${window.canDelete(window.Auth.getUser()) ? 
                     `<button class="btn btn-ghost p-1.5 text-destructive" onclick="deleteTraceRecord('transfers', ${t.id}, 'este traslado')" title="Eliminar"><i data-lucide="trash-2" class="w-4 h-4"></i></button>` : 
                     ''
@@ -669,14 +689,30 @@ window.viewTransferNote = async function(id) {
                         <div class="text-xs p-3 bg-white border rounded whitespace-pre-line">${t.observaciones}</div>
                     </div>` : ''}
                     ${t.foto_url ? `
-                    <div>
-                        <div class="text-[10px] uppercase font-bold text-muted-foreground mb-1">Evidencia Fotográfica</div>
-                        <div class="relative group rounded-xl overflow-hidden border border-slate-200 bg-slate-50 flex items-center justify-center max-h-48 cursor-pointer" onclick="window.open('${t.foto_url}', '_blank')">
-                            <img src="${t.foto_url}" class="max-h-48 object-contain w-full hover:scale-105 transition-transform duration-300" alt="Evidencia de traslado">
-                            <div class="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                                <span class="text-white text-xs font-semibold flex items-center gap-1"><i data-lucide="external-link" class="w-3.5 h-3.5"></i> Ver pantalla completa</span>
+                    <div class="mt-1">
+                        <div class="flex items-center gap-2 mb-2">
+                            <div class="flex items-center gap-1.5 text-[10px] uppercase font-black text-amber-700 tracking-widest">
+                                <i data-lucide="camera" class="w-3.5 h-3.5"></i>
+                                Evidencia Fotográfica
                             </div>
+                            <span class="relative flex h-2 w-2">
+                                <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                                <span class="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+                            </span>
                         </div>
+                        <button onclick="window.open('${t.foto_url}', '_blank')" class="w-full group relative rounded-2xl overflow-hidden border-2 border-amber-100 bg-gradient-to-br from-amber-50 to-slate-50 shadow-sm hover:shadow-lg hover:border-amber-300 transition-all duration-300 cursor-pointer block">
+                            <img src="${t.foto_url}" class="w-full max-h-48 object-contain group-hover:scale-[1.03] transition-transform duration-500" alt="Evidencia del traslado">
+                            <div class="absolute inset-0 bg-gradient-to-t from-amber-900/70 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col items-center justify-end pb-4 gap-1">
+                                <div class="bg-white/20 backdrop-blur-sm border border-white/30 rounded-xl px-4 py-2 flex items-center gap-2">
+                                    <i data-lucide="zoom-in" class="w-4 h-4 text-white"></i>
+                                    <span class="text-white text-xs font-bold">Ver foto completa</span>
+                                </div>
+                            </div>
+                            <div class="absolute top-2 right-2 bg-white/90 backdrop-blur-sm rounded-lg px-2 py-1 flex items-center gap-1 shadow-sm opacity-100 group-hover:opacity-0 transition-opacity">
+                                <i data-lucide="maximize-2" class="w-3 h-3 text-amber-600"></i>
+                                <span class="text-[10px] font-bold text-amber-700">Click para ampliar</span>
+                            </div>
+                        </button>
                     </div>` : ''}
                 </div>
             `,
@@ -1033,6 +1069,9 @@ async function loadDispatches() {
         return;
     }
 
+    const user = window.Auth.getUser();
+    const isAdmin = user && user.role === 'admin';
+
     tbody.innerHTML = data.map(m => `
         <tr>
             <td class="text-xs">${m.fecha ? new Date(m.fecha).toLocaleDateString('es-PE') : '—'}</td>
@@ -1043,6 +1082,7 @@ async function loadDispatches() {
             <td class="text-xs italic">${m.despachado_por_nombre || 'Admin'}</td>
             <td class="text-right whitespace-nowrap">
                 <button class="btn btn-ghost p-1.5 text-primary" onclick="viewDispatchNote(${m.id})" title="Ver detalles"><i data-lucide="info" class="w-4 h-4"></i></button>
+                ${isAdmin ? `<button class="btn btn-ghost p-1.5 text-indigo-600" onclick="editDispatch(${m.id})" title="Editar"><i data-lucide="pencil" class="w-4 h-4"></i></button>` : ''}
                 ${window.canDelete(window.Auth.getUser()) ? 
                     `<button class="btn btn-ghost p-1.5 text-destructive" onclick="deleteTraceRecord('dispatch', ${m.id}, 'este despacho')" title="Eliminar"><i data-lucide="trash-2" class="w-4 h-4"></i></button>` : 
                     ''
@@ -1123,18 +1163,30 @@ window.viewDispatchNote = async function(id) {
 
                     <!-- Foto evidencia -->
                     ${m.foto_url ? `
-                    <div>
-                        <div class="text-[10px] uppercase font-bold text-muted-foreground mb-1 flex items-center gap-1">
-                            <i data-lucide="camera" class="w-3.5 h-3.5"></i>
-                            Evidencia Fotográfica
-                        </div>
-                        <div class="relative group rounded-xl overflow-hidden border border-slate-200 bg-slate-50 flex items-center justify-center max-h-52 cursor-pointer" onclick="window.open('${m.foto_url}', '_blank')">
-                            <img src="${m.foto_url}" class="max-h-52 object-contain w-full hover:scale-105 transition-transform duration-300" alt="Evidencia del despacho">
-                            <div class="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                                <span class="text-white text-xs font-semibold flex items-center gap-1"><i data-lucide="external-link" class="w-3.5 h-3.5"></i> Ver en pantalla completa</span>
+                    <div class="mt-1">
+                        <div class="flex items-center gap-2 mb-2">
+                            <div class="flex items-center gap-1.5 text-[10px] uppercase font-black text-emerald-700 tracking-widest">
+                                <i data-lucide="camera" class="w-3.5 h-3.5"></i>
+                                Evidencia Fotográfica
                             </div>
+                            <span class="relative flex h-2 w-2">
+                                <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                                <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                            </span>
                         </div>
-                        <p class="text-[10px] text-muted-foreground mt-1 text-center italic">Click en la imagen para ampliarla</p>
+                        <button onclick="window.open('${m.foto_url}', '_blank')" class="w-full group relative rounded-2xl overflow-hidden border-2 border-emerald-100 bg-gradient-to-br from-emerald-50 to-slate-50 shadow-sm hover:shadow-lg hover:border-emerald-300 transition-all duration-300 cursor-pointer block">
+                            <img src="${m.foto_url}" class="w-full max-h-52 object-contain group-hover:scale-[1.03] transition-transform duration-500" alt="Evidencia del despacho">
+                            <div class="absolute inset-0 bg-gradient-to-t from-emerald-900/70 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col items-center justify-end pb-4 gap-1">
+                                <div class="bg-white/20 backdrop-blur-sm border border-white/30 rounded-xl px-4 py-2 flex items-center gap-2">
+                                    <i data-lucide="zoom-in" class="w-4 h-4 text-white"></i>
+                                    <span class="text-white text-xs font-bold">Ver foto completa</span>
+                                </div>
+                            </div>
+                            <div class="absolute top-2 right-2 bg-white/90 backdrop-blur-sm rounded-lg px-2 py-1 flex items-center gap-1 shadow-sm opacity-100 group-hover:opacity-0 transition-opacity">
+                                <i data-lucide="maximize-2" class="w-3 h-3 text-emerald-600"></i>
+                                <span class="text-[10px] font-bold text-emerald-700">Click para ampliar</span>
+                            </div>
+                        </button>
                     </div>` : `
                     <div class="p-3 rounded-lg border border-dashed border-slate-200 flex items-center gap-2 text-slate-400">
                         <i data-lucide="image-off" class="w-4 h-4"></i>
@@ -1834,21 +1886,612 @@ window.uploadTracePhoto = async function(prefix) {
         return null;
     }
     
-    const formData = new FormData();
-    formData.append('file', fileInput.files[0]);
+    const file = fileInput.files[0];
+    const name = `${prefix.toUpperCase()}_${Date.now()}_${file.name}`;
     
-    const r = await fetch('api/upload.php', {
-        method: 'POST',
-        body: formData
-    }).then(x => x.json()).catch(() => ({}));
-    
-    if (r.ok) {
-        if (r.error_drive) {
-            console.warn('Subida a Google Drive falló, guardado localmente:', r.error_drive);
+    return new Promise((resolve, reject) => {
+        if (typeof google === 'undefined') {
+            reject(new Error('La librería de Google API no está cargada. Por favor, recargue la página.'));
+            return;
         }
-        return r.url;
-    } else {
-        throw new Error(r.error || 'Fallo la subida de imagen');
+        if (typeof DRIVE_CLIENT_ID === 'undefined' || typeof DRIVE_FOLDER_ID === 'undefined') {
+            reject(new Error('Configuración de Google Drive no disponible en este momento.'));
+            return;
+        }
+        
+        const metadata = {
+            name: name,
+            parents: [DRIVE_FOLDER_ID]
+        };
+        const form = new FormData();
+        form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+        form.append('file', file);
+
+        google.accounts.oauth2.initTokenClient({
+            client_id: DRIVE_CLIENT_ID,
+            scope: 'https://www.googleapis.com/auth/drive.file',
+            callback: async (token) => {
+                if (token.error) {
+                    reject(new Error('Acceso denegado a Google Drive: ' + token.error));
+                    return;
+                }
+                if (!token.access_token) {
+                    reject(new Error('No se pudo obtener el token de acceso de Google.'));
+                    return;
+                }
+                try {
+                    const uploadResp = await fetch(
+                        'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,webViewLink',
+                        {
+                            method: 'POST',
+                            headers: { Authorization: 'Bearer ' + token.access_token },
+                            body: form
+                        }
+                    );
+                    if (uploadResp.ok) {
+                        const fileData = await uploadResp.json();
+                        // Hacer que el archivo sea visible para cualquier persona con el link (para renderizado directo en la UI)
+                        await fetch(`https://www.googleapis.com/drive/v3/files/${fileData.id}/permissions`, {
+                            method: 'POST',
+                            headers: {
+                                Authorization: 'Bearer ' + token.access_token,
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({ role: 'reader', type: 'anyone' })
+                        });
+                        // Retornamos el link directo para visualización en <img> (uc?export=view&id=)
+                        resolve(`https://drive.google.com/uc?export=view&id=${fileData.id}`);
+                    } else {
+                        const err = await uploadResp.json();
+                        reject(new Error(err.error?.message || 'Error al subir a Google Drive.'));
+                    }
+                } catch (err) {
+                    reject(err);
+                }
+            }
+        }).requestAccessToken();
+    });
+};
+
+window.editDispatch = async function (id) {
+    const user = window.Auth.getUser();
+    if (!user || user.role !== 'admin') {
+        UI.toast('Solo el Administrador puede editar despachos', 'error');
+        return;
+    }
+
+    UI.loading('Cargando datos...');
+    try {
+        const resp = await fetch('api/movements.php').then(r => r.json());
+        const m = (resp.movements || []).find(x => x.id == id);
+        UI.stopLoading();
+        if (!m) { UI.toast('Registro no encontrado', 'error'); return; }
+
+        let selectedItem = _traceResources.items.find(i => i.id == m.item_id);
+
+        UI.modal({
+            title: 'Editar Despacho de Insumos',
+            body: `
+                <div class="space-y-4 pt-2">
+                    <div>
+                        <label class="text-xs font-bold mb-1 block uppercase text-primary">Insumo <span class="text-destructive">*</span></label>
+                        <div class="relative group">
+                            <input type="text" id="edit-disp-search" class="input w-full pr-20" 
+                                   placeholder="Ingrese Código o Nombre del Insumo..." 
+                                   value="${selectedItem ? (selectedItem.codigo || selectedItem.nombre) : ''}">
+                            <div class="absolute right-1 top-1 flex gap-1">
+                                <button class="p-1.5 rounded-lg bg-primary/10 text-primary hover:bg-primary hover:text-white transition-all shadow-sm" onclick="UI.openScanner((val, showError) => { 
+                                    const found = window._traceResources.items.find(i => i.categoria_tipo === 'insumo' && i.codigo && i.codigo.toLowerCase() === val.toLowerCase());
+                                    if (!found) {
+                                        showError('⚠️ Código no reconocido como Insumo.');
+                                        return false;
+                                    }
+                                    document.getElementById('edit-disp-search').value = val; 
+                                    document.getElementById('edit-disp-search').dispatchEvent(new Event('input')); 
+                                    return true;
+                                })" title="Escanear QR">
+                                    <i data-lucide="camera" class="w-4 h-4"></i>
+                                </button>
+                                <div class="p-1.5 text-muted-foreground">
+                                    <i data-lucide="search" class="w-4 h-4"></i>
+                                </div>
+                            </div>
+                        </div>
+                        <div id="edit-disp-found-info" class="mt-2 p-3 rounded-lg border border-dashed border-border bg-muted/20 text-xs transition-all">
+                            ${selectedItem ?
+                                `<div class="font-bold text-primary">${selectedItem.nombre}</div>
+                                  <div class="text-muted-foreground">Stock Actual: <span class="font-bold">${selectedItem.stock_actual}</span> ${selectedItem.unidad_medida || 'unid.'}</div>` :
+                                '<span class="italic text-muted-foreground">Busque el insumo...</span>'
+                            }
+                        </div>
+                        <input type="hidden" id="edit-disp-item" value="${m.item_id}">
+                    </div>
+                    <div>
+                        <label class="text-xs font-bold mb-1 block uppercase text-muted-foreground">Entregar a (Personal) <span class="text-destructive">*</span></label>
+                        <select id="edit-disp-dest" class="select w-full">
+                            <option value="">Seleccione destinatario...</option>
+                            ${_traceResources.staff.map(p => `<option value="${p.id}" ${p.id == m.personal_destinatario_id ? 'selected' : ''}>${p.nombre} (${p.area})</option>`).join('')}
+                        </select>
+                    </div>
+                    <div>
+                        <label class="text-xs font-bold mb-1 block uppercase text-muted-foreground">Destino (Aula / Espacio) <span class="text-destructive">*</span></label>
+                        <select id="edit-disp-dest-loc" class="select w-full">
+                            <option value="">Seleccione destino...</option>
+                            ${_traceResources.locations.filter(l => l.estado !== 'inactivo').map(l => `<option value="${l.id}" ${l.id == m.ubicacion_id ? 'selected' : ''}>${l.nombre} ${l.tipo ? `(${l.tipo})` : ''}</option>`).join('')}
+                        </select>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="text-xs font-bold mb-1 block uppercase text-muted-foreground">Cantidad a Despachar (<span class="font-bold text-primary" id="edit-disp-unit-label">${selectedItem ? selectedItem.unidad_medida || 'unid.' : 'unid.'}</span>) <span class="text-destructive">*</span></label>
+                            <input type="number" id="edit-disp-qty" class="input w-full" value="${m.cantidad}" min="1">
+                        </div>
+                        <div>
+                            <label class="text-xs font-bold mb-1 block uppercase text-muted-foreground">Entregado por</label>
+                            <select id="edit-disp-admin" class="select w-full">
+                                <option value="">Administrador</option>
+                                ${_traceResources.staff.map(p => `<option value="${p.id}" ${p.id == m.despachado_por_id ? 'selected' : ''}>${p.nombre}</option>`).join('')}
+                            </select>
+                        </div>
+                    </div>
+                    <div id="edit-disp-error-container" class="hidden p-3 rounded-lg border border-red-200 bg-red-50 text-xs text-red-600 font-semibold transition-all"></div>
+                    <div>
+                        <label class="text-xs font-bold mb-1 block uppercase text-muted-foreground">Observaciones</label>
+                        <textarea id="edit-disp-obs" class="input w-full h-20 resize-none py-2 px-3 shadow-sm" placeholder="Ej: Entrega semanal...">${m.observacion || ''}</textarea>
+                    </div>
+                    <div class="space-y-1">
+                        <label class="text-xs font-bold block uppercase text-muted-foreground">Foto del Insumo Despachado (Opcional)</label>
+                        <div id="edit-disp-photo-container" class="relative border-2 border-dashed border-slate-200 rounded-xl p-4 text-center hover:bg-slate-50 transition-all cursor-pointer" onclick="document.getElementById('edit-disp-file').click()">
+                            <input type="file" id="edit-disp-file" accept="image/*" class="hidden" onchange="window.handleTracePhotoChange('edit-disp')">
+                            <div id="edit-disp-photo-placeholder" class="flex flex-col items-center justify-center py-2 text-slate-400 ${m.foto_url ? 'hidden' : ''}">
+                                <i data-lucide="camera" class="w-8 h-8 mb-2 text-slate-400"></i>
+                                <span class="text-xs font-semibold text-slate-600">Tomar foto o subir imagen</span>
+                                <span class="text-[10px] text-muted-foreground">Click para usar la cámara o elegir archivo</span>
+                            </div>
+                            <div id="edit-disp-photo-preview-wrapper" class="flex flex-col items-center justify-center relative ${m.foto_url ? '' : 'hidden'}">
+                                <img id="edit-disp-photo-preview" src="${m.foto_url || ''}" class="max-h-32 rounded-lg object-contain shadow-sm border border-slate-100 mb-2">
+                                <button type="button" class="btn btn-ghost btn-xs text-destructive flex items-center justify-center gap-1 py-1 px-2.5 rounded-lg border border-destructive/10 bg-destructive/5 hover:bg-destructive hover:text-white transition-all text-xs" onclick="event.stopPropagation(); window.removeTracePhoto('edit-disp')">
+                                    <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> Quitar Foto
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `,
+            confirmText: 'Guardar Cambios',
+            onConfirm: async () => {
+                const item_id = document.getElementById('edit-disp-item').value;
+                const dest_id = document.getElementById('edit-disp-dest').value;
+                const qty = document.getElementById('edit-disp-qty').value;
+                const dest_loc = document.getElementById('edit-disp-dest-loc').value;
+
+                const errContainer = document.getElementById('edit-disp-error-container');
+                errContainer.classList.add('hidden');
+                document.getElementById('edit-disp-qty').classList.remove('border-red-500', 'ring-red-400', 'ring-2');
+
+                if (!item_id || !dest_id || !qty || !dest_loc) { 
+                    errContainer.innerHTML = '⚠️ Complete todos los campos obligatorios.';
+                    errContainer.classList.remove('hidden');
+                    return false; 
+                }
+
+                // Validar stock
+                const item = _traceResources.items.find(i => i.id == item_id);
+                if (item) {
+                    const originalQty = parseInt(m.cantidad);
+                    const stock = parseInt(item.stock_actual) + (item_id == m.item_id ? originalQty : 0);
+                    const qtyVal = parseInt(qty);
+                    if (qtyVal > stock) {
+                        errContainer.innerHTML = `⚠️ <strong>Error: Stock insuficiente.</strong> No se puede registrar porque la cantidad ingresada (${qtyVal}) supera el stock disponible (${stock}).`;
+                        errContainer.classList.remove('hidden');
+                        document.getElementById('edit-disp-qty').classList.add('border-red-500', 'ring-red-400', 'ring-2');
+                        return false;
+                    }
+                }
+
+                UI.loading('Subiendo imagen...');
+                let foto_url = m.foto_url;
+                const fileInput = document.getElementById('edit-disp-file');
+                if (fileInput && fileInput.files && fileInput.files.length > 0) {
+                    try {
+                        foto_url = await window.uploadTracePhoto('edit-disp');
+                    } catch (e) {
+                        UI.stopLoading();
+                        errContainer.innerHTML = '⚠️ Error al subir la imagen: ' + e.message;
+                        errContainer.classList.remove('hidden');
+                        return false;
+                    }
+                } else {
+                    const previewWrapper = document.getElementById('edit-disp-photo-preview-wrapper');
+                    if (previewWrapper && previewWrapper.classList.contains('hidden')) {
+                        foto_url = null;
+                    }
+                }
+
+                const data = {
+                    id: id,
+                    item_id: item_id,
+                    personal_destinatario_id: dest_id,
+                    despachado_por_id: document.getElementById('edit-disp-admin').value || null,
+                    cantidad: qty,
+                    tipo: 'Salida',
+                    ubicacion_id: dest_loc,
+                    observacion: document.getElementById('edit-disp-obs').value,
+                    foto_url: foto_url
+                };
+
+                UI.loading('Guardando cambios...');
+                const r = await fetch('api/movements.php', { 
+                    method: 'PUT', 
+                    headers: { 'Content-Type': 'application/json' }, 
+                    body: JSON.stringify(data) 
+                }).then(x => x.json());
+                UI.stopLoading();
+                if (r.ok) { 
+                    UI.toast('Despacho actualizado correctamente', 'success'); 
+                    loadDispatches(); 
+                } else { 
+                    errContainer.innerHTML = `⚠️ <strong>Error de servidor:</strong> ${r.error}`;
+                    errContainer.classList.remove('hidden');
+                    return false; 
+                }
+            }
+        });
+
+        const searchInput = document.getElementById('edit-disp-search');
+        const infoDiv = document.getElementById('edit-disp-found-info');
+        const idInput = document.getElementById('edit-disp-item');
+        const qtyInput = document.getElementById('edit-disp-qty');
+        const errDiv = document.getElementById('edit-disp-error-container');
+
+        const checkStockLimit = () => {
+            const itemId = idInput.value;
+            const qtyVal = parseInt(qtyInput.value) || 0;
+            
+            errDiv.classList.add('hidden');
+            qtyInput.classList.remove('border-red-500', 'ring-red-400', 'ring-2');
+
+            if (!itemId) return true;
+            const item = _traceResources.items.find(i => i.id == itemId);
+            if (item) {
+                const originalQty = parseInt(m.cantidad);
+                const stock = parseInt(item.stock_actual) + (itemId == m.item_id ? originalQty : 0);
+                if (qtyVal > stock) {
+                    errDiv.innerHTML = `⚠️ <strong>Error: Stock insuficiente.</strong> No se puede despachar porque supera el stock disponible (${stock} ${item.unidad_medida || 'unid.'}).`;
+                    errDiv.classList.remove('hidden');
+                    qtyInput.classList.add('border-red-500', 'ring-red-400', 'ring-2');
+                    return false;
+                }
+            }
+            return true;
+        };
+
+        qtyInput.addEventListener('input', checkStockLimit);
+
+        const resultsDiv = document.createElement('div');
+        resultsDiv.className = 'mt-1 max-h-40 overflow-y-auto bg-white border border-border rounded-lg hidden z-50 relative shadow-lg';
+        searchInput.parentNode.after(resultsDiv);
+
+        searchInput.addEventListener('input', (e) => {
+            const val = e.target.value.trim().toLowerCase();
+            if (val.length < 2) {
+                resultsDiv.classList.add('hidden');
+                if (!val) {
+                    infoDiv.innerHTML = '<span class="italic text-muted-foreground">Busque el insumo...</span>';
+                    idInput.value = '';
+                    infoDiv.className = 'mt-2 p-3 rounded-lg border border-dashed border-border bg-muted/20 text-xs';
+                    checkStockLimit();
+                }
+                return;
+            }
+
+            const matches = _traceResources.items.filter(i =>
+                i.categoria_tipo === 'insumo' && (
+                    (i.codigo && i.codigo.toLowerCase().includes(val)) ||
+                    (i.nombre && i.nombre.toLowerCase().includes(val))
+                )
+            ).slice(0, 5);
+
+            if (matches.length === 0) {
+                resultsDiv.innerHTML = '<div class="p-3 text-xs text-muted-foreground italic text-center">No se encontraron coincidencias</div>';
+                resultsDiv.classList.remove('hidden');
+                infoDiv.innerHTML = '<span class="text-destructive font-medium">Insumo no encontrado</span>';
+                idInput.value = '';
+                infoDiv.className = 'mt-2 p-3 rounded-lg border border-red-200 bg-red-50 text-xs';
+                checkStockLimit();
+                return;
+            }
+
+            resultsDiv.innerHTML = matches.map(i => `
+                <div class="p-2 hover:bg-primary/5 cursor-pointer border-b border-border last:border-0" 
+                     onclick="window.selectEditDispatchItem(${i.id}, '${i.nombre.replace(/'/g, "\\'")}', ${i.stock_actual}, '${i.unidad_medida || 'unid.'}')">
+                    <div class="text-xs font-bold">${i.nombre}</div>
+                    <div class="text-[10px] text-muted-foreground uppercase">Stock: ${i.stock_actual} ${i.unidad_medida || 'unid.'}</div>
+                </div>
+            `).join('');
+            resultsDiv.classList.remove('hidden');
+        });
+
+        window.selectEditDispatchItem = (id, nombre, stock, unidad) => {
+            idInput.value = id;
+            searchInput.value = nombre;
+            resultsDiv.classList.add('hidden');
+            const originalQty = parseInt(m.cantidad);
+            const stockCalc = stock + (id == m.item_id ? originalQty : 0);
+            infoDiv.innerHTML = `
+                <div class="font-bold text-primary">${nombre}</div>
+                <div class="text-muted-foreground">Stock Actual: <span class="font-bold">${stockCalc}</span> ${unidad}</div>
+                ${stockCalc <= 0 ? '<div class="text-destructive font-bold mt-1">⚠️ Sin stock disponible</div>' : '<div class="text-green-600 font-bold mt-1">✓ Insumo disponible</div>'}
+            `;
+            idInput.value = stockCalc > 0 ? id : '';
+            infoDiv.className = `mt-2 p-3 rounded-lg border ${stockCalc > 0 ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50'} text-xs`;
+
+            const label = document.getElementById('edit-disp-unit-label');
+            if (label) label.textContent = unidad;
+
+            checkStockLimit();
+        };
+
+        lucide.createIcons();
+    } catch (e) {
+        UI.stopLoading();
+        UI.toast('Error al cargar datos del despacho', 'error');
+        console.error(e);
+    }
+};
+
+window.editTransfer = async function (id) {
+    const user = window.Auth.getUser();
+    if (!user || user.role !== 'admin') {
+        UI.toast('Solo el Administrador puede editar traslados', 'error');
+        return;
+    }
+
+    UI.loading('Cargando datos...');
+    try {
+        const resp = await fetch('api/transfers.php').then(r => r.json());
+        const t = (resp.transfers || []).find(x => x.id == id);
+        UI.stopLoading();
+        if (!t) { UI.toast('Registro no encontrado', 'error'); return; }
+
+        let selectedItem = _traceResources.items.find(i => i.id == t.item_id);
+
+        UI.modal({
+            title: 'Editar Traslado de Mobiliario',
+            body: `
+                <div class="space-y-4 pt-2">
+                    <div>
+                        <label class="text-xs font-bold mb-1 block uppercase text-primary">Mobiliario <span class="text-destructive">*</span></label>
+                        <div class="relative group">
+                            <input type="text" id="edit-tr-search" class="input w-full pr-20" 
+                                   placeholder="Ingrese Código o Nombre del Artículo..." 
+                                   value="${selectedItem ? (selectedItem.codigo || selectedItem.nombre) : ''}">
+                            <div class="absolute right-1 top-1 flex gap-1">
+                                <button class="p-1.5 rounded-lg bg-primary/10 text-primary hover:bg-primary hover:text-white transition-all shadow-sm" onclick="UI.openScanner((val, showError) => { 
+                                    const found = window._traceResources.items.find(i => i.categoria_tipo === 'mobiliario' && i.codigo && i.codigo.toLowerCase() === val.toLowerCase());
+                                    if (!found) {
+                                        showError('⚠️ Código no reconocido como Mobiliario.');
+                                        return false;
+                                    }
+                                    document.getElementById('edit-tr-search').value = val; 
+                                    document.getElementById('edit-tr-search').dispatchEvent(new Event('input')); 
+                                    return true;
+                                })" title="Escanear QR">
+                                    <i data-lucide="camera" class="w-4 h-4"></i>
+                                </button>
+                                <div class="p-1.5 text-muted-foreground">
+                                    <i data-lucide="search" class="w-4 h-4"></i>
+                                </div>
+                            </div>
+                        </div>
+                        <div id="edit-tr-found-info" class="mt-2 p-3 rounded-lg border border-dashed border-border bg-muted/20 text-xs transition-all">
+                            ${selectedItem ?
+                                `<div class="font-bold text-primary">${selectedItem.nombre}</div>
+                                 <div class="text-muted-foreground">Categoría: ${selectedItem.categoria_nombre} | Stock: ${selectedItem.stock_actual}</div>` :
+                                '<span class="italic text-muted-foreground">Busque el mobiliario...</span>'
+                            }
+                        </div>
+                        <input type="hidden" id="edit-tr-item" value="${t.item_id}">
+                    </div>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="text-xs font-bold mb-1 block uppercase text-muted-foreground">Desde (Origen)</label>
+                            <select id="edit-tr-origen" class="select w-full">
+                                <option value="">Almacén Principal</option>
+                                ${_traceResources.locations.map(l => `<option value="${l.id}" ${l.id == t.ubicacion_origen_id ? 'selected' : ''}>${l.nombre}</option>`).join('')}
+                            </select>
+                        </div>
+                        <div>
+                            <label class="text-xs font-bold mb-1 block uppercase text-muted-foreground">Hacia (Destino) <span class="text-destructive">*</span></label>
+                            <select id="edit-tr-destino" class="select w-full">
+                                <option value="">Seleccione destino...</option>
+                                ${_traceResources.locations.map(l => `<option value="${l.id}" ${l.id == t.ubicacion_destino_id ? 'selected' : ''}>${l.nombre}</option>`).join('')}
+                            </select>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="text-xs font-bold mb-1 block uppercase text-muted-foreground">Cantidad <span class="text-destructive">*</span></label>
+                            <input type="number" id="edit-tr-qty" class="input w-full" value="${t.cantidad}" min="1">
+                        </div>
+                        <div>
+                            <label class="text-xs font-bold mb-1 block uppercase text-muted-foreground">Fecha</label>
+                            <input type="date" id="edit-tr-fecha" class="input w-full" value="${t.fecha}">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="text-xs font-bold mb-1 block uppercase text-muted-foreground">Responsable del Traslado</label>
+                        <select id="edit-tr-resp" class="select w-full">
+                            <option value="">Seleccione personal...</option>
+                            ${_traceResources.staff.map(p => `<option value="${p.id}" ${p.id == t.responsable_id ? 'selected' : ''}>${p.nombre}</option>`).join('')}
+                        </select>
+                    </div>
+                    <div>
+                        <label class="text-xs font-bold mb-1 block uppercase text-muted-foreground">Motivo / Observaciones</label>
+                        <textarea id="edit-tr-obs" class="input w-full h-20" placeholder="Ej: Cambio de mobiliario...">${t.motivo || ''}</textarea>
+                    </div>
+                    <div class="p-3 bg-red-50 border border-red-200 rounded-lg flex items-center gap-3">
+                        <input type="checkbox" id="edit-tr-baja" class="w-4 h-4 text-destructive" ${t.tipo === 'Baja' ? 'checked' : ''}>
+                        <div>
+                            <label for="edit-tr-baja" class="text-xs font-bold text-red-700 block cursor-pointer">Registrar como BAJA definitiva (Mobiliario inservible)</label>
+                            <p class="text-[10px] text-red-600">La cantidad indicada se descontará permanentemente del stock por estar malograda.</p>
+                        </div>
+                    </div>
+                    <div class="space-y-1">
+                        <label class="text-xs font-bold block uppercase text-muted-foreground">Foto del Traslado (Opcional)</label>
+                        <div id="edit-tr-photo-container" class="relative border-2 border-dashed border-slate-200 rounded-xl p-4 text-center hover:bg-slate-50 transition-all cursor-pointer" onclick="document.getElementById('edit-tr-file').click()">
+                            <input type="file" id="edit-tr-file" accept="image/*" class="hidden" onchange="window.handleTracePhotoChange('edit-tr')">
+                            <div id="edit-tr-photo-placeholder" class="flex flex-col items-center justify-center py-2 text-slate-400 ${t.foto_url ? 'hidden' : ''}">
+                                <i data-lucide="camera" class="w-8 h-8 mb-2 text-slate-400"></i>
+                                <span class="text-xs font-semibold text-slate-600">Tomar foto o subir imagen</span>
+                                <span class="text-[10px] text-muted-foreground">Click para usar la cámara o elegir archivo</span>
+                            </div>
+                            <div id="edit-tr-photo-preview-wrapper" class="flex flex-col items-center justify-center relative ${t.foto_url ? '' : 'hidden'}">
+                                <img id="edit-tr-photo-preview" src="${t.foto_url || ''}" class="max-h-32 rounded-lg object-contain shadow-sm border border-slate-100 mb-2">
+                                <button type="button" class="btn btn-ghost btn-xs text-destructive flex items-center justify-center gap-1 py-1 px-2.5 rounded-lg border border-destructive/10 bg-destructive/5 hover:bg-destructive hover:text-white transition-all text-xs" onclick="event.stopPropagation(); window.removeTracePhoto('edit-tr')">
+                                    <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> Quitar Foto
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `,
+            confirmText: 'Guardar Cambios',
+            onConfirm: async () => {
+                const isBaja = document.getElementById('edit-tr-baja').checked;
+                const item_id = document.getElementById('edit-tr-item').value;
+                const qty = document.getElementById('edit-tr-qty').value;
+
+                if (!item_id || (!isBaja && !document.getElementById('edit-tr-destino').value) || !qty) {
+                    UI.toast('Complete los campos obligatorios', 'error');
+                    return false;
+                }
+
+                // Validar stock
+                const item = _traceResources.items.find(i => i.id == item_id);
+                if (item) {
+                    const originalQty = parseInt(t.cantidad);
+                    const stock = parseInt(item.stock_actual) + (item_id == t.item_id ? originalQty : 0);
+                    const qtyVal = parseInt(qty);
+                    if (qtyVal > stock) {
+                        UI.toast(`⚠️ Stock insuficiente. El stock disponible es de ${stock} unidades.`, 'error');
+                        return false;
+                    }
+                }
+
+                UI.loading('Subiendo imagen...');
+                let foto_url = t.foto_url;
+                const fileInput = document.getElementById('edit-tr-file');
+                if (fileInput && fileInput.files && fileInput.files.length > 0) {
+                    try {
+                        foto_url = await window.uploadTracePhoto('edit-tr');
+                    } catch (e) {
+                        UI.stopLoading();
+                        UI.toast('Error al subir la imagen: ' + e.message, 'error');
+                        return false;
+                    }
+                } else {
+                    const previewWrapper = document.getElementById('edit-tr-photo-preview-wrapper');
+                    if (previewWrapper && previewWrapper.classList.contains('hidden')) {
+                        foto_url = null;
+                    }
+                }
+
+                const data = {
+                    id: id,
+                    item_id: item_id,
+                    ubicacion_origen_id: document.getElementById('edit-tr-origen').value,
+                    ubicacion_destino_id: isBaja ? null : document.getElementById('edit-tr-destino').value,
+                    cantidad: qty,
+                    fecha: document.getElementById('edit-tr-fecha').value,
+                    responsable_id: document.getElementById('edit-tr-resp').value,
+                    motivo: document.getElementById('edit-tr-obs').value,
+                    tipo: isBaja ? 'Baja' : 'Salida',
+                    foto_url: foto_url
+                };
+
+                UI.loading('Guardando cambios...');
+                const r = await fetch('api/transfers.php', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                }).then(x => x.json());
+                UI.stopLoading();
+                if (r.ok) {
+                    UI.toast('Traslado actualizado correctamente', 'success');
+                    loadTransfers();
+                } else {
+                    UI.toast('Error al actualizar: ' + r.error, 'error');
+                    return false;
+                }
+            }
+        });
+
+        const searchInput = document.getElementById('edit-tr-search');
+        const infoDiv = document.getElementById('edit-tr-found-info');
+        const idInput = document.getElementById('edit-tr-item');
+
+        const resultsDiv = document.createElement('div');
+        resultsDiv.className = 'mt-1 max-h-40 overflow-y-auto bg-white border border-border rounded-lg hidden z-50 relative shadow-lg';
+        searchInput.parentNode.after(resultsDiv);
+
+        searchInput.addEventListener('input', (e) => {
+            const val = e.target.value.trim().toLowerCase();
+            if (val.length < 2) {
+                resultsDiv.classList.add('hidden');
+                if (!val) {
+                    infoDiv.innerHTML = '<span class="italic text-muted-foreground">Busque el mobiliario...</span>';
+                    idInput.value = '';
+                    infoDiv.className = 'mt-2 p-3 rounded-lg border border-dashed border-border bg-muted/20 text-xs';
+                }
+                return;
+            }
+
+            const matches = _traceResources.items.filter(i =>
+                i.categoria_tipo === 'mobiliario' && (
+                    (i.codigo && i.codigo.toLowerCase().includes(val)) ||
+                    (i.nombre && i.nombre.toLowerCase().includes(val))
+                )
+            ).slice(0, 5);
+
+            if (matches.length === 0) {
+                resultsDiv.innerHTML = '<div class="p-3 text-xs text-muted-foreground italic text-center">No se encontraron coincidencias</div>';
+                resultsDiv.classList.remove('hidden');
+                infoDiv.innerHTML = '<span class="text-destructive font-medium">Mobiliario no encontrado</span>';
+                idInput.value = '';
+                infoDiv.className = 'mt-2 p-3 rounded-lg border border-red-200 bg-red-50 text-xs';
+                return;
+            }
+
+            resultsDiv.innerHTML = matches.map(i => `
+                <div class="p-2 hover:bg-primary/5 cursor-pointer border-b border-border last:border-0" 
+                     onclick="window.selectEditTransferItem(${i.id}, '${i.nombre.replace(/'/g, "\\'")}', '${i.categoria_nombre}', ${i.stock_actual})">
+                    <div class="text-xs font-bold">${i.nombre}</div>
+                    <div class="text-[10px] text-muted-foreground uppercase">${i.categoria_nombre} | Stock: ${i.stock_actual}</div>
+                </div>
+            `).join('');
+            resultsDiv.classList.remove('hidden');
+        });
+
+        window.selectEditTransferItem = (id, nombre, categoria, stock) => {
+            idInput.value = id;
+            searchInput.value = nombre;
+            resultsDiv.classList.add('hidden');
+            const originalQty = parseInt(t.cantidad);
+            const stockCalc = stock + (id == t.item_id ? originalQty : 0);
+            infoDiv.innerHTML = `
+                <div class="font-bold text-primary">${nombre}</div>
+                <div class="text-muted-foreground">Categoría: ${categoria} | Stock Actual: <span class="font-bold">${stockCalc}</span></div>
+                ${stockCalc <= 0 ? '<div class="text-destructive font-bold mt-1">⚠️ Sin stock disponible</div>' : '<div class="text-green-600 font-bold mt-1">✓ Disponible para traslado</div>'}
+            `;
+            idInput.value = stockCalc > 0 ? id : '';
+            infoDiv.className = `mt-2 p-3 rounded-lg border ${stockCalc > 0 ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50'} text-xs`;
+        };
+
+        lucide.createIcons();
+    } catch (e) {
+        UI.stopLoading();
+        UI.toast('Error al cargar datos del traslado', 'error');
+        console.error(e);
     }
 };
 
