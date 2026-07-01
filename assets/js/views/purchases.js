@@ -337,7 +337,7 @@ window.Views['new-purchase'].afterMount = async function () {
 
   // Fecha requerida por defecto: hoy
   const def = new Date();
-  document.getElementById('oc-fecha-req').value = def.toISOString().split('T')[0];
+  document.getElementById('oc-fecha-req').value = todayPE();
 
   _ocItemRows = 0;
   addOCItem(); // Agregar primera fila vacía
@@ -422,7 +422,7 @@ window.toggleCreditDetails = function () {
     // Set default dates if empty
     const fAdelanto = document.getElementById('oc-adelanto-fecha-pago');
     const fSaldo = document.getElementById('oc-adelanto-fecha-saldo');
-    if (fAdelanto && !fAdelanto.value) fAdelanto.value = new Date().toISOString().split('T')[0];
+    if (fAdelanto && !fAdelanto.value) fAdelanto.value = todayPE();
     if (fSaldo && !fSaldo.value) {
       const future = new Date();
       future.setDate(future.getDate() + 15);
@@ -435,7 +435,7 @@ window.toggleCreditDetails = function () {
       alquilerContainer.classList.remove('hidden');
       const f1 = document.getElementById('oc-alquiler-primera-fecha');
       if (f1 && !f1.value) {
-        f1.value = new Date().toISOString().split('T')[0];
+        f1.value = todayPE();
       }
     }
   } else {
@@ -462,7 +462,7 @@ window.toggleCreditSubFields = function () {
     if (cuotasFields) cuotasFields.classList.remove('hidden');
     // Poner fecha de inicio por defecto si está vacía
     const fi = document.getElementById('oc-cuotas-fecha-inicio');
-    if (fi && !fi.value) fi.value = new Date().toISOString().split('T')[0];
+    if (fi && !fi.value) fi.value = todayPE();
   }
   recalcOCTotals();
 };
@@ -530,7 +530,7 @@ window.toggleMobilityPrompt = function () {
             </div>
             <div>
               <label class="text-sm font-medium">Fecha Tentativa</label>
-              <input type="date" id="mob-fecha" class="input mt-1 w-full" value="${new Date().toISOString().split('T')[0]}">
+              <input type="date" id="mob-fecha" class="input mt-1 w-full" value="${todayPE()}">
             </div>
           </div>
           <div>
@@ -1411,7 +1411,7 @@ window.generateOC = async function () {
       usuario_id: user?.id,
       proveedor_id,
       activo_id: activoId, // Link al equipo/mueble a intervenir
-      fecha: new Date().toISOString().split('T')[0],
+      fecha: todayPE(),
       area_id: area,
       moneda: document.getElementById('oc-moneda').value,
       condicion_pago: cond,
@@ -2534,3 +2534,352 @@ window.showRentalSetupModal = function (id, currentDia, currentFecha, currentMes
     }
   });
 };
+
+// ── VISTA DE EDICIÓN Y PROCESAMIENTO DE REQUISICIÓN / ORDEN ──
+window.Views['edit-purchase'] = function (params) {
+  const requisitionId = params ? (params.requisition_id || params.id) : null;
+  let html = window.Views['new-purchase']();
+  
+  // Reemplazar el título y subtítulo para reflejar el estado de edición
+  html = html.replace('Nueva Orden de Compra / Servicio', 'Editar y Procesar Requisición / Adquisición');
+  html = html.replace('Complete el formulario para generar el documento', 'Complete los datos de la requisición para convertirla en orden formal');
+  
+  // Interceptar el botón de guardar/previsualizar para usar el flujo de edición
+  html = html.replace('showOCPreview()', `showOCEditPreview(${requisitionId})`);
+  
+  return html;
+};
+
+// afterMount de Edición: carga catálogos y llena el formulario con los datos cargados
+window.Views['edit-purchase'].afterMount = async function () {
+  // Los params se leen directamente de Router.params (set por Router.go antes de navegar)
+  const params = Router.params;
+  const requisitionId = params ? (params.requisition_id || params.id) : null;
+  if (!requisitionId) {
+    UI.toast('ID de requisición no proporcionado', 'error');
+    Router.go('requisitions');
+    return;
+  }
+
+  // 1. Ejecutar afterMount regular para cargar los selectores y catálogos
+  await window.Views['new-purchase'].afterMount();
+
+  // Cambiar título en la UI
+  const title = document.querySelector('#view h1');
+  if (title) title.textContent = 'Procesar Requisición / Adquisición';
+
+  UI.loading('Cargando datos de la requisición...');
+  try {
+    const data = await fetch(`api/purchases.php?id=${requisitionId}`).then(r => r.json());
+    const oc = data.purchase;
+    UI.stopLoading();
+    
+    if (!oc) {
+      UI.toast('No se encontró la requisición solicitada', 'error');
+      Router.go('requisitions');
+      return;
+    }
+
+    // 2. Poblar los campos con los datos cargados
+    document.getElementById('oc-tipo').value = oc.tipo;
+    if (typeof toggleOSTargetField === 'function') toggleOSTargetField();
+
+    if (oc.activo_id && oc.tipo === 'servicio') {
+      const foundAsset = _ocAssets.find(a => a.id == oc.activo_id);
+      if (foundAsset) {
+        document.getElementById('os-target-code').value = foundAsset.codigo_interno || foundAsset.numero_serie || '';
+      }
+    }
+
+    document.getElementById('oc-area').value = oc.area_id || '';
+    document.getElementById('oc-fecha-req').value = oc.fecha_requerida || '';
+    document.getElementById('oc-moneda').value = oc.moneda || 'PEN';
+    
+    if (oc.proveedor_id) {
+      document.getElementById('oc-proveedor').value = oc.proveedor_id;
+      // Disparar el evento change para auto-rellenar datos de proveedor
+      const event = new Event('change');
+      document.getElementById('oc-proveedor').dispatchEvent(event);
+    }
+
+    document.getElementById('oc-condicion').value = oc.condicion_pago || 'Al contado';
+    if (typeof toggleCreditDetails === 'function') toggleCreditDetails();
+
+    // Detalles de crédito si aplica
+    if (oc.condicion_pago === 'Credito') {
+      if (oc.condicion_detalle && oc.condicion_detalle.includes('Cuotas')) {
+        document.getElementById('oc-credito-tipo').value = 'Cuotas';
+        if (typeof toggleCreditSubFields === 'function') toggleCreditSubFields();
+        document.getElementById('oc-condicion-val').value = oc.cuotas ? oc.cuotas.length : 2;
+        document.getElementById('oc-cuotas-dia-mes').value = oc.dia_pago || '';
+        const firstCuotaDate = (oc.cuotas && oc.cuotas.length > 0) ? oc.cuotas[0].fecha_vencimiento : '';
+        document.getElementById('oc-cuotas-fecha-inicio').value = firstCuotaDate;
+      } else {
+        document.getElementById('oc-credito-tipo').value = 'Dias';
+        if (typeof toggleCreditSubFields === 'function') toggleCreditSubFields();
+        document.getElementById('oc-credito-fecha-limite').value = oc.fecha_vencimiento || '';
+        if (typeof calcularDiasDesdefecha === 'function') calcularDiasDesdefecha();
+      }
+    } else if (oc.condicion_pago === 'Adelanto + Saldo') {
+      document.getElementById('oc-adelanto-porc').value = parseFloat(oc.adelanto_porcentaje).toFixed(0);
+      document.getElementById('oc-adelanto-fecha-pago').value = oc.fecha_pago_adelanto || '';
+      document.getElementById('oc-adelanto-fecha-saldo').value = oc.fecha_pago_saldo_proyectado || '';
+    } else if (oc.condicion_pago === 'Alquiler') {
+      document.getElementById('oc-alquiler-dia').value = oc.dia_pago || 30;
+      document.getElementById('oc-alquiler-meses').value = oc.cuotas ? oc.cuotas.length : 24;
+      const firstCuotaDate = (oc.cuotas && oc.cuotas.length > 0) ? oc.cuotas[0].fecha_vencimiento : '';
+      document.getElementById('oc-alquiler-fecha-inicio').value = firstCuotaDate;
+    }
+
+    document.getElementById('oc-observaciones').value = oc.observaciones || '';
+    
+    const pptoCheck = document.getElementById('oc-dentro-presupuesto');
+    if (pptoCheck) pptoCheck.checked = (oc.dentro_presupuesto == 1);
+
+    // 3. Limpiar ítems vacíos y poblar ítems reales
+    const tbody = document.getElementById('oc-items-body');
+    if (tbody) {
+      tbody.innerHTML = '';
+      _ocItemRows = 0;
+
+      oc.items.forEach(it => {
+        addOCItem();
+        const r = _ocItemRows;
+        
+        document.getElementById(`oc-cat-${r}`).value = it.categoria_nombre || '';
+        document.getElementById(`oc-prefijo-${r}`).value = it.prefijo || '';
+        document.getElementById(`oc-desc-${r}`).value = it.descripcion || '';
+        document.getElementById(`oc-unidad-${r}`).value = it.unidad || 'Unidad';
+        document.getElementById(`oc-qty-${r}`).value = it.cantidad || 1;
+        document.getElementById(`oc-pu-${r}`).value = parseFloat(it.precio_unitario || 0).toFixed(2);
+        
+        if (typeof onCategorySelect === 'function') {
+          onCategorySelect(r);
+        }
+
+        // Volver a escribir por si la categoría reinició los campos
+        document.getElementById(`oc-cat-${r}`).value = it.categoria_nombre || '';
+        document.getElementById(`oc-prefijo-${r}`).value = it.prefijo || '';
+        document.getElementById(`oc-desc-${r}`).value = it.descripcion || '';
+        document.getElementById(`oc-unidad-${r}`).value = it.unidad || 'Unidad';
+        document.getElementById(`oc-qty-${r}`).value = it.cantidad || 1;
+        document.getElementById(`oc-pu-${r}`).value = parseFloat(it.precio_unitario || 0).toFixed(2);
+      });
+      
+      // Recalcular montos e IGV
+      if (typeof recalcOCTotals === 'function') recalcOCTotals();
+    }
+
+  } catch (e) {
+    UI.stopLoading();
+    console.error(e);
+    UI.toast('Error de red al cargar la requisición', 'error');
+  }
+};
+
+// Interceptor de previsualización en edición
+window.showOCEditPreview = function (requisitionId) {
+  // 1. Mostrar la vista previa de compras regular
+  window.showOCPreview();
+  
+  // 2. Clonar y cambiar el botón confirmar en el modal de previsualización
+  const confirmBtn = document.getElementById('oc-preview-confirm-btn');
+  if (confirmBtn) {
+    const cloned = confirmBtn.cloneNode(true);
+    cloned.textContent = 'Guardar y Enviar a Firmas';
+    cloned.style.background = 'linear-gradient(135deg, #4f46e5, #4338ca)'; // color índigo premium
+    confirmBtn.replaceWith(cloned);
+    
+    cloned.addEventListener('click', () => {
+      if (typeof closePreview === 'function') closePreview();
+      window.saveEditedOC(requisitionId);
+    });
+  }
+};
+
+// Guardar los cambios (PUT)
+window.saveEditedOC = async function (requisitionId) {
+  const proveedor_id = document.getElementById('oc-proveedor').value;
+  const area = document.getElementById('oc-area').value;
+  const fecha_req = document.getElementById('oc-fecha-req').value;
+
+  if (!proveedor_id) { UI.toast('Seleccione un proveedor', 'error'); return; }
+  if (!area) { UI.toast('Seleccione el área solicitante', 'error'); return; }
+
+  const { items, invalidRow } = getOCItems();
+
+  if (invalidRow) {
+    UI.toast(`Fila ${invalidRow.row}: La categoría "${invalidRow.nombre}" no existe. Créala primero en Categorías.`, 'error');
+    return;
+  }
+  if (items.length === 0) { UI.toast('Agregue al menos un ítem con categoría válida', 'error'); return; }
+
+  UI.loading('Actualizando y Generando OC/OS...');
+
+  try {
+    const tipo = document.getElementById('oc-tipo').value;
+    const sup = _ocSuppliers.find(s => s.id == proveedor_id);
+    const user = Auth.getUser();
+    const cond = document.getElementById('oc-condicion').value;
+    const cTipo = document.getElementById('oc-credito-tipo').value;
+    const cVal = document.getElementById('oc-condicion-val').value;
+    
+    let activoId = null;
+    if (tipo === 'servicio') {
+      const assetCode = document.getElementById('os-target-code')?.value || '';
+      if (assetCode) {
+        const found = _ocAssets.find(a => a.codigo_interno === assetCode || a.numero_serie === assetCode);
+        if (found) activoId = found.id;
+      }
+    }
+
+    // Detalles del pago
+    let condDetalle = null;
+    let fechaVencimientoCredito = null;
+    let diaPago = null;
+    let mesesAlquiler = null;
+    let fecha1raCuota = null;
+    let cuotasDiaMes = null;
+    let cuotasFechaInicio = null;
+    let adelantoPorc = null;
+    let adelantoMonto = null;
+    let saldoMonto = null;
+    let fechaPagoAdelanto = null;
+    let fechaPagoSaldoProyectado = null;
+
+    // Calcular montos finales
+    const porcIgv = parseFloat(document.getElementById('oc-igv-porcentaje').value || 18) / 100;
+    const incluido = document.getElementById('oc-precios-con-igv').checked;
+    const base = items.reduce((a, it) => a + (parseFloat(it.total) || 0), 0);
+    let subtotal, igv, total;
+    if (incluido) { total = base; subtotal = total / (1 + porcIgv); igv = total - subtotal; }
+    else { subtotal = base; igv = subtotal * porcIgv; total = subtotal + igv; }
+
+    if (cond === 'Credito') {
+      condDetalle = (cTipo === 'Dias') ? `${cVal} Días` : `${cVal} Cuotas`;
+      if (cTipo === 'Dias') {
+        fechaVencimientoCredito = document.getElementById('oc-credito-fecha-limite').value;
+      } else {
+        diaPago = parseInt(document.getElementById('oc-cuotas-dia-mes').value) || null;
+        fecha1raCuota = document.getElementById('oc-cuotas-fecha-inicio').value || null;
+      }
+    } else if (cond === 'Adelanto + Saldo') {
+      adelantoPorc = parseFloat(document.getElementById('oc-adelanto-porc').value);
+      adelantoMonto = total * (adelantoPorc / 100);
+      saldoMonto = total - adelantoMonto;
+      fechaPagoAdelanto = document.getElementById('oc-adelanto-fecha-pago').value;
+      fechaPagoSaldoProyectado = document.getElementById('oc-adelanto-fecha-saldo').value;
+    } else if (cond === 'Alquiler') {
+      diaPago = parseInt(document.getElementById('oc-alquiler-dia').value) || 30;
+      mesesAlquiler = parseInt(document.getElementById('oc-alquiler-meses').value) || 24;
+      fecha1raCuota = document.getElementById('oc-alquiler-fecha-inicio').value || null;
+    }
+
+    const payload = {
+      action: 'full_update',
+      id: requisitionId,
+      tipo,
+      usuario_id: user?.id,
+      proveedor_id,
+      activo_id: activoId,
+      fecha: todayPE(),
+      area_id: area,
+      moneda: document.getElementById('oc-moneda').value,
+      condicion_pago: cond,
+      condicion_detalle: condDetalle,
+      fecha_vencimiento_credito: fechaVencimientoCredito,
+      dia_pago: diaPago,
+      meses_alquiler: mesesAlquiler,
+      fecha_primera_cuota: fecha1raCuota,
+      cuotas_dia_mes: cuotasDiaMes,
+      cuotas_fecha_inicio: cuotasFechaInicio,
+      adelanto_porcentaje: adelantoPorc,
+      adelanto_monto: adelantoMonto ? adelantoMonto.toFixed(2) : null,
+      saldo_monto: saldoMonto ? saldoMonto.toFixed(2) : null,
+      fecha_pago_adelanto: fechaPagoAdelanto,
+      fecha_pago_saldo_proyectado: fechaPagoSaldoProyectado,
+      fecha_requerida: fecha_req,
+      igv_porcentaje: document.getElementById('oc-igv-porcentaje').value,
+      precios_con_igv: incluido ? 1 : 0,
+      incluye_movilidad: document.getElementById('oc-incluye-movilidad').checked ? 1 : 0,
+      monto_movilidad: _ocMobilityData ? _ocMobilityData.monto : 0,
+      mobility: _ocMobilityData,
+      observaciones: document.getElementById('oc-observaciones').value.trim(),
+      dentro_presupuesto: document.getElementById('oc-dentro-presupuesto')?.checked ? 1 : 0,
+      estado: 'Pendiente', // <--- Se eleva a aprobación formal de firmas
+      items
+    };
+
+    const resp = await fetch('api/purchases.php', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    const res = await resp.json();
+    UI.stopLoading();
+
+    if (res.ok) {
+      const areaNombre = document.getElementById('oc-area').options[document.getElementById('oc-area').selectedIndex].text;
+      payload.fecha_vencimiento = res.fecha_vencimiento || payload.fecha_vencimiento_credito || null;
+
+      // ── PASO 1: Generar y descargar PDF ──
+      UI.loading('Descargando PDF de la OC/OS…');
+      let ocDoc = null;
+      try {
+        ocDoc = generateOCPDF(res.numero_oc, sup, areaNombre, payload, items);
+      } catch (pdfErr) {
+        console.error('Error in generateOCPDF:', pdfErr);
+        UI.toast('Error al generar el PDF de la OC', 'warning');
+      }
+
+      // ── PASO 2: Generar y descargar PDF de Movilidad si aplica ──
+      let mobDoc = null;
+      if (!payload.incluye_movilidad && payload.mobility) {
+        await new Promise(r => setTimeout(r, 800));
+        UI.loading('Descargando PDF de Movilidad…');
+        try {
+          mobDoc = generateMobilityPDF(res.numero_oc, payload.mobility, sup, payload.moneda, payload.mobility.proveedor_nombre);
+        } catch (mobErr) {
+          console.error('Error in generateMobilityPDF:', mobErr);
+        }
+      }
+
+      UI.stopLoading();
+      UI.toast(`Orden ${res.numero_oc} generada y enviada a firmas con éxito.`, 'success');
+      
+      // Redirigir a listado de compras
+      Router.go('purchases');
+
+      // ── PASO 3: Subir a Google Drive en segundo plano ──
+      (async () => {
+          try {
+            const driveLinks = {};
+            if (ocDoc) driveLinks.pdf_oc_url = await uploadToDrive(ocDoc, res.numero_oc);
+            if (mobDoc) driveLinks.pdf_mov_url = await uploadToDrive(mobDoc, res.numero_oc + '-MOV');
+
+            if (driveLinks.pdf_oc_url || driveLinks.pdf_mov_url) {
+              await fetch('api/purchases.php', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'save_drive_links', id: res.id, ...driveLinks })
+              });
+              console.log('Copia de seguridad de requisición procesada subida a Drive.');
+            }
+          } catch (driveErr) {
+            console.error('Drive background upload error:', driveErr);
+          }
+      })();
+
+    } else {
+      UI.toast('Error: ' + (res.error || 'Ocurrió un problema en el servidor'), 'error');
+    }
+
+  } catch (err) {
+    UI.stopLoading();
+    console.error(err);
+    UI.toast('Error al guardar: ' + err.message, 'error');
+  }
+};
+
+// Router hook para edición

@@ -223,7 +223,7 @@ window.exportLocations = function() {
     'Estado': l.estado === 'activo' ? 'Activo' : 'De Baja / Inactivo'
   }));
   
-  const fecha = new Date().toISOString().split('T')[0];
+  const fecha = todayPE();
   UI.exportToExcel(dataToExport, `Aulas_y_Espacios_${fecha}.xlsx`);
 };
 

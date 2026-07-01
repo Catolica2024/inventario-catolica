@@ -7,6 +7,8 @@ window.ROLES = [
   { id: 'tesoreria', label: 'Tesorería', description: 'Gestión de pagos y vouchers' },
   { id: 'contabilidad', label: 'Contabilidad', description: 'Consulta de pagos y estado financiero' },
   { id: 'personal', label: 'Personal', description: 'Consulta de inventario' },
+  { id: 'jefe_area', label: 'Jefe de Área', description: 'Gestión y creación de requisiciones' },
+  { id: 'req_pedagogia', label: 'Jefe Pedagogía (Sub-área)', description: 'Jefe de sub-área de pedagogía, requiere firma de Dirección' },
 ];
 
 // MÓDULOS SENSIBLES: Requieren asignación explícita del Admin.
@@ -18,15 +20,18 @@ window.ROLE_PERMISSIONS = {
   gerente_general: ['notifications', 'search', 'inventory', 'approvals', 'reports', 'history'],
   jefe_finanzas: ['notifications', 'search', 'inventory', 'approvals', 'reports', 'history'],
   almacenero: ['notifications', 'search', 'inventory', 'assets', 'categories', 'locations', 'areas', 'movements', 'maintenance', 'add-item', 'new-purchase', 'history'],
-  comprador: ['notifications', 'search', 'suppliers', 'categories', 'purchases', 'new-purchase', 'recepcions', 'areas', 'history', 'documents'],
+  comprador: ['notifications', 'search', 'suppliers', 'categories', 'purchases', 'new-purchase', 'edit-purchase', 'recepcions', 'areas', 'history', 'documents', 'requisitions'],
   tesoreria: ['notifications', 'search', 'inventory', 'treasury', 'history'],
   contabilidad: ['notifications', 'search', 'treasury', 'history'],
   personal: ['search', 'inventory', 'notifications'],
+  jefe_area: ['notifications', 'search', 'requisitions', 'new-requisition'],
+  req_pedagogia: ['notifications', 'search', 'requisitions', 'new-requisition'],
 };
 
 window.MODULES_LIST = [
   { id: 'dashboard', label: 'Dashboard' },
   { id: 'notifications', label: 'Notificaciones' },
+  { id: 'requisitions', label: 'Requisiciones' },
   { id: 'registration', label: 'Registrar Bien' },
   { id: 'inventory', label: 'Inventario General' },
   { id: 'categories-inv', label: 'Categorías' },

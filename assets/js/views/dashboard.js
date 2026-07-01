@@ -253,6 +253,8 @@ async function _loadDashboardContent(user, container, silent = false) {
       </div>
     `;
 
+
+
     lucide.createIcons();
 
     // -- CHARTS --

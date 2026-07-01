@@ -225,7 +225,7 @@ window.openAssignmentModal = function (preselectedId = null) {
                 <div class="grid grid-cols-2 gap-3">
                     <div>
                         <label class="text-xs font-bold mb-1 block uppercase text-muted-foreground">Fecha de Entrega</label>
-                        <input type="date" id="asig-fecha" class="input w-full" value="${new Date().toISOString().split('T')[0]}">
+                        <input type="date" id="asig-fecha" class="input w-full" value="${todayPE()}">
                     </div>
                     <div>
                         <label class="text-xs font-bold mb-1 block uppercase text-muted-foreground">Condición</label>
@@ -355,7 +355,7 @@ window.returnAsset = function (id, nombre) {
                 <p class="text-sm">Registrando devolución de: <strong>${nombre}</strong></p>
                 <div>
                     <label class="text-xs font-bold mb-1 block uppercase">Fecha de Devolución</label>
-                    <input type="date" id="ret-fecha" class="input w-full" value="${new Date().toISOString().split('T')[0]}">
+                    <input type="date" id="ret-fecha" class="input w-full" value="${todayPE()}">
                 </div>
                 <div>
                     <label class="text-xs font-bold mb-1 block uppercase">Condición de Devolución</label>
@@ -636,7 +636,7 @@ window.viewTransferNote = async function(id) {
         // Format created_at for display
         let registradoEl = '';
         if (t.created_at) {
-            const dt = new Date(t.created_at);
+            const dt = parsePEDate(t.created_at);
             const fecha = dt.toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric' });
             const hora  = dt.toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
             registradoEl = `<div class="p-3 bg-slate-50 rounded-lg border border-slate-100">
@@ -747,7 +747,7 @@ window.returnFurnitureTransfer = async function(id) {
                         </div>
                         <div>
                             <label class="text-xs font-bold mb-1 block uppercase">Fecha</label>
-                            <input type="date" id="ret-f-fecha" class="input w-full" value="${new Date().toISOString().split('T')[0]}">
+                            <input type="date" id="ret-f-fecha" class="input w-full" value="${todayPE()}">
                         </div>
                     </div>
 
@@ -876,7 +876,7 @@ window.openTransferModal = function (preselectedId = null) {
                     </div>
                     <div>
                         <label class="text-xs font-bold mb-1 block uppercase text-muted-foreground">Fecha</label>
-                        <input type="date" id="tr-fecha" class="input w-full" value="${new Date().toISOString().split('T')[0]}">
+                        <input type="date" id="tr-fecha" class="input w-full" value="${todayPE()}">
                     </div>
                 </div>
                 <div>
@@ -1105,7 +1105,7 @@ window.viewDispatchNote = async function(id) {
         let fechaStr = '—';
         let horaStr = '';
         if (m.fecha) {
-            const dt = new Date(m.fecha);
+            const dt = parsePEDate(m.fecha);
             fechaStr = dt.toLocaleDateString('es-PE', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' });
             horaStr  = dt.toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
         }

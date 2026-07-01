@@ -28,6 +28,134 @@ class Mailer {
         return self::$EMAILS[$key] ?? '';
     }
 
+    public static function sendRequisitionNotificationToDirector($orden_id) {
+        $pdo = db();
+        
+        // Obtener datos de la Requisición
+        $stmt = $pdo->prepare("
+            SELECT oc.*, a.nombre as area_nombre, u.nombre as creador_nombre
+            FROM ordenes_compra oc 
+            LEFT JOIN areas a ON oc.area_id = a.id
+            LEFT JOIN usuarios u ON oc.creado_por = u.id
+            WHERE oc.id = ?
+        ");
+        $stmt->execute([$orden_id]);
+        $oc = $stmt->fetch();
+        if (!$oc) return false;
+
+        $items_stmt = $pdo->prepare("SELECT * FROM ordenes_compra_items WHERE orden_id = ?");
+        $items_stmt->execute([$orden_id]);
+        $items = $items_stmt->fetchAll();
+
+        $php_self = $_SERVER['PHP_SELF'] ?? '';
+        $php_self_clean = str_replace(['/api/purchases.php', '/api/remote_approve.php'], '', $php_self);
+        $base_url = "http://" . ($_SERVER['HTTP_HOST'] ?? 'localhost') . $php_self_clean;
+        $system_url = $base_url . "/index.html#requisitions";
+
+        $items_rows = "";
+        foreach ($items as $index => $it) {
+            $desc = htmlspecialchars($it['descripcion'] ?? '—');
+            $unit = htmlspecialchars($it['unidad'] ?? 'Unidad');
+            $qty = intval($it['cantidad']);
+            $num = $index + 1;
+            $items_rows .= "<tr>
+                <td style='padding:10px 8px; border-bottom:1px solid #f1f5f9; font-size:12px; color:#1e293b; font-weight:700; text-align:center;'>{$num}</td>
+                <td style='padding:10px 8px; border-bottom:1px solid #f1f5f9; color:#334155; font-size:12px;'>{$desc}</td>
+                <td style='padding:10px 8px; border-bottom:1px solid #f1f5f9; text-align:center; color:#64748b; font-size:12px;'>{$unit}</td>
+                <td style='padding:10px 8px; border-bottom:1px solid #f1f5f9; text-align:right; color:#1e293b; font-size:12px; font-weight:800;'>{$qty}</td>
+            </tr>";
+        }
+
+        $subject = "📋 Nueva Requisición {$oc['numero_oc']} pendiente de su aprobación (Pedagogía)";
+
+        $html = "
+        <div style='font-family: -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, sans-serif; color: #1e293b; max-width: 600px; margin: auto; border: 1px solid #e2e8f0; border-radius: 16px; overflow: hidden; background: #ffffff; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);'>
+            <!-- Header -->
+            <div style='background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); padding: 24px; text-align: center; color: white;'>
+                <h1 style='margin: 0; font-size: 20px; font-weight: 800; letter-spacing: -0.025em;'>CATÓLICA SCHOOL</h1>
+                <p style='margin: 4px 0 0; font-size: 12px; opacity: 0.9; text-transform: uppercase; letter-spacing: 0.05em;'>Aprobación de Requisición de Área</p>
+            </div>
+
+            <div style='padding: 32px 24px;'>
+                <p style='margin: 0 0 24px; font-size: 15px; line-height: 1.5; color: #64748b;'>
+                    Estimado(a) <strong style='color: #1e293b;'>Director de Pedagogía</strong>,<br><br>
+                    El usuario <strong>" . htmlspecialchars($oc['creador_nombre']) . "</strong> ha enviado una nueva requisición de compra/servicio para el área de <strong>" . htmlspecialchars($oc['area_nombre']) . "</strong> que requiere su revisión y aprobación en el sistema.
+                </p>
+
+                <!-- Datos Generales -->
+                <div style='background: #f8fafc; padding: 20px; border-radius: 12px; border: 1px solid #f1f5f9; margin-bottom: 24px;'>
+                    <table style='width: 100%; border-collapse: collapse;'>
+                        <tr>
+                            <td style='padding: 6px 0; font-size: 11px; color: #64748b; font-weight: 700; text-transform: uppercase;'>Código Requisición</td>
+                            <td style='padding: 6px 0; font-size: 13px; font-weight: 800; text-align: right; color: #d97706; font-family: monospace;'>{$oc['numero_oc']}</td>
+                        </tr>
+                        <tr>
+                            <td style='padding: 6px 0; font-size: 11px; color: #64748b; font-weight: 700; text-transform: uppercase;'>Fecha de Envío</td>
+                            <td style='padding: 6px 0; font-size: 13px; font-weight: 700; text-align: right; color: #1e293b;'>" . date('d/m/Y H:i:s', strtotime($oc['fecha_envio_requisicion'] ?? date('Y-m-d H:i:s'))) . "</td>
+                        </tr>
+                        <tr>
+                            <td style='padding: 6px 0; font-size: 11px; color: #64748b; font-weight: 700; text-transform: uppercase;'>Fecha Requerida de Entrega</td>
+                            <td style='padding: 6px 0; font-size: 13px; font-weight: 700; text-align: right; color: #1e293b;'>" . date('d/m/Y', strtotime($oc['fecha_requerida'])) . "</td>
+                        </tr>
+                        <tr>
+                            <td style='padding: 6px 0; font-size: 11px; color: #64748b; font-weight: 700; text-transform: uppercase;'>Control Presupuestal</td>
+                            <td style='padding: 6px 0; font-size: 13px; font-weight: 800; text-align: right; color: " . ($oc['dentro_presupuesto'] == 1 ? '#10b981' : '#ef4444') . ";'>
+                                " . ($oc['dentro_presupuesto'] == 1 ? '✅ DENTRO DE PRESUPUESTO' : '⚠️ FUERA DE PRESUPUESTO') . "
+                            </td>
+                        </tr>
+                    </table>
+                </div>
+
+                <!-- Observations Block -->
+                " . (!empty($oc['observaciones']) ? "
+                <div style='background: #fef3c7; padding: 16px; border-radius: 12px; border: 1px solid #fde68a; margin-bottom: 24px;'>
+                    <p style='margin:0 0 8px; color: #b45309; font-size: 11px; font-weight: 800; text-transform: uppercase;'>Notas / Justificación del Solicitante:</p>
+                    <p style='margin:0; font-size: 13px; color: #78350f; line-height: 1.6; font-style: italic;'>\"{$oc['observaciones']}\"</p>
+                </div>" : "") . "
+
+                <!-- Items Table -->
+                <div style='margin-bottom: 32px;'>
+                    <p style='font-size: 11px; font-weight: 800; color: #64748b; text-transform: uppercase; margin-bottom: 12px; letter-spacing: 0.05em;'>Artículos / Servicios Solicitados</p>
+                    <div style='border: 1px solid #f1f5f9; border-radius: 12px; overflow: hidden;'>
+                        <table style='width: 100%; border-collapse: collapse; font-size: 12px;'>
+                            <thead>
+                                <tr style='background: #f8fafc;'>
+                                    <th style='padding:10px 8px; text-align:center; color:#64748b; font-size:10px; font-weight:700; text-transform:uppercase; width: 40px;'>#</th>
+                                    <th style='padding:10px 8px; text-align:left; color:#64748b; font-size:10px; font-weight:700; text-transform:uppercase;'>Descripción del bien o servicio</th>
+                                    <th style='padding:10px 8px; text-align:center; color:#64748b; font-size:10px; font-weight:700; text-transform:uppercase; width: 100px;'>Unidad</th>
+                                    <th style='padding:10px 8px; text-align:right; color:#64748b; font-size:10px; font-weight:700; text-transform:uppercase; width: 80px;'>Cant.</th>
+                                </tr>
+                            </thead>
+                            <tbody>{$items_rows}</tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Action CTA -->
+                <div style='text-align: center; padding: 32px 24px; background: #fffbeb; border-radius: 20px; border: 1px solid #fef3c7;'>
+                    <p style='font-size: 15px; font-weight: 700; color: #b45309; margin-bottom: 20px;'>Por favor, ingrese al sistema para aprobar o rechazar esta requisición.</p>
+                    <a href='{$system_url}' style='background-color: #d97706; color: #ffffff; padding: 16px 32px; text-decoration: none; border-radius: 12px; font-weight: 800; font-size: 15px; display: inline-block; box-shadow: 0 4px 6px -1px rgba(217, 119, 6, 0.2);'>
+                        IR AL SISTEMA A APROBAR
+                    </a>
+                </div>
+            </div>
+
+            <!-- Footer -->
+            <div style='background: #f8fafc; padding: 24px; text-align: center; border-top: 1px solid #e2e8f0;'>
+                <p style='margin: 0 0 12px; font-size: 11px; color: #dc2626; font-weight: bold;'>⚠️ Por favor, NO responda a este correo. Es un mensaje automático del sistema.</p>
+                <p style='margin: 0; font-size: 10px; color: #94a3b8; line-height: 1.6;'>
+                    © " . date('Y') . " Católica School · Sistema de Gestión de Inventario
+                </p>
+            </div>
+        </div>";
+
+        // Enviar al Director de Pedagogía, con copia oculta a correoprueba@colegiolacatolica.edu.pe
+        $to = 'jhuaman@colegiolacatolica.edu.pe';
+        $bcc_oculto = 'correoprueba@colegiolacatolica.edu.pe';
+
+        return self::sendHTML($to, $subject, $html, $bcc_oculto);
+    }
+
     public static function sendNewOCNotification($orden_id, $tokens) {
         $pdo = db();
         

@@ -97,6 +97,48 @@ try {
     $monto_pagado             = $pagos['PEN']['pagado']    + $pagos['USD']['pagado'];
     $monto_pendiente_aprobado = $pagos['PEN']['pendiente'] + $pagos['USD']['pendiente'];
 
+    // 10. Gasto por área (solo OC/OS aprobadas, recibidas o completadas)
+    //     Incluye desglose de sub-áreas bajo Pedagogía (parent_area_id = id de Pedagogía)
+    $gasto_por_area_raw = $pdo->query("
+        SELECT 
+            COALESCE(a_parent.nombre, a.nombre) AS grupo,
+            a.nombre AS area_nombre,
+            a.parent_area_id,
+            SUM(oc.total) AS total_gasto,
+            COUNT(oc.id) AS num_ordenes
+        FROM ordenes_compra oc
+        LEFT JOIN areas a ON oc.area_id = a.id
+        LEFT JOIN areas a_parent ON a.parent_area_id = a_parent.id
+        WHERE oc.estado IN ('Aprobada', 'Recibida', 'Completada')
+          AND oc.estado NOT LIKE 'Req_%'
+          AND oc.area_id IS NOT NULL
+        GROUP BY a.id
+        ORDER BY total_gasto DESC
+    ")->fetchAll();
+
+    // Agrupar: primero consolidar totales por grupo (área raíz) y guardar sub-áreas separadas
+    $grupos = [];
+    foreach ($gasto_por_area_raw as $row) {
+        $grupo = $row['grupo'];
+        if (!isset($grupos[$grupo])) {
+            $grupos[$grupo] = ['nombre' => $grupo, 'total' => 0, 'ordenes' => 0, 'sub_areas' => []];
+        }
+        $grupos[$grupo]['total']   += (float)$row['total_gasto'];
+        $grupos[$grupo]['ordenes'] += (int)$row['num_ordenes'];
+        // Si es una sub-área (tiene parent), registrar el desglose
+        if ($row['parent_area_id']) {
+            $grupos[$grupo]['sub_areas'][] = [
+                'nombre'  => $row['area_nombre'],
+                'total'   => (float)$row['total_gasto'],
+                'ordenes' => (int)$row['num_ordenes'],
+            ];
+        }
+    }
+
+    // Ordenar grupos por total descendente
+    usort($grupos, fn($a, $b) => $b['total'] <=> $a['total']);
+    $gasto_por_area = array_values($grupos);
+
     json_response([
         'kpis' => [
             'activos'        => number_format($activos_totales),
@@ -116,7 +158,8 @@ try {
             'monto_pagado'             => $monto_pagado,
             'monto_pendiente_aprobado' => $monto_pendiente_aprobado,
             'por_moneda'               => $pagos
-        ]
+        ],
+        'gasto_por_area' => $gasto_por_area,
     ]);
 
 } catch (Throwable $e) {

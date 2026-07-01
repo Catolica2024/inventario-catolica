@@ -30,10 +30,11 @@ try {
                 $stmt = $pdo->prepare("
                     SELECT oc.*, p.razon_social as proveedor_nombre, p.ruc, p.direccion as proveedor_direccion,
                            p.telefono as proveedor_telefono, p.contacto as proveedor_contacto,
-                           a.nombre as area_nombre
+                           a.nombre as area_nombre, u.nombre as creador_nombre
                     FROM ordenes_compra oc
-                    JOIN proveedores p ON oc.proveedor_id = p.id
+                    LEFT JOIN proveedores p ON oc.proveedor_id = p.id
                     LEFT JOIN areas a ON oc.area_id = a.id
+                    LEFT JOIN usuarios u ON oc.creado_por = u.id
                     WHERE oc.id = ?
                 ");
                 $stmt->execute([$_GET['id']]);
@@ -65,9 +66,16 @@ try {
             if (isset($_GET['approved_only'])) {
                 $where = "oc.estado IN ('Aprobada', 'Recibida', 'Completada')";
             }
+            if (isset($_GET['requisitions_only'])) {
+                $where .= " AND oc.estado LIKE 'Req_%'";
+            } else if (!isset($_GET['include_reqs'])) {
+                $where .= " AND oc.estado NOT LIKE 'Req_%'";
+            }
 
             $rows = $pdo->query("
-                SELECT oc.*, p.razon_social as proveedor_nombre, a.nombre as area_nombre,
+                SELECT oc.*, p.razon_social as proveedor_nombre,
+                       COALESCE(a.nombre, a_pers.nombre) as area_nombre,
+                       u.nombre as creador_nombre,
                        (SELECT COUNT(*) FROM ordenes_cuotas WHERE orden_id = oc.id) as total_cuotas_reg,
                        (SELECT COUNT(*) FROM ordenes_cuotas WHERE orden_id = oc.id AND pagado = 1) as cuotas_pagadas,
                        (SELECT COUNT(*) FROM ordenes_cuotas WHERE orden_id = oc.id AND comprobante_url IS NOT NULL AND comprobante_url != '') as cuotas_con_factura,
@@ -77,26 +85,52 @@ try {
                        (SELECT fecha_vencimiento FROM ordenes_cuotas WHERE orden_id = oc.id AND pagado = 0 ORDER BY numero_cuota ASC LIMIT 1) as proxima_cuota_vencimiento,
                        (SELECT numero_cuota FROM ordenes_cuotas WHERE orden_id = oc.id AND pagado = 0 ORDER BY numero_cuota ASC LIMIT 1) as proxima_cuota_numero
                 FROM ordenes_compra oc
-                JOIN proveedores p ON oc.proveedor_id = p.id
+                LEFT JOIN proveedores p ON oc.proveedor_id = p.id
                 LEFT JOIN areas a ON oc.area_id = a.id
+                LEFT JOIN usuarios u ON oc.creado_por = u.id
+                LEFT JOIN personal pers ON u.personal_id = pers.id
+                LEFT JOIN areas a_pers ON pers.area_id = a_pers.id
                 WHERE $where
                 ORDER BY oc.id DESC
             ")->fetchAll();
+
             json_response(['purchases' => $rows]);
             break;
 
         case 'POST':
             $b = get_body();
-            if (empty($b['proveedor_id'])) {
-                json_response(['error' => 'Proveedor requerido'], 400);
+            $estado = $b['estado'] ?? 'Pendiente';
+            
+            // Si el proveedor está vacío o se especifica estado de req, tratamos como requisición
+            $es_req = empty($b['proveedor_id']) || in_array($estado, ['Req_Pendiente_Area', 'Req_Pendiente_Compras']);
+            
+            if ($es_req) {
+                // Simplificación por Roles: Si el rol es 'req_pedagogia' requiere firma del área (Pedagogía). Si no, va directo.
+                $usuario_id = $b['usuario_id'] ?? null;
+                $rol_nombre = '';
+                if ($usuario_id) {
+                    $stmtRol = $pdo->prepare("SELECT r.nombre FROM usuarios u JOIN roles r ON u.rol_id = r.id WHERE u.id = ?");
+                    $stmtRol->execute([$usuario_id]);
+                    $rol_nombre = $stmtRol->fetchColumn();
+                }
+                $estado = ($rol_nombre === 'req_pedagogia') ? 'Req_Pendiente_Area' : 'Req_Pendiente_Compras';
+            } else {
+                if (empty($b['proveedor_id'])) {
+                    json_response(['error' => 'Proveedor requerido para órdenes de compra/servicio'], 400);
+                }
             }
 
             $tipo = $b['tipo'] ?? 'compra';
-            $prefix = ($tipo === 'servicio') ? 'OS' : 'OC';
+            $prefix = $es_req ? 'RQ' : (($tipo === 'servicio') ? 'OS' : 'OC');
 
-            // Auto-generar número correlativo según tipo
-            $stmtLast = $pdo->prepare("SELECT numero_oc FROM ordenes_compra WHERE tipo = ? ORDER BY id DESC LIMIT 1");
-            $stmtLast->execute([$tipo]);
+            // Auto-generar número correlativo según prefijo/tipo
+            if ($prefix === 'RQ') {
+                $stmtLast = $pdo->prepare("SELECT numero_oc FROM ordenes_compra WHERE numero_oc LIKE 'RQ-%' ORDER BY id DESC LIMIT 1");
+                $stmtLast->execute([]);
+            } else {
+                $stmtLast = $pdo->prepare("SELECT numero_oc FROM ordenes_compra WHERE tipo = ? AND numero_oc NOT LIKE 'RQ-%' ORDER BY id DESC LIMIT 1");
+                $stmtLast->execute([$tipo]);
+            }
             $last = $stmtLast->fetchColumn();
             $num = 1;
             if ($last) { preg_match('/(\d+)$/', $last, $m); $num = intval($m[1] ?? 0) + 1; }
@@ -120,14 +154,14 @@ try {
             $pdo->beginTransaction();
             $stmt = $pdo->prepare("
                 INSERT INTO ordenes_compra
-                  (creado_por, numero_oc, tipo, proveedor_id, activo_id, fecha, area_id, moneda, condicion_pago, condicion_detalle, adelanto_porcentaje, adelanto_monto, saldo_monto, fecha_requerida, subtotal, igv, igv_porcentaje, precios_con_igv, total, monto, estado, observaciones, incluye_movilidad, monto_movilidad, dentro_presupuesto, es_alquiler, dia_pago, fecha_pago_adelanto, fecha_pago_saldo_proyectado)
-                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                  (creado_por, numero_oc, tipo, proveedor_id, activo_id, fecha, area_id, moneda, condicion_pago, condicion_detalle, adelanto_porcentaje, adelanto_monto, saldo_monto, fecha_requerida, subtotal, igv, igv_porcentaje, precios_con_igv, total, monto, estado, observaciones, incluye_movilidad, monto_movilidad, dentro_presupuesto, es_alquiler, dia_pago, fecha_pago_adelanto, fecha_pago_saldo_proyectado, fecha_envio_requisicion)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             ");
             $stmt->execute([
                 $b['usuario_id'] ?? null,
                 $numero_oc,
                 $tipo,
-                $b['proveedor_id'],
+                !empty($b['proveedor_id']) ? $b['proveedor_id'] : null,
                 $b['activo_id'] ?? null,
                 $b['fecha'] ?? date('Y-m-d'),
                 $b['area_id'] ?? null,
@@ -144,7 +178,7 @@ try {
                 $incluido ? 1 : 0,
                 $total,
                 $total,
-                'Pendiente',
+                $estado,
                 $b['observaciones'] ?? null,
                 $b['incluye_movilidad'] ?? 1,
                 $b['monto_movilidad'] ?? 0,
@@ -152,7 +186,8 @@ try {
                 ($b['condicion_pago'] ?? '') === 'Alquiler' ? 1 : 0,
                 isset($b['dia_pago']) ? (int)$b['dia_pago'] : null,
                 $b['fecha_pago_adelanto'] ?? null,
-                $b['fecha_pago_saldo_proyectado'] ?? null
+                $b['fecha_pago_saldo_proyectado'] ?? null,
+                $es_req ? date('Y-m-d H:i:s') : null
             ]);
             $orden_id = $pdo->lastInsertId();
 
@@ -306,6 +341,23 @@ try {
                 }
             }
 
+            // Si es una requisición, guardar y salir inmediatamente (sin tokens ni correos a gerencia)
+            if ($es_req) {
+                $pdo->commit();
+
+                if ($estado === 'Req_Pendiente_Area') {
+                    try {
+                        require_once __DIR__ . '/../includes/mailer.php';
+                        Mailer::sendRequisitionNotificationToDirector($orden_id);
+                    } catch (Exception $ex) {
+                        error_log("No se pudo enviar notificación de requisición al director: " . $ex->getMessage());
+                    }
+                }
+
+                json_response(['ok' => true, 'id' => $orden_id, 'numero_oc' => $numero_oc]);
+                break;
+            }
+
             // Cargar Mailer antes de los tokens para acceder a los emails configurados
             require_once __DIR__ . '/../includes/mailer.php';
 
@@ -341,6 +393,36 @@ try {
             $b = get_body();
             $id = $b['id'] ?? null;
             if (!$id) json_response(['error' => 'ID requerido'], 400);
+
+            // ── Actualizar estado de requisición (aprobación/rechazo simple) ──
+            if (($b['action'] ?? '') === 'update_status') {
+                $estado = $b['estado'] ?? null;
+                if (!$estado) json_response(['error' => 'Estado requerido'], 400);
+
+                // Obtener estado anterior
+                $stmtOC = $pdo->prepare("SELECT estado FROM ordenes_compra WHERE id = ?");
+                $stmtOC->execute([$id]);
+                $estado_anterior = $stmtOC->fetchColumn();
+                if (!$estado_anterior) json_response(['error' => 'Orden no encontrada'], 404);
+
+                $pdo->beginTransaction();
+                
+                $stmt = $pdo->prepare("UPDATE ordenes_compra SET estado = ? WHERE id = ?");
+                $stmt->execute([$estado, $id]);
+
+                if ($estado_anterior === 'Req_Pendiente_Area' && $estado === 'Req_Pendiente_Compras') {
+                    $pdo->prepare("UPDATE ordenes_compra SET fecha_aprobacion_director = NOW() WHERE id = ?")->execute([$id]);
+                }
+
+                if ($estado === 'Req_Rechazada' && isset($b['motivo_rechazo'])) {
+                    $pdo->prepare("UPDATE ordenes_compra SET motivo_rechazo = ?, rechazo_por = ? WHERE id = ?")
+                        ->execute([$b['motivo_rechazo'], $b['rechazo_por'] ?? 'Director', $id]);
+                }
+
+                $pdo->commit();
+                json_response(['ok' => true]);
+                break;
+            }
 
             // ── Guardar links de Google Drive (solo URLs, sin datos extra) ──
             if (($b['action'] ?? '') === 'save_drive_links') {
@@ -407,11 +489,274 @@ try {
                 break;
             }
 
-            // Si es una actualización completa (desde edición)
-            if (isset($b['proveedor_id'])) {
-                $stmt = $pdo->prepare("UPDATE ordenes_compra SET proveedor_id=?, fecha=?, area_id=?, monto=?, estado=?, observaciones=?, dentro_presupuesto=? WHERE id=?");
-                $stmt->execute([$b['proveedor_id'], $b['fecha'], $b['area_id'] ?? null, $b['monto'], $b['estado'], $b['observaciones'] ?? null, isset($b['dentro_presupuesto']) ? (int)$b['dentro_presupuesto'] : 1, $id]);
-                json_response(['ok' => true]);
+            // Si es una actualización completa (desde edición o procesamiento de requisición)
+            if (isset($b['action']) && $b['action'] === 'full_update' || isset($b['proveedor_id'])) {
+                // Obtener datos actuales de la OC
+                $stmtOC = $pdo->prepare("SELECT numero_oc, creado_por, tipo, estado FROM ordenes_compra WHERE id = ?");
+                $stmtOC->execute([$id]);
+                $currOC = $stmtOC->fetch();
+                if (!$currOC) json_response(['error' => 'Orden no encontrada'], 404);
+
+                $estado_anterior = $currOC['estado'];
+                $estado_nuevo = $b['estado'] ?? $estado_anterior;
+
+                // Si es una requisición que pasa a Pendiente (se convierte a OC/OS formal)
+                $numero_oc = $currOC['numero_oc'];
+                $tipo = $b['tipo'] ?? $currOC['tipo'] ?? 'compra';
+                
+                if (strpos($numero_oc, 'RQ-') === 0 && $estado_nuevo === 'Pendiente') {
+                    $prefix = ($tipo === 'servicio') ? 'OS' : 'OC';
+                    $stmtLast = $pdo->prepare("SELECT numero_oc FROM ordenes_compra WHERE tipo = ? AND numero_oc NOT LIKE 'RQ-%' ORDER BY id DESC LIMIT 1");
+                    $stmtLast->execute([$tipo]);
+                    $last = $stmtLast->fetchColumn();
+                    $num = 1;
+                    if ($last) { preg_match('/(\d+)$/', $last, $m); $num = intval($m[1] ?? 0) + 1; }
+                    $numero_oc = $prefix . '-' . date('Y') . '-' . str_pad($num, 3, '0', STR_PAD_LEFT);
+                }
+
+                $items = $b['items'] ?? [];
+                $porc = floatval($b['igv_porcentaje'] ?? 18) / 100;
+                $base = array_sum(array_map(fn($i) => floatval($i['total'] ?? 0), $items));
+                $incluido = !empty($b['precios_con_igv']);
+
+                if ($incluido) {
+                    $total = round($base, 2);
+                    $subtotal = round($total / (1 + $porc), 2);
+                    $igv = round($total - $subtotal, 2);
+                } else {
+                    $subtotal = round($base, 2);
+                    $igv = round($subtotal * $porc, 2);
+                    $total = round($subtotal + $igv, 2);
+                }
+
+                $pdo->beginTransaction();
+
+                $stmt = $pdo->prepare("
+                    UPDATE ordenes_compra SET 
+                        numero_oc = ?,
+                        tipo = ?,
+                        proveedor_id = ?,
+                        activo_id = ?,
+                        fecha = ?,
+                        area_id = ?,
+                        moneda = ?,
+                        condicion_pago = ?,
+                        condicion_detalle = ?,
+                        adelanto_porcentaje = ?,
+                        adelanto_monto = ?,
+                        saldo_monto = ?,
+                        fecha_requerida = ?,
+                        subtotal = ?,
+                        igv = ?,
+                        igv_porcentaje = ?,
+                        precios_con_igv = ?,
+                        total = ?,
+                        monto = ?,
+                        estado = ?,
+                        observaciones = ?,
+                        incluye_movilidad = ?,
+                        monto_movilidad = ?,
+                        dentro_presupuesto = ?,
+                        es_alquiler = ?,
+                        dia_pago = ?,
+                        fecha_pago_adelanto = ?,
+                        fecha_pago_saldo_proyectado = ?
+                    WHERE id = ?
+                ");
+                $stmt->execute([
+                    $numero_oc,
+                    $tipo,
+                    !empty($b['proveedor_id']) ? $b['proveedor_id'] : null,
+                    $b['activo_id'] ?? null,
+                    $b['fecha'] ?? date('Y-m-d'),
+                    $b['area_id'] ?? null,
+                    $b['moneda'] ?? 'PEN',
+                    $b['condicion_pago'] ?? 'Al contado',
+                    $b['condicion_detalle'] ?? null,
+                    $b['adelanto_porcentaje'] ?? null,
+                    $b['adelanto_monto'] ?? null,
+                    $b['saldo_monto'] ?? null,
+                    $b['fecha_requerida'] ?? null,
+                    $subtotal,
+                    $igv,
+                    $b['igv_porcentaje'] ?? 18,
+                    $incluido ? 1 : 0,
+                    $total,
+                    $total,
+                    $estado_nuevo,
+                    $b['observaciones'] ?? null,
+                    $b['incluye_movilidad'] ?? 1,
+                    $b['monto_movilidad'] ?? 0,
+                    isset($b['dentro_presupuesto']) ? (int)$b['dentro_presupuesto'] : 1,
+                    ($b['condicion_pago'] ?? '') === 'Alquiler' ? 1 : 0,
+                    isset($b['dia_pago']) ? (int)$b['dia_pago'] : null,
+                    $b['fecha_pago_adelanto'] ?? null,
+                    $b['fecha_pago_saldo_proyectado'] ?? null,
+                    $id
+                ]);
+
+                if ($estado_anterior === 'Req_Pendiente_Area' && $estado_nuevo === 'Req_Pendiente_Compras') {
+                    $pdo->prepare("UPDATE ordenes_compra SET fecha_aprobacion_director = NOW() WHERE id = ?")->execute([$id]);
+                }
+
+                // Actualizar ítems
+                $pdo->prepare("DELETE FROM ordenes_compra_items WHERE orden_id = ?")->execute([$id]);
+                if (!empty($items)) {
+                    $si = $pdo->prepare("INSERT INTO ordenes_compra_items (orden_id, item_id, categoria_nombre, prefijo, descripcion, unidad, cantidad, precio_unitario, total, factor_conversion) VALUES (?,?,?,?,?,?,?,?,?,?)");
+                    foreach ($items as $it) {
+                        $si->execute([
+                            $id,
+                            $it['item_id'] ?? null,
+                            $it['categoria_nombre'] ?? null,
+                            $it['prefijo'] ?? null,
+                            $it['descripcion'],
+                            $it['unidad'] ?? 'Unidad',
+                            $it['cantidad'],
+                            $it['precio_unitario'],
+                            $it['total'],
+                            $it['factor_conversion'] ?? 1.00
+                        ]);
+                    }
+                }
+
+                // Si la orden de servicio está vinculada a un activo y es servicio
+                if ($tipo === 'servicio' && !empty($b['activo_id']) && $estado_nuevo === 'Pendiente') {
+                    // Verificar si ya tiene mantenimiento para esta orden
+                    $stmtM = $pdo->prepare("SELECT id FROM mantenimientos WHERE orden_compra_id = ?");
+                    $stmtM->execute([$id]);
+                    if (!$stmtM->fetchColumn()) {
+                        $stmtAct = $pdo->prepare("SELECT item_id FROM activos WHERE id = ?");
+                        $stmtAct->execute([$b['activo_id']]);
+                        $act = $stmtAct->fetch();
+                        if ($act) {
+                            $sm = $pdo->prepare("INSERT INTO mantenimientos (activo_id, item_id, proveedor_id, tipo, estado, fecha_inicio, costo, descripcion_problema, orden_compra_id) VALUES (?,?,?,?,?,?,?,?,?)");
+                            $sm->execute([
+                                $b['activo_id'],
+                                $act['item_id'],
+                                $b['proveedor_id'],
+                                'Correctivo',
+                                'Iniciado',
+                                date('Y-m-d'),
+                                $total,
+                                'Servicio solicitado vía OS #' . $numero_oc . '. ' . ($b['observaciones'] ?? ''),
+                                $id
+                            ]);
+                            $pdo->prepare("UPDATE activos SET estado = 'Mantenimiento' WHERE id = ?")->execute([$b['activo_id']]);
+                        }
+                    }
+                }
+
+                // Generar cuotas si el estado es Pendiente y se convierte de requisición
+                if ($estado_nuevo === 'Pendiente' && strpos($currOC['numero_oc'], 'RQ-') === 0) {
+                    $condPago = $b['condicion_pago'] ?? 'Al contado';
+                    // Recrear cuotas
+                    $pdo->prepare("DELETE FROM ordenes_cuotas WHERE orden_id = ?")->execute([$id]);
+                    
+                    if ($condPago === 'Credito') {
+                        $cTipo = $b['credito_tipo'] ?? 'Dias';
+                        if ($cTipo === 'Cuotas') {
+                            $numCuotas = max(2, (int)($b['condicion_val'] ?? 2));
+                            $montoCuota = round($total / $numCuotas, 2);
+                            $diaMesCuotas = isset($b['cuotas_dia_mes']) ? (int)$b['cuotas_dia_mes'] : null;
+                            $fechaInicioCuotas = $b['cuotas_fecha_inicio'] ?? null;
+                            
+                            if ($fechaInicioCuotas) {
+                                $scuota = $pdo->prepare("INSERT INTO ordenes_cuotas (orden_id, numero_cuota, total_cuotas, monto_cuota, fecha_vencimiento, descripcion) VALUES (?,?,?,?,?,?)");
+                                $dt = new DateTime($fechaInicioCuotas);
+                                $meses_es = ['', 'Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+                                for ($c = 1; $c <= $numCuotas; $c++) {
+                                    if ($c > 1 && $diaMesCuotas) {
+                                        $maxDia = (int)(new DateTime($dt->format('Y-m-01')))->format('t');
+                                        $dt->setDate((int)$dt->format('Y'), (int)$dt->format('n'), min($diaMesCuotas, $maxDia));
+                                    }
+                                    $fVenc = $dt->format('Y-m-d');
+                                    $label = 'Cuota ' . $c . ' de ' . $numCuotas . ' - ' . $meses_es[(int)$dt->format('n')] . ' ' . $dt->format('Y');
+                                    $scuota->execute([$id, $c, $numCuotas, $montoCuota, $fVenc, $label]);
+                                    $dt->modify('first day of next month');
+                                }
+                            } else {
+                                $scuota2 = $pdo->prepare("INSERT INTO ordenes_cuotas (orden_id, numero_cuota, total_cuotas, monto_cuota, fecha_vencimiento) VALUES (?,?,?,?,?)");
+                                for ($c = 1; $c <= $numCuotas; $c++) {
+                                    $fVenc = date('Y-m-d', strtotime('+' . ($c * 30) . ' days', strtotime($b['fecha'] ?? 'now')));
+                                    $scuota2->execute([$id, $c, $numCuotas, $montoCuota, $fVenc]);
+                                }
+                            }
+                        }
+                    } else if ($condPago === 'Alquiler') {
+                        $diaPago = isset($b['dia_pago']) ? (int)$b['dia_pago'] : 1;
+                        $mesesTotal = isset($b['meses_alquiler']) ? max(1, (int)$b['meses_alquiler']) : 24;
+                        $montoCuota = round($total / $mesesTotal, 2);
+                        $fechaInicio = $b['fecha_primera_cuota'] ?? null;
+                        
+                        if (!$fechaInicio) {
+                            $hoy = new DateTime();
+                            $anio = (int)$hoy->format('Y');
+                            $mes  = (int)$hoy->format('n');
+                            if ((int)$hoy->format('j') >= $diaPago) { $mes++; }
+                            if ($mes > 12) { $mes = 1; $anio++; }
+                            $diaCap = min($diaPago, (int)(new DateTime("$anio-$mes-01"))->format('t'));
+                            $fechaInicio = sprintf('%04d-%02d-%02d', $anio, $mes, $diaCap);
+                        }
+                        
+                        $scuota = $pdo->prepare("INSERT INTO ordenes_cuotas (orden_id, numero_cuota, total_cuotas, monto_cuota, fecha_vencimiento, descripcion) VALUES (?,?,?,?,?,?)");
+                        $dt = new DateTime($fechaInicio);
+                        $meses_es = ['', 'Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+                        for ($c = 1; $c <= $mesesTotal; $c++) {
+                            $fVenc = $dt->format('Y-m-d');
+                            $label = 'Alquiler - ' . $meses_es[(int)$dt->format('n')] . ' ' . $dt->format('Y');
+                            $scuota->execute([$id, $c, $mesesTotal, $montoCuota, $fVenc, $label]);
+                            $dt->modify('first day of next month');
+                            $diaCap = min($diaPago, (int)$dt->format('t'));
+                            $dt->setDate((int)$dt->format('Y'), (int)$dt->format('n'), $diaCap);
+                        }
+                    }
+                }
+
+                // Si tiene movilidad
+                if (isset($b['incluye_movilidad']) && $b['incluye_movilidad'] == 0 && !empty($b['mobility']) && $estado_nuevo === 'Pendiente') {
+                    $mob = $b['mobility'];
+                    $pdo->prepare("DELETE FROM ordenes_movilidad WHERE orden_id = ?")->execute([$id]);
+                    $stmtMob = $pdo->prepare("INSERT INTO ordenes_movilidad (orden_id, monto, descripcion, fecha, proveedor_id) VALUES (?,?,?,?,?)");
+                    $stmtMob->execute([
+                        $id,
+                        $mob['monto'],
+                        $mob['descripcion'] ?? 'Movilidad de la orden',
+                        $mob['fecha'] ?? date('Y-m-d'),
+                        $mob['proveedor_id'] ?? null
+                    ]);
+                }
+
+                // Si pasa a Pendiente y el número original era RQ, generar tokens y mandar correos
+                if (strpos($currOC['numero_oc'], 'RQ-') === 0 && $estado_nuevo === 'Pendiente') {
+                    require_once __DIR__ . '/../includes/mailer.php';
+                    $token_gerente  = bin2hex(random_bytes(32));
+                    $token_finanzas = bin2hex(random_bytes(32));
+                    $exp = date('Y-m-d H:i:s', strtotime('+168 hours'));
+
+                    $email_gerente  = Mailer::getEmail('gerente');
+                    $email_finanzas = Mailer::getEmail('finanzas');
+
+                    $st = $pdo->prepare("INSERT INTO ordenes_compra_tokens (orden_id, token, rol, expiracion, email_destinatario) VALUES (?,?,?,?,?)");
+                    $st->execute([$id, $token_gerente,  'gerente_general', $exp, $email_gerente]);
+                    $st->execute([$id, $token_finanzas, 'jefe_finanzas',   $exp, $email_finanzas]);
+
+                    try {
+                        Mailer::sendNewOCNotification($id, [
+                            'gerente'  => $token_gerente,
+                            'finanzas' => $token_finanzas
+                        ]);
+                    } catch (Exception $e) {
+                        error_log("Error enviando correo OC $id: " . $e->getMessage());
+                    }
+
+                    // Notificar al creador de la requisición que ha sido convertida a orden
+                    $msg = "Tu requisición {$currOC['numero_oc']} ha sido procesada por compras y convertida en la Orden {$numero_oc}. Ya entró al flujo de firmas.";
+                    $pdo->prepare("INSERT INTO notificaciones (usuario_id, titulo, mensaje, tipo) VALUES (?, 'Requisición Procesada', ?, 'success')")
+                        ->execute([$currOC['creado_por'], $msg]);
+                }
+
+                $pdo->commit();
+                json_response(['ok' => true, 'id' => $id, 'numero_oc' => $numero_oc]);
                 break;
             }
 
@@ -469,6 +814,42 @@ try {
                     $pdo->prepare("INSERT INTO notificaciones (usuario_id, titulo, mensaje, tipo) VALUES (?, 'Aprobación Parcial', ?, 'info')")
                         ->execute([$ocInfo['creado_por'], $msg]);
                 }
+            } else if (($b['action'] ?? '') === 'clear_voucher') {
+                // Solo el administrador (rol = 'admin') puede borrar vouchers
+                $user_id = $b['usuario_id'] ?? null;
+                if (!$user_id) json_response(['error' => 'Usuario requerido'], 400);
+
+                $stmtUser = $pdo->prepare("SELECT r.nombre FROM usuarios u JOIN roles r ON u.rol_id = r.id WHERE u.id = ?");
+                $stmtUser->execute([$user_id]);
+                $rol_nombre = $stmtUser->fetchColumn();
+
+                if ($rol_nombre !== 'admin') {
+                    json_response(['error' => 'Solo el administrador puede eliminar vouchers.'], 403);
+                }
+
+                $type = $b['type'] ?? null; // 'cuota', 'adelanto', 'saldo', 'mobility'
+                if ($type === 'cuota') {
+                    $cuota_id = $b['cuota_id'] ?? null;
+                    if (!$cuota_id) json_response(['error' => 'cuota_id requerido'], 400);
+                    
+                    $stmt = $pdo->prepare("UPDATE ordenes_cuotas SET pagado = 0, fecha_pago = NULL, voucher_url = NULL WHERE id = ? AND orden_id = ?");
+                    $stmt->execute([$cuota_id, $id]);
+                    
+                    // Si se anula una cuota, desmarcar la OC/OS de pagado completo
+                    $pdo->prepare("UPDATE ordenes_compra SET pagado = 0, fecha_pago = NULL WHERE id = ?")->execute([$id]);
+                } else if ($type === 'adelanto') {
+                    $stmt = $pdo->prepare("UPDATE ordenes_compra SET adelanto_pagado = 0, adelanto_fecha = NULL, adelanto_voucher = NULL WHERE id = ?");
+                    $stmt->execute([$id]);
+                } else if ($type === 'saldo' || $type === 'pago_unico') {
+                    $stmt = $pdo->prepare("UPDATE ordenes_compra SET pagado = 0, fecha_pago = NULL, voucher_url = NULL WHERE id = ?");
+                    $stmt->execute([$id]);
+                } else if ($type === 'mobility') {
+                    $stmt = $pdo->prepare("UPDATE ordenes_movilidad SET pagado = 0, fecha_pago = NULL, voucher_url = NULL WHERE orden_id = ?");
+                    $stmt->execute([$id]);
+                } else {
+                    json_response(['error' => 'Tipo de voucher no soportado'], 400);
+                }
+
                 json_response(['ok' => true]);
             } else if (($b['action'] ?? '') === 'pay_cuota') {
                 // Pagar una cuota individual
@@ -923,7 +1304,18 @@ try {
 
         case 'DELETE':
             $id = $_GET['id'] ?? null;
+            $user_id = $_GET['usuario_id'] ?? null;
             if (!$id) json_response(['error' => 'ID requerido'], 400);
+            if (!$user_id) json_response(['error' => 'Usuario no especificado para la eliminación'], 400);
+
+            // Validar que sea administrador
+            $stmtUser = $pdo->prepare("SELECT r.nombre FROM usuarios u JOIN roles r ON u.rol_id = r.id WHERE u.id = ?");
+            $stmtUser->execute([$user_id]);
+            $rol_nombre = $stmtUser->fetchColumn();
+
+            if ($rol_nombre !== 'admin') {
+                json_response(['error' => 'Solo el administrador puede eliminar requisiciones/órdenes.'], 403);
+            }
             
             $pdo->beginTransaction();
             // Eliminar registros relacionados primero

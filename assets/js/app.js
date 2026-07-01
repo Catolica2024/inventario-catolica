@@ -1,4 +1,58 @@
 // Vista principal: monta login o app según sesión
+
+// ─────────────────────────────────────────────────────────────────────────────
+// UTILIDADES DE ZONA HORARIA — PERÚ (America/Lima, UTC-5)
+// Todas las fechas que llegan del servidor ya vienen en hora peruana (UTC-5).
+// Al parsearlas con new Date() sin offset, el navegador asume UTC, lo que puede
+// mostrar la hora incorrecta si el usuario está en otra zona horaria.
+// Estas funciones garantizan la interpretación y display correcto en hora peruana.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Parsea un string de fecha/datetime del servidor (guardado en hora peruana)
+ * y devuelve un objeto Date correctamente interpretado como hora peruana.
+ * Soporta formatos: 'YYYY-MM-DD HH:MM:SS', 'YYYY-MM-DD HH:MM', 'YYYY-MM-DD'
+ */
+window.parsePEDate = function(dtStr) {
+  if (!dtStr) return null;
+  // Normalizar: reemplazar espacio por T y agregar offset de Perú (-05:00)
+  const normalized = dtStr.trim().replace(' ', 'T');
+  // Si ya tiene timezone info, no añadir
+  if (normalized.includes('+') || normalized.includes('Z') || /T.*-\d\d:\d\d$/.test(normalized)) {
+    return new Date(normalized);
+  }
+  // Agregar offset de Perú para interpretación correcta
+  return new Date(normalized + '-05:00');
+};
+
+/**
+ * Formatea un string de fecha del servidor a formato peruano legible.
+ * @param {string} dtStr - Fecha del servidor
+ * @param {boolean} includeTime - Si true, incluye la hora (HH:MM)
+ * @returns {string} Fecha formateada, ej: "01/07/2026" o "01/07/2026 13:45"
+ */
+window.formatPEDate = function(dtStr, includeTime = false) {
+  if (!dtStr) return '—';
+  const d = window.parsePEDate(dtStr);
+  if (!d || isNaN(d.getTime())) return dtStr;
+  const opts = { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'America/Lima' };
+  if (includeTime) {
+    opts.hour = '2-digit';
+    opts.minute = '2-digit';
+    opts.hour12 = false;
+  }
+  return d.toLocaleString('es-PE', opts);
+};
+
+/**
+ * Devuelve la fecha de hoy en horario peruano en formato YYYY-MM-DD.
+ * Útil para valores por defecto de inputs type="date".
+ */
+window.todayPE = function() {
+  return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Lima' }); // en-CA → YYYY-MM-DD
+};
+
+
 (function(){
   const root = () => document.getElementById('app-root');
 
@@ -19,6 +73,9 @@
     ]},
     { label:'Mantenimientos y Reparaciones', items:[
       { id:'maintenance',    label:'Mantenimiento',       icon:'wrench' },
+    ]},
+    { label:'Requisiciones', items:[
+      { id:'requisitions',  label:'Requisiciones',       icon:'clipboard-list' },
     ]},
     { label:'Gestión de Compras', items:[
       { id:'purchases',  label:'Órdenes de Compra',   icon:'shopping-cart' },

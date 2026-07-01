@@ -111,7 +111,6 @@ try {
             ],
         ],
 
-        // ---- areas (depende: sedes) ----
         'areas' => [
             'create_sql' => "CREATE TABLE `areas` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
@@ -119,6 +118,8 @@ try {
   `nombre` varchar(100) NOT NULL,
   `descripcion` varchar(255) DEFAULT NULL,
   `sede_id` int(11) DEFAULT NULL,
+  `parent_area_id` int(11) DEFAULT NULL,
+  `jefe_id` int(11) DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `nombre` (`nombre`),
   UNIQUE KEY `codigo` (`codigo`),
@@ -126,11 +127,13 @@ try {
   CONSTRAINT `fk_areas_sede` FOREIGN KEY (`sede_id`) REFERENCES `sedes` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
             'columns' => [
-                'id'          => ['definition' => 'int(11) NOT NULL auto_increment',  'after' => null],
-                'codigo'      => ['definition' => 'varchar(20) NULL DEFAULT NULL',    'after' => 'id'],
-                'nombre'      => ['definition' => 'varchar(100) NOT NULL',            'after' => 'codigo'],
-                'descripcion' => ['definition' => 'varchar(255) NULL DEFAULT NULL',   'after' => 'nombre'],
-                'sede_id'     => ['definition' => 'int(11) NULL DEFAULT NULL',        'after' => 'descripcion'],
+                'id'             => ['definition' => 'int(11) NOT NULL auto_increment',  'after' => null],
+                'codigo'         => ['definition' => 'varchar(20) NULL DEFAULT NULL',    'after' => 'id'],
+                'nombre'         => ['definition' => 'varchar(100) NOT NULL',            'after' => 'codigo'],
+                'descripcion'    => ['definition' => 'varchar(255) NULL DEFAULT NULL',   'after' => 'nombre'],
+                'sede_id'        => ['definition' => 'int(11) NULL DEFAULT NULL',        'after' => 'descripcion'],
+                'parent_area_id' => ['definition' => 'int(11) NULL DEFAULT NULL',        'after' => 'sede_id'],
+                'jefe_id'        => ['definition' => 'int(11) NULL DEFAULT NULL',        'after' => 'parent_area_id'],
             ],
         ],
 
@@ -545,12 +548,12 @@ try {
   `creado_por` int(11) DEFAULT NULL,
   `numero_oc` varchar(20) DEFAULT NULL,
   `tipo` enum('compra','servicio') DEFAULT 'compra',
-  `proveedor_id` int(11) NOT NULL,
+  `proveedor_id` int(11) DEFAULT NULL,
   `activo_id` int(11) DEFAULT NULL,
   `area_id` int(11) DEFAULT NULL,
   `fecha` date DEFAULT NULL,
   `monto` decimal(10,2) DEFAULT NULL,
-  `estado` enum('Pendiente','Aprobada','Rechazada','Recibida','Completada') DEFAULT 'Pendiente',
+  `estado` enum('Req_Pendiente_Area','Req_Pendiente_Compras','Req_Rechazada','Pendiente','Aprobada','Rechazada','Recibida','Completada') DEFAULT 'Pendiente',
   `fecha_aprobacion` datetime DEFAULT NULL,
   `pagado` tinyint(1) DEFAULT 0,
   `fecha_pago` datetime DEFAULT NULL,
@@ -598,6 +601,8 @@ try {
   `fecha_pago_adelanto` date DEFAULT NULL,
   `fecha_pago_saldo_proyectado` date DEFAULT NULL,
   `ultimo_recordatorio` datetime DEFAULT NULL,
+  `fecha_envio_requisicion` datetime DEFAULT NULL,
+  `fecha_aprobacion_director` datetime DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `numero_oc` (`numero_oc`),
   KEY `proveedor_id` (`proveedor_id`),
@@ -610,12 +615,12 @@ try {
                 'creado_por'                  => ['definition' => 'int(11) NULL DEFAULT NULL',       'after' => 'id'],
                 'numero_oc'                   => ['definition' => 'varchar(20) NULL DEFAULT NULL',   'after' => 'creado_por'],
                 'tipo'                        => ['definition' => "enum('compra','servicio') NULL DEFAULT 'compra'", 'after' => 'numero_oc'],
-                'proveedor_id'                => ['definition' => 'int(11) NOT NULL',                'after' => 'tipo'],
+                'proveedor_id'                => ['definition' => 'int(11) NULL DEFAULT NULL',       'after' => 'tipo'],
                 'activo_id'                   => ['definition' => 'int(11) NULL DEFAULT NULL',       'after' => 'proveedor_id'],
                 'area_id'                     => ['definition' => 'int(11) NULL DEFAULT NULL',       'after' => 'activo_id'],
                 'fecha'                       => ['definition' => 'date NULL DEFAULT NULL',          'after' => 'area_id'],
                 'monto'                       => ['definition' => 'decimal(10,2) NULL DEFAULT NULL', 'after' => 'fecha'],
-                'estado'                      => ['definition' => "enum('Pendiente','Aprobada','Rechazada','Recibida','Completada') NULL DEFAULT 'Pendiente'", 'after' => 'monto'],
+                'estado'                      => ['definition' => "enum('Req_Pendiente_Area','Req_Pendiente_Compras','Req_Rechazada','Pendiente','Aprobada','Rechazada','Recibida','Completada') NULL DEFAULT 'Pendiente'", 'after' => 'monto'],
                 'fecha_aprobacion'            => ['definition' => 'datetime NULL DEFAULT NULL',      'after' => 'estado'],
                 'pagado'                      => ['definition' => "tinyint(1) NULL DEFAULT '0'",     'after' => 'fecha_aprobacion'],
                 'fecha_pago'                  => ['definition' => 'datetime NULL DEFAULT NULL',      'after' => 'pagado'],
@@ -663,6 +668,8 @@ try {
                 'fecha_pago_adelanto'         => ['definition' => 'date NULL DEFAULT NULL',          'after' => 'dia_pago'],
                 'fecha_pago_saldo_proyectado' => ['definition' => 'date NULL DEFAULT NULL',          'after' => 'fecha_pago_adelanto'],
                 'ultimo_recordatorio'         => ['definition' => 'datetime NULL DEFAULT NULL',      'after' => 'fecha_pago_saldo_proyectado'],
+                'fecha_envio_requisicion'     => ['definition' => 'datetime NULL DEFAULT NULL',      'after' => 'ultimo_recordatorio'],
+                'fecha_aprobacion_director'   => ['definition' => 'datetime NULL DEFAULT NULL',      'after' => 'fecha_envio_requisicion'],
             ],
         ],
 
@@ -776,6 +783,9 @@ try {
   `voucher_url` varchar(255) DEFAULT NULL,
   `pagado` tinyint(1) DEFAULT 0,
   `fecha_pago` datetime DEFAULT NULL,
+  `banco` varchar(100) DEFAULT NULL,
+  `numero_cuenta` varchar(50) DEFAULT NULL,
+  `cci` varchar(50) DEFAULT NULL,
   PRIMARY KEY (`id`),
   KEY `orden_id` (`orden_id`),
   KEY `fk_mob_supplier` (`proveedor_id`),
@@ -783,15 +793,18 @@ try {
   CONSTRAINT `ordenes_movilidad_ibfk_1` FOREIGN KEY (`orden_id`) REFERENCES `ordenes_compra` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
             'columns' => [
-                'id'           => ['definition' => 'int(11) NOT NULL auto_increment',  'after' => null],
-                'orden_id'     => ['definition' => 'int(11) NOT NULL',                 'after' => 'id'],
-                'monto'        => ['definition' => 'decimal(10,2) NOT NULL',           'after' => 'orden_id'],
-                'descripcion'  => ['definition' => 'text NULL DEFAULT NULL',           'after' => 'monto'],
-                'fecha'        => ['definition' => 'date NULL DEFAULT NULL',           'after' => 'descripcion'],
-                'proveedor_id' => ['definition' => 'int(11) NULL DEFAULT NULL',        'after' => 'fecha'],
-                'voucher_url'  => ['definition' => 'varchar(255) NULL DEFAULT NULL',   'after' => 'proveedor_id'],
-                'pagado'       => ['definition' => "tinyint(1) NULL DEFAULT '0'",      'after' => 'voucher_url'],
-                'fecha_pago'   => ['definition' => 'datetime NULL DEFAULT NULL',       'after' => 'pagado'],
+                'id'            => ['definition' => 'int(11) NOT NULL auto_increment',  'after' => null],
+                'orden_id'      => ['definition' => 'int(11) NOT NULL',                 'after' => 'id'],
+                'monto'         => ['definition' => 'decimal(10,2) NOT NULL',           'after' => 'orden_id'],
+                'descripcion'   => ['definition' => 'text NULL DEFAULT NULL',           'after' => 'monto'],
+                'fecha'         => ['definition' => 'date NULL DEFAULT NULL',           'after' => 'descripcion'],
+                'proveedor_id'  => ['definition' => 'int(11) NULL DEFAULT NULL',        'after' => 'fecha'],
+                'voucher_url'   => ['definition' => 'varchar(255) NULL DEFAULT NULL',   'after' => 'proveedor_id'],
+                'pagado'        => ['definition' => "tinyint(1) NULL DEFAULT '0'",      'after' => 'voucher_url'],
+                'fecha_pago'    => ['definition' => 'datetime NULL DEFAULT NULL',       'after' => 'pagado'],
+                'banco'         => ['definition' => 'varchar(100) NULL DEFAULT NULL',   'after' => 'fecha_pago'],
+                'numero_cuenta' => ['definition' => 'varchar(50) NULL DEFAULT NULL',    'after' => 'banco'],
+                'cci'           => ['definition' => 'varchar(50) NULL DEFAULT NULL',    'after' => 'numero_cuenta'],
             ],
         ],
 
@@ -857,6 +870,23 @@ try {
     }
 
     // =========================================================
+    // 2.1. GARANTIZAR COMPATIBILIDAD DE TIPOS/COLUMNAS EXISTENTES
+    // =========================================================
+    try {
+        $pdo->exec("ALTER TABLE `ordenes_compra` MODIFY COLUMN `proveedor_id` int(11) NULL DEFAULT NULL");
+        $logs[] = "🔧 Columna 'proveedor_id' de 'ordenes_compra' modificada a NULLable.";
+    } catch (Exception $ex) {
+        $errors[] = "⚠️ No se pudo modificar 'proveedor_id' a NULLable: " . $ex->getMessage();
+    }
+
+    try {
+        $pdo->exec("ALTER TABLE `ordenes_compra` MODIFY COLUMN `estado` enum('Req_Pendiente_Area','Req_Pendiente_Compras','Req_Rechazada','Pendiente','Aprobada','Rechazada','Recibida','Completada') DEFAULT 'Pendiente'");
+        $logs[] = "🔧 Columna 'estado' de 'ordenes_compra' actualizada con enums de Requisición.";
+    } catch (Exception $ex) {
+        $errors[] = "⚠️ No se pudo actualizar enum de 'estado' en 'ordenes_compra': " . $ex->getMessage();
+    }
+
+    // =========================================================
     // 3. DATOS SEMILLA: Asegurar que exista la ubicación Almacén
     // =========================================================
     $almacen = $pdo->query("SELECT id FROM ubicaciones WHERE nombre LIKE '%Almacén%' OR nombre LIKE '%Almacen%' LIMIT 1")->fetch();
@@ -865,6 +895,52 @@ try {
         $logs[] = "🏭 Ubicación 'Almacén General' creada (requerida para asignaciones).";
     } else {
         $logs[] = "ℹ️  Ubicación Almacén ya existe (ID: {$almacen['id']}).";
+    }
+
+    // =========================================================
+    // 3.1. DATOS SEMILLA: Roles y Permisos (incluye req_pedagogia)
+    // =========================================================
+    $roles_semilla = [
+        ['nombre' => 'admin', 'descripcion' => 'Administrador del sistema', 'can_delete' => 1],
+        ['nombre' => 'comprador', 'descripcion' => 'Jefe de Compras', 'can_delete' => 0],
+        ['nombre' => 'contabilidad', 'descripcion' => 'Contabilidad / Tesorería', 'can_delete' => 0],
+        ['nombre' => 'almacen', 'descripcion' => 'Encargado de Almacén', 'can_delete' => 0],
+        ['nombre' => 'jefe_area', 'descripcion' => 'Jefe de Área (Aprobador Directo)', 'can_delete' => 0],
+        ['nombre' => 'req_pedagogia', 'descripcion' => 'Jefe de Sub-Área Pedagogía (Firma Intermedia)', 'can_delete' => 0],
+    ];
+    $stmtCheckRol = $pdo->prepare("SELECT COUNT(*) FROM roles WHERE nombre = ?");
+    $stmtInsertRol = $pdo->prepare("INSERT INTO roles (nombre, descripcion, can_delete) VALUES (?, ?, ?)");
+    foreach ($roles_semilla as $rol) {
+        $stmtCheckRol->execute([$rol['nombre']]);
+        if ($stmtCheckRol->fetchColumn() == 0) {
+            $stmtInsertRol->execute([$rol['nombre'], $rol['descripcion'], $rol['can_delete']]);
+            $logs[] = "🛡️ Rol '{$rol['nombre']}' registrado.";
+        }
+    }
+
+    // =========================================================
+    // 3.2. DATOS SEMILLA: Jerarquía de sub-áreas de Pedagogía (id=7)
+    // =========================================================
+    $pedagogia = $pdo->query("SELECT id FROM areas WHERE nombre = 'Pedagogía'")->fetch();
+    if ($pedagogia) {
+        $pId = $pedagogia['id'];
+        $subAreasNames = [
+            'Early Years - Pedagogía',
+            'Elementary - Pedagogía',
+            'Middle y High - Pedagogía',
+            'Proyectos - Pedagogía',
+            'Psicología - Pedagogía'
+        ];
+        $stmtCheckSubArea = $pdo->prepare("SELECT id, parent_area_id FROM areas WHERE nombre = ?");
+        $stmtUpdateParent = $pdo->prepare("UPDATE areas SET parent_area_id = ? WHERE id = ?");
+        foreach ($subAreasNames as $name) {
+            $stmtCheckSubArea->execute([$name]);
+            $sub = $stmtCheckSubArea->fetch();
+            if ($sub && empty($sub['parent_area_id'])) {
+                $stmtUpdateParent->execute([$pId, $sub['id']]);
+                $logs[] = "🌳 Sub-área '{$name}' vinculada bajo Pedagogía (ID {$pId}).";
+            }
+        }
     }
 
     // =========================================================

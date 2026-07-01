@@ -605,6 +605,7 @@ window.openPaymentDetails = async function (id) {
 
     const user = window.Auth.getUser();
     const esContabilidad = user?.role === 'contabilidad';
+    const isAdmin = user?.role === 'admin';
 
     // Obtener datos extendidos (incluye cuotas)
     const [detResp, supResp] = await Promise.all([
@@ -668,7 +669,16 @@ window.openPaymentDetails = async function (id) {
                         ` : !isPagada ? `
                             <span class="badge badge-yellow text-[10px]">Pendiente</span>
                         ` : `
-                            ${c.voucher_url ? `<a href="${c.voucher_url}" target="_blank" class="btn btn-ghost btn-sm text-xs px-1.5"><i data-lucide="external-link" class="w-3 h-3"></i></a>` : ''}
+                            ${c.voucher_url ? `
+                                <div class="flex items-center gap-1">
+                                    <a href="${c.voucher_url}" target="_blank" class="btn btn-ghost btn-sm text-xs px-1.5"><i data-lucide="external-link" class="w-3 h-3"></i></a>
+                                    ${isAdmin ? `
+                                        <button class="btn btn-ghost btn-sm text-xs text-destructive px-1.5" onclick="clearVoucher(${p.id}, 'cuota', ${c.id})" title="Borrar voucher cuota">
+                                            <i data-lucide="trash-2" class="w-3 h-3"></i>
+                                        </button>
+                                    ` : ''}
+                                </div>
+                            ` : ''}
                         `}
                     </div>
                 </div>`;
@@ -789,7 +799,16 @@ window.openPaymentDetails = async function (id) {
                             ` : !isAdelantoPagado ? `
                                 <span class="badge badge-yellow text-[10px]">Pendiente</span>
                             ` : `
-                                ${p.adelanto_voucher ? `<a href="${p.adelanto_voucher}" target="_blank" class="btn btn-ghost btn-sm text-xs px-1.5"><i data-lucide="external-link" class="w-3 h-3"></i></a>` : ''}
+                                ${p.adelanto_voucher ? `
+                                    <div class="flex items-center gap-1">
+                                        <a href="${p.adelanto_voucher}" target="_blank" class="btn btn-ghost btn-sm text-xs px-1.5"><i data-lucide="external-link" class="w-3 h-3"></i></a>
+                                        ${isAdmin ? `
+                                            <button class="btn btn-ghost btn-sm text-xs text-destructive px-1.5" onclick="clearVoucher(${p.id}, 'adelanto')" title="Borrar voucher de adelanto">
+                                                <i data-lucide="trash-2" class="w-3 h-3"></i>
+                                            </button>
+                                        ` : ''}
+                                    </div>
+                                ` : ''}
                             `}
                         </div>
                     </div>
@@ -1116,7 +1135,16 @@ window.openPaymentDetails = async function (id) {
                 ` : `
                     <div class="border-t border-orange-200 pt-2 flex justify-between items-center">
                         <span class="text-[10px] text-green-700 font-medium italic">Pagado el ${new Date(fullOC.mobility.fecha_pago).toLocaleDateString('es-PE')}</span>
-                        ${fullOC.mobility.voucher_url ? `<a href="${fullOC.mobility.voucher_url}" target="_blank" class="text-[10px] text-primary hover:underline font-bold flex items-center gap-1"><i data-lucide="external-link" class="w-3 h-3"></i>Ver Voucher</a>` : ''}
+                        ${fullOC.mobility.voucher_url ? `
+                            <div class="flex items-center gap-1.5">
+                                <a href="${fullOC.mobility.voucher_url}" target="_blank" class="text-[10px] text-primary hover:underline font-bold flex items-center gap-1"><i data-lucide="external-link" class="w-3 h-3"></i>Ver Voucher</a>
+                                ${isAdmin ? `
+                                    <button class="text-destructive hover:underline text-[10px] font-bold flex items-center gap-0.5" onclick="clearVoucher(${p.id}, 'mobility')" title="Borrar voucher movilidad">
+                                        <i data-lucide="trash-2" class="w-2.5 h-2.5"></i>Borrar
+                                    </button>
+                                ` : ''}
+                            </div>
+                        ` : ''}
                     </div>
                 `}
             </div>` : ''}
@@ -1156,7 +1184,14 @@ window.openPaymentDetails = async function (id) {
                 <div class="p-4 border border-green-200 bg-green-50 rounded-lg">
                     <h4 class="font-bold text-green-800 flex items-center gap-2 mb-2 text-sm"><i data-lucide="check-circle" class="w-4 h-4"></i>Pago Confirmado</h4>
                     <p class="text-xs text-green-700">Pagado el ${new Date(p.fecha_pago).toLocaleString('es-PE')}</p>
-                    ${p.voucher_url ? `<a href="${p.voucher_url}" target="_blank" class="btn btn-outline btn-sm mt-3 w-full bg-white text-xs"><i data-lucide="external-link"></i>Ver Voucher en Drive</a>` : ''}
+                    ${p.voucher_url ? `
+                        <a href="${p.voucher_url}" target="_blank" class="btn btn-outline btn-sm mt-3 w-full bg-white text-xs"><i data-lucide="external-link"></i>Ver Voucher en Drive</a>
+                        ${isAdmin ? `
+                            <button class="btn btn-outline btn-sm mt-1.5 w-full bg-red-50 text-destructive border-red-200 text-xs flex items-center justify-center gap-1.5 hover:bg-red-100 transition-colors" onclick="clearVoucher(${p.id}, 'saldo')" title="Borrar voucher principal">
+                                <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>Borrar Voucher Principal
+                            </button>
+                        ` : ''}
+                    ` : ''}
                 </div>
             ` : ''}
         </div>`;
@@ -1410,4 +1445,40 @@ window.exportTreasuryExcel = async function() {
         UI.exportToExcel(data, 'Reporte_Pagos_Tesorería.xlsx');
     } catch(e) { UI.toast('Error al exportar', 'error'); }
     finally { UI.stopLoading(); }
+};
+
+window.clearVoucher = async function(ordenId, type, cuotaId = null) {
+    if (!confirm('¿Está seguro de que desea eliminar este voucher? El pago volverá a figurar como pendiente en el sistema.')) return;
+    
+    UI.loading('Eliminando voucher...');
+    try {
+        const user = window.Auth.getUser();
+        const resp = await fetch('api/purchases.php', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                action: 'clear_voucher',
+                id: ordenId,
+                type: type,
+                cuota_id: cuotaId,
+                usuario_id: user?.id
+            })
+        });
+        const res = await resp.json();
+        UI.stopLoading();
+        if (res.ok) {
+            UI.toast('Voucher eliminado correctamente.', 'success');
+            // Cerrar backdrops del modal
+            document.querySelectorAll('.modal-backdrop').forEach(m => m.remove());
+            setTimeout(() => {
+                location.reload();
+            }, 500);
+        } else {
+            UI.toast('Error: ' + (res.error || 'No se pudo eliminar el voucher'), 'error');
+        }
+    } catch(e) {
+        UI.stopLoading();
+        console.error(e);
+        UI.toast('Error de red al intentar eliminar el voucher', 'error');
+    }
 };

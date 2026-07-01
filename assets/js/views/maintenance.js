@@ -262,7 +262,7 @@
                         </div>
                         <div>
                             <label class="text-xs font-bold mb-1 block uppercase">Fecha de Inicio <span class="text-destructive">*</span></label>
-                            <input type="date" id="m-date" class="input w-full" value="${new Date().toISOString().split('T')[0]}">
+                            <input type="date" id="m-date" class="input w-full" value="${todayPE()}">
                         </div>
                     </div>
 
@@ -404,7 +404,7 @@
                     <p class="text-sm text-muted-foreground">Registre la solución y el costo final del servicio.</p>
                     <div>
                         <label class="text-xs font-bold mb-1 block uppercase">Fecha de Finalización <span class="text-destructive">*</span></label>
-                        <input type="date" id="m-end-date" class="input w-full" value="${new Date().toISOString().split('T')[0]}">
+                        <input type="date" id="m-end-date" class="input w-full" value="${todayPE()}">
                     </div>
                     <div>
                         <label class="text-xs font-bold mb-1 block uppercase">Costo Final (S/) <span class="text-destructive">*</span></label>
