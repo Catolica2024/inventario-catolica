@@ -175,12 +175,14 @@ window.todayPE = function() {
         <div class="space-y-1 mt-2">
           ${g.items.map(i => {
             const hasBadge = i.id === 'notifications' && window._unreadCount > 0;
+            const hasReqBadge = i.id === 'requisitions' && window._pendingReqCount > 0;
             const active = Router.current === i.id;
             return `
             <a class="sidebar-link ${active?'active':''}" data-section="${i.id}">
               <div class="relative">
                 <i data-lucide="${i.icon}" class="w-4.5 h-4.5 ${active?'text-white':'text-slate-400'}"></i>
                 ${hasBadge ? `<span class="absolute -top-1.5 -right-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[9px] font-bold text-white badge-pulse">${window._unreadCount}</span>` : ''}
+                ${hasReqBadge ? `<span class="absolute -top-1.5 -right-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-orange-500 text-[9px] font-bold text-white badge-pulse">${window._pendingReqCount}</span>` : ''}
               </div>
               <span class="${active?'font-bold':''}">${i.label}</span>
             </a>`;
@@ -200,6 +202,8 @@ window.todayPE = function() {
 
 
   window._unreadCount = 0;
+  window._pendingReqCount = 0;
+
 
   // ── DashboardBus ────────────────────────────────────────────────────────────
   // Coordina la actualización automática del dashboard tras cualquier mutación.
@@ -273,6 +277,46 @@ window.todayPE = function() {
     } catch (e) {}
   }
 
+  async function checkRequisitionsBadge() {
+    const user = Auth.getUser();
+    if (!user) return;
+    // Solo roles con acceso a requisiciones
+    const rolesConReq = ['admin', 'comprador', 'jefe_area', 'req_pedagogia'];
+    if (!rolesConReq.includes(user.role)) return;
+
+    try {
+      const data = await fetch('api/purchases.php?requisitions_only=1').then(r => r.json());
+      const reqs = data.purchases || [];
+
+      let count = 0;
+      const isComprador = user.role === 'comprador' || user.role === 'admin';
+      const esDirectorPedagogia = user.role === 'jefe_area' && user.area_nombre === 'Pedagogía';
+
+      if (isComprador) {
+        // Comprador: cuenta las que están en su bandeja
+        count = reqs.filter(r => r.estado === 'Req_Pendiente_Compras').length;
+      } else if (esDirectorPedagogia) {
+        // Director de Pedagogía: cuenta las que esperan su firma
+        count = reqs.filter(r => r.estado === 'Req_Pendiente_Area').length;
+      } else {
+        // Jefe de área / req_pedagogia: cuenta sus propias solicitudes pendientes
+        count = reqs.filter(r =>
+          String(r.creado_por) === String(user.id) &&
+          (r.estado === 'Req_Pendiente_Area' || r.estado === 'Req_Pendiente_Compras')
+        ).length;
+      }
+
+      if (count !== window._pendingReqCount) {
+        window._pendingReqCount = count;
+        renderSidebar(user);
+      }
+    } catch (e) { /* silencioso */ }
+  }
+
+  // Exponer para que requisitions.js pueda refrescar el badge tras mutaciones
+  window.refreshRequisitionsBadge = checkRequisitionsBadge;
+
+
   // ── Sincronización de permisos desde el servidor ─────────────────────────────
   // Cada 60 s consulta los permisos actuales del usuario en BD y actualiza el
   // localStorage + sidebar si el admin los modificó mientras el usuario está activo.
@@ -344,8 +388,10 @@ window.todayPE = function() {
     }
     renderShell(user);
     checkNotifications();
+    checkRequisitionsBadge();
     syncUserPermissions();
     setInterval(checkNotifications, 30000);   // Notificaciones cada 30 s
+    setInterval(checkRequisitionsBadge, 30000); // Badge de requisiciones cada 30 s
     setInterval(syncUserPermissions, 60000);   // Permisos cada 60 s
     // Router.onChange siempre lee usuario fresco — sin closure fijo
     Router.onChange(s => { renderView(s); renderSidebar(Auth.getUser()); });

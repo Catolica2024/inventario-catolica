@@ -553,7 +553,7 @@ try {
   `area_id` int(11) DEFAULT NULL,
   `fecha` date DEFAULT NULL,
   `monto` decimal(10,2) DEFAULT NULL,
-  `estado` enum('Req_Pendiente_Area','Req_Pendiente_Compras','Req_Rechazada','Pendiente','Aprobada','Rechazada','Recibida','Completada') DEFAULT 'Pendiente',
+  `estado` enum('Req_Pendiente_Area','Req_Pendiente_Compras','Req_Rechazada','Req_Finalizada','Pendiente','Aprobada','Rechazada','Recibida','Completada') DEFAULT 'Pendiente',
   `fecha_aprobacion` datetime DEFAULT NULL,
   `pagado` tinyint(1) DEFAULT 0,
   `fecha_pago` datetime DEFAULT NULL,
@@ -603,6 +603,7 @@ try {
   `ultimo_recordatorio` datetime DEFAULT NULL,
   `fecha_envio_requisicion` datetime DEFAULT NULL,
   `fecha_aprobacion_director` datetime DEFAULT NULL,
+  `fecha_finalizacion` datetime DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `numero_oc` (`numero_oc`),
   KEY `proveedor_id` (`proveedor_id`),
@@ -620,7 +621,7 @@ try {
                 'area_id'                     => ['definition' => 'int(11) NULL DEFAULT NULL',       'after' => 'activo_id'],
                 'fecha'                       => ['definition' => 'date NULL DEFAULT NULL',          'after' => 'area_id'],
                 'monto'                       => ['definition' => 'decimal(10,2) NULL DEFAULT NULL', 'after' => 'fecha'],
-                'estado'                      => ['definition' => "enum('Req_Pendiente_Area','Req_Pendiente_Compras','Req_Rechazada','Pendiente','Aprobada','Rechazada','Recibida','Completada') NULL DEFAULT 'Pendiente'", 'after' => 'monto'],
+                'estado'                      => ['definition' => "enum('Req_Pendiente_Area','Req_Pendiente_Compras','Req_Rechazada','Req_Finalizada','Pendiente','Aprobada','Rechazada','Recibida','Completada') NULL DEFAULT 'Pendiente'", 'after' => 'monto'],
                 'fecha_aprobacion'            => ['definition' => 'datetime NULL DEFAULT NULL',      'after' => 'estado'],
                 'pagado'                      => ['definition' => "tinyint(1) NULL DEFAULT '0'",     'after' => 'fecha_aprobacion'],
                 'fecha_pago'                  => ['definition' => 'datetime NULL DEFAULT NULL',      'after' => 'pagado'],
@@ -670,6 +671,7 @@ try {
                 'ultimo_recordatorio'         => ['definition' => 'datetime NULL DEFAULT NULL',      'after' => 'fecha_pago_saldo_proyectado'],
                 'fecha_envio_requisicion'     => ['definition' => 'datetime NULL DEFAULT NULL',      'after' => 'ultimo_recordatorio'],
                 'fecha_aprobacion_director'   => ['definition' => 'datetime NULL DEFAULT NULL',      'after' => 'fecha_envio_requisicion'],
+                'fecha_finalizacion'          => ['definition' => 'datetime NULL DEFAULT NULL',      'after' => 'fecha_aprobacion_director'],
             ],
         ],
 
@@ -880,7 +882,7 @@ try {
     }
 
     try {
-        $pdo->exec("ALTER TABLE `ordenes_compra` MODIFY COLUMN `estado` enum('Req_Pendiente_Area','Req_Pendiente_Compras','Req_Rechazada','Pendiente','Aprobada','Rechazada','Recibida','Completada') DEFAULT 'Pendiente'");
+        $pdo->exec("ALTER TABLE `ordenes_compra` MODIFY COLUMN `estado` enum('Req_Pendiente_Area','Req_Pendiente_Compras','Req_Rechazada','Req_Finalizada','Pendiente','Aprobada','Rechazada','Recibida','Completada') DEFAULT 'Pendiente'");
         $logs[] = "🔧 Columna 'estado' de 'ordenes_compra' actualizada con enums de Requisición.";
     } catch (Exception $ex) {
         $errors[] = "⚠️ No se pudo actualizar enum de 'estado' en 'ordenes_compra': " . $ex->getMessage();

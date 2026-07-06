@@ -3,6 +3,7 @@ window.Views = window.Views || {};
 let _reqAreas = [];
 let _reqItemCount = 0;
 let _allRequisitions = [];
+let _reqHistorial = [];
 
 // ── VISTA PRINCIPAL: DASHBOARD DE REQUISICIONES ──
 window.Views.requisitions = function () {
@@ -35,13 +36,19 @@ window.Views.requisitions = function () {
           <span id="badge-por-aprobar-count" class="hidden ml-1 inline-flex items-center justify-center w-5 h-5 text-[10px] font-bold bg-red-500 text-white rounded-full">0</span>
         </span>
       </button>
+      <button id="tab-historial" class="tab-req-btn px-5 py-2 text-xs font-bold rounded-lg transition-all text-slate-600 hover:bg-slate-100" onclick="switchRequisitionsTab('historial')">
+        <span class="flex items-center gap-1.5">
+          <i data-lucide="archive" class="w-3.5 h-3.5"></i>
+          Historial
+        </span>
+      </button>
     </div>
 
     <!-- Tabla de Solicitudes -->
     <div class="card p-5">
       <div class="table-container">
         <table class="data w-full">
-          <thead>
+          <thead id="req-table-head">
             <tr>
               <th>Código</th>
               <th>Área</th>
@@ -71,7 +78,12 @@ window.switchRequisitionsTab = function (tab) {
     activeBtn.classList.add('bg-primary', 'text-white');
     activeBtn.classList.remove('text-slate-600', 'hover:bg-slate-100');
   }
-  renderRequisitions(tab);
+
+  if (tab === 'historial') {
+    loadRequisitionsHistory();
+  } else {
+    renderRequisitions(tab);
+  }
 };
 
 async function loadRequisitions() {
@@ -92,7 +104,7 @@ async function loadRequisitions() {
       if (porAprobarTab) porAprobarTab.classList.remove('hidden');
     }
 
-    // Cargar únicamente requisiciones
+    // Cargar únicamente requisiciones activas
     const data = await fetch('api/purchases.php?requisitions_only=1').then(r => r.json());
     _allRequisitions = data.purchases || [];
 
@@ -114,9 +126,124 @@ async function loadRequisitions() {
   }
 }
 
+async function loadRequisitionsHistory() {
+  const tbody = document.getElementById('requisitions-table-body');
+  const thead = document.getElementById('req-table-head');
+  if (!tbody) return;
+
+  // Actualizar cabecera para historial
+  if (thead) {
+    thead.innerHTML = `
+      <tr>
+        <th>Código RQ</th>
+        <th>OC/OS Generada</th>
+        <th>Área</th>
+        <th>Solicitante</th>
+        <th>Presupuesto</th>
+        <th>Fecha Finalización</th>
+        <th class="text-right">Acciones</th>
+      </tr>`;
+  }
+
+  tbody.innerHTML = `<tr><td colspan="7" class="text-center py-10 text-slate-400">
+    <div class="flex flex-col items-center gap-2">
+      <i data-lucide="loader-2" class="w-6 h-6 text-slate-300 animate-spin"></i>
+      <span class="text-sm">Cargando historial...</span>
+    </div>
+  </td></tr>`;
+  lucide.createIcons();
+
+  try {
+    const user = Auth.getUser();
+    const isComprador = user?.role === 'comprador' || user?.role === 'admin';
+
+    // Para usuarios normales, filtrar por creado_por; para comprador, ver todas
+    const data = await fetch('api/purchases.php?req_history=1').then(r => r.json());
+    let historial = data.purchases || [];
+
+    // Usuarios normales solo ven su propio historial
+    if (!isComprador && user?.role !== 'admin') {
+      historial = historial.filter(p => String(p.creado_por) === String(user?.id));
+    }
+
+    _reqHistorial = historial;
+
+    if (historial.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="7" class="text-center py-14 text-slate-400">
+        <div class="flex flex-col items-center gap-3">
+          <i data-lucide="archive" class="w-10 h-10 text-slate-300"></i>
+          <span class="text-sm">No hay requisiciones en el historial.</span>
+        </div>
+      </td></tr>`;
+      lucide.createIcons();
+      return;
+    }
+
+    tbody.innerHTML = historial.map(p => {
+      const fechaFin = p.fecha_finalizacion
+        ? window.formatPEDate(p.fecha_finalizacion, true)
+        : '—';
+
+      // Detectar si tiene OC/OS generada (el numero_oc ya no empieza con RQ-)
+      const ocGenerada = !p.numero_oc.startsWith('RQ-')
+        ? `<span class="font-mono text-xs font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">${p.numero_oc}</span>`
+        : `<span class="text-xs text-slate-400 italic">Solo gestión</span>`;
+
+      // Número original de RQ (se guarda en numero_oc si aún tiene RQ-; de lo contrario buscamos observaciones)
+      const codigoRQ = p.numero_oc.startsWith('RQ-')
+        ? p.numero_oc
+        : (p.numero_oc_original || p.numero_oc);
+
+      return `
+        <tr>
+          <td class="font-mono text-xs font-bold text-slate-500">${codigoRQ}</td>
+          <td>${ocGenerada}</td>
+          <td class="font-semibold text-sm">${p.area_nombre || '—'}</td>
+          <td class="text-xs text-slate-600">${p.creador_nombre || '—'}</td>
+          <td>
+            ${p.dentro_presupuesto == 1
+              ? `<span class="badge badge-green text-[10px] py-0.5 px-2 flex items-center gap-1 w-fit"><i data-lucide="check" class="w-3 h-3"></i>En Ppto.</span>`
+              : `<span class="badge badge-red text-[10px] py-0.5 px-2 flex items-center gap-1 w-fit"><i data-lucide="alert-triangle" class="w-3 h-3"></i>Fuera Ppto.</span>`}
+          </td>
+          <td class="text-xs text-slate-600">
+            <span class="flex items-center gap-1.5">
+              <i data-lucide="calendar-check" class="w-3.5 h-3.5 text-emerald-500"></i>
+              ${fechaFin}
+            </span>
+          </td>
+          <td class="text-right">
+            <button class="btn btn-ghost p-1.5" title="Ver detalles" onclick="viewRequisitionDetails(${p.id})">
+              <i data-lucide="eye" class="w-4 h-4"></i>
+            </button>
+          </td>
+        </tr>`;
+    }).join('');
+
+    lucide.createIcons();
+  } catch (e) {
+    console.error(e);
+    tbody.innerHTML = '<tr><td colspan="7" class="text-center py-10 text-red-400">Error al cargar el historial.</td></tr>';
+  }
+}
+
 function renderRequisitions(tab) {
   const tbody = document.getElementById('requisitions-table-body');
+  const thead = document.getElementById('req-table-head');
   if (!tbody) return;
+
+  // Restaurar cabecera estándar (por si venimos del historial)
+  if (thead) {
+    thead.innerHTML = `
+      <tr>
+        <th>Código</th>
+        <th>Área</th>
+        <th>Creado por</th>
+        <th>Envío / Entrega</th>
+        <th>Presupuesto</th>
+        <th>Estado</th>
+        <th class="text-right">Acciones</th>
+      </tr>`;
+  }
 
   const user = window.Auth.getUser();
   const isAdmin = user?.role === 'admin';
@@ -126,14 +253,16 @@ function renderRequisitions(tab) {
   let filtered = [];
 
   if (isAdmin) {
-    // El administrador ve todas las requisiciones de todos, incluyendo pendientes de área, bandeja de compras y rechazados
+    // El administrador ve todas las requisiciones activas
     filtered = _allRequisitions;
   } else if (tab === 'por-aprobar') {
-    // Si es el Director de Pedagogía, le salen todas las requisiciones pendientes de aprobación de área
+    // Director de Pedagogía: requisiciones pendientes de aprobación de área
     filtered = _allRequisitions.filter(p => p.estado === 'Req_Pendiente_Area');
   } else if (isComprador) {
+    // Comprador: solo las que están en su bandeja
     filtered = _allRequisitions.filter(p => p.estado === 'Req_Pendiente_Compras');
   } else {
+    // Usuarios normales: solo las suyas propias
     filtered = _allRequisitions.filter(p => String(p.creado_por) === String(user?.id));
   }
 
@@ -154,8 +283,16 @@ function renderRequisitions(tab) {
     'Req_Rechazada':         { label: 'Rechazada',             cls: 'badge-red',    icon: 'x-circle' },
   };
 
+  // Para usuarios normales, las que están en compras se muestran como "En Proceso"
+  const badgeMapUsuario = {
+    'Req_Pendiente_Area':    { label: 'Falta Firma Área',  cls: 'badge-yellow', icon: 'clock' },
+    'Req_Pendiente_Compras': { label: 'En Proceso',        cls: 'badge-cyan',   icon: 'loader-2' },
+    'Req_Rechazada':         { label: 'Rechazada',         cls: 'badge-red',    icon: 'x-circle' },
+  };
+
   tbody.innerHTML = filtered.map(p => {
-    const cfg = badgeMap[p.estado] || { label: p.estado, cls: 'badge-gray', icon: 'help-circle' };
+    const activeBadgeMap = isComprador ? badgeMap : badgeMapUsuario;
+    const cfg = activeBadgeMap[p.estado] || { label: p.estado, cls: 'badge-gray', icon: 'help-circle' };
     const isOwner = String(p.creado_por) === String(user?.id);
 
     return `
@@ -193,6 +330,9 @@ function renderRequisitions(tab) {
             ${isComprador && p.estado === 'Req_Pendiente_Compras' ? `
               <button class="btn btn-primary px-3 py-1.5 text-xs font-bold" onclick="Router.go('edit-purchase', { requisition_id: ${p.id} })">
                 <i data-lucide="arrow-right-left" class="w-3.5 h-3.5 mr-1"></i>Procesar
+              </button>
+              <button class="btn btn-ghost px-3 py-1.5 text-xs font-bold text-emerald-600 hover:bg-emerald-50 border border-emerald-200" title="Finalizar requisición" onclick="finalizeRequisition(${p.id}, '${p.numero_oc}')">
+                <i data-lucide="check-circle-2" class="w-3.5 h-3.5 mr-1"></i>Finalizar
               </button>
             ` : ''}
             ${isAdmin ? `
@@ -608,6 +748,8 @@ window.saveRequisition = async function () {
 
     if (res.ok) {
       UI.toast(`Requisición ${res.numero_oc} enviada correctamente.`, 'success');
+      // Refrescar badge del sidebar
+      if (window.refreshRequisitionsBadge) window.refreshRequisitionsBadge();
       Router.go('requisitions');
     } else {
       UI.toast('Error: ' + (res.error || 'Ocurrió un problema.'), 'error');
@@ -639,7 +781,11 @@ window.approveRequisition = function (id) {
         });
         const res = await resp.json();
         UI.stopLoading();
-        if (res.ok) { UI.toast('Requisición aprobada y enviada a Compras.', 'success'); loadRequisitions(); }
+        if (res.ok) {
+          UI.toast('Requisición aprobada y enviada a Compras.', 'success');
+          if (window.refreshRequisitionsBadge) window.refreshRequisitionsBadge();
+          loadRequisitions();
+        }
         else UI.toast('Error: ' + res.error, 'error');
       } catch (e) { UI.stopLoading(); UI.toast('Error de red.', 'error'); }
     }
@@ -671,7 +817,11 @@ window.rejectRequisition = function (id) {
         });
         const res = await resp.json();
         UI.stopLoading();
-        if (res.ok) { UI.toast('Requisición rechazada.', 'success'); loadRequisitions(); }
+        if (res.ok) {
+          UI.toast('Requisición rechazada.', 'success');
+          if (window.refreshRequisitionsBadge) window.refreshRequisitionsBadge();
+          loadRequisitions();
+        }
         else UI.toast('Error: ' + res.error, 'error');
       } catch (e) { UI.stopLoading(); UI.toast('Error de red.', 'error'); }
     }
@@ -690,11 +840,57 @@ window.confirmDeleteRequisition = function (id, code) {
         const resp = await fetch(`api/purchases.php?id=${id}&usuario_id=${user?.id || ''}`, { method: 'DELETE' });
         const res = await resp.json();
         UI.stopLoading();
-        if (res.ok) { UI.toast('Requisición anulada.', 'success'); loadRequisitions(); }
+        if (res.ok) {
+          UI.toast('Requisición anulada.', 'success');
+          if (window.refreshRequisitionsBadge) window.refreshRequisitionsBadge();
+          loadRequisitions();
+        }
         else UI.toast('Error: ' + res.error, 'error');
       } catch (e) { UI.stopLoading(); UI.toast('Error de red.', 'error'); }
     }
   });
+};
+
+// ── FINALIZAR REQUISICIÓN ──
+window.finalizeRequisition = function (id, code) {
+  UI.modal({
+    title: 'Finalizar Requisición',
+    body: `
+      <div class="flex flex-col items-center gap-4 py-2">
+        <div class="w-16 h-16 rounded-2xl bg-emerald-100 flex items-center justify-center">
+          <i data-lucide="check-circle-2" class="w-8 h-8 text-emerald-600"></i>
+        </div>
+        <div class="text-center">
+          <p class="font-bold text-slate-800 mb-1">¿Finalizar la requisición <span class="text-primary font-mono">${code}</span>?</p>
+          <p class="text-sm text-slate-500">Esto moverá la requisición al <strong>Historial</strong> e indicará que las gestiones de compras han concluido.</p>
+        </div>
+      </div>`,
+    confirmText: 'Sí, finalizar',
+    onConfirm: async () => {
+      UI.loading('Finalizando...');
+      try {
+        const resp = await fetch('api/purchases.php', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'finalize_requisition', id })
+        });
+        const res = await resp.json();
+        UI.stopLoading();
+        if (res.ok) {
+          UI.toast('Requisición finalizada y movida al historial.', 'success');
+          if (window.refreshRequisitionsBadge) window.refreshRequisitionsBadge();
+          loadRequisitions();
+        } else {
+          UI.toast('Error: ' + (res.error || 'No se pudo finalizar.'), 'error');
+        }
+      } catch (e) {
+        UI.stopLoading();
+        UI.toast('Error de red.', 'error');
+      }
+    }
+  });
+  // Render lucide icons inside modal after it opens
+  setTimeout(() => lucide.createIcons(), 50);
 };
 
 // ── VER DETALLES EN MODAL ──
@@ -713,6 +909,7 @@ window.viewRequisitionDetails = async function (id) {
       'Req_Pendiente_Area':    '<span class="badge badge-yellow py-1 px-2.5 flex items-center gap-1.5 w-fit"><i data-lucide="clock" class="w-3.5 h-3.5"></i>Falta Firma del Área</span>',
       'Req_Pendiente_Compras': '<span class="badge badge-indigo py-1 px-2.5 flex items-center gap-1.5 w-fit"><i data-lucide="truck" class="w-3.5 h-3.5"></i>En Bandeja de Compras</span>',
       'Req_Rechazada':         '<span class="badge badge-red py-1 px-2.5 flex items-center gap-1.5 w-fit"><i data-lucide="x-circle" class="w-3.5 h-3.5"></i>Rechazada</span>',
+      'Req_Finalizada':        '<span class="badge badge-green py-1 px-2.5 flex items-center gap-1.5 w-fit"><i data-lucide="check-circle-2" class="w-3.5 h-3.5"></i>Finalizada</span>',
     };
 
     const itemsHtml = req.items.map((it, i) => `
@@ -741,7 +938,7 @@ window.viewRequisitionDetails = async function (id) {
           <!-- Ciclo de Vida de Fechas -->
           <div class="p-4 bg-slate-50 rounded-xl border border-slate-200/70">
             <p class="text-[10px] uppercase font-bold text-slate-400 mb-2.5">Historial de Fechas</p>
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-3 text-xs">
               <div>
                 <span class="text-slate-500 block font-semibold">1. Fecha Envío:</span>
                 <span class="font-bold text-slate-800">${formatDateTimeStr(req.fecha_envio_requisicion)}</span>
@@ -753,6 +950,10 @@ window.viewRequisitionDetails = async function (id) {
               <div>
                 <span class="text-slate-500 block font-semibold">3. Fecha de Entrega:</span>
                 <span class="font-bold text-slate-800">${req.fecha_requerida ? req.fecha_requerida.split('-').reverse().join('/') : '—'}</span>
+              </div>
+              <div>
+                <span class="text-slate-500 block font-semibold">4. Finalización:</span>
+                <span class="font-bold text-emerald-700">${formatDateTimeStr(req.fecha_finalizacion)}</span>
               </div>
             </div>
           </div>

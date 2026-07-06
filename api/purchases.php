@@ -66,8 +66,12 @@ try {
             if (isset($_GET['approved_only'])) {
                 $where = "oc.estado IN ('Aprobada', 'Recibida', 'Completada')";
             }
-            if (isset($_GET['requisitions_only'])) {
-                $where .= " AND oc.estado LIKE 'Req_%'";
+            if (isset($_GET['req_history'])) {
+                // Solo requisiciones finalizadas (historial)
+                $where .= " AND oc.estado = 'Req_Finalizada'";
+            } else if (isset($_GET['requisitions_only'])) {
+                // Requisiciones activas (excluye finalizadas)
+                $where .= " AND oc.estado IN ('Req_Pendiente_Area', 'Req_Pendiente_Compras', 'Req_Rechazada')";
             } else if (!isset($_GET['include_reqs'])) {
                 $where .= " AND oc.estado NOT LIKE 'Req_%'";
             }
@@ -393,6 +397,26 @@ try {
             $b = get_body();
             $id = $b['id'] ?? null;
             if (!$id) json_response(['error' => 'ID requerido'], 400);
+
+            // ── Finalizar requisición (mover al historial) ──
+            if (($b['action'] ?? '') === 'finalize_requisition') {
+                $stmtCheck = $pdo->prepare("SELECT estado FROM ordenes_compra WHERE id = ?");
+                $stmtCheck->execute([$id]);
+                $estadoActual = $stmtCheck->fetchColumn();
+                if (!$estadoActual) json_response(['error' => 'Requisición no encontrada'], 404);
+
+                // Solo se puede finalizar desde Req_Pendiente_Compras
+                if ($estadoActual !== 'Req_Pendiente_Compras') {
+                    json_response(['error' => 'Solo se pueden finalizar requisiciones en bandeja de compras'], 400);
+                }
+
+                $pdo->beginTransaction();
+                $pdo->prepare("UPDATE ordenes_compra SET estado = 'Req_Finalizada', fecha_finalizacion = NOW() WHERE id = ?")
+                    ->execute([$id]);
+                $pdo->commit();
+                json_response(['ok' => true]);
+                break;
+            }
 
             // ── Actualizar estado de requisición (aprobación/rechazo simple) ──
             if (($b['action'] ?? '') === 'update_status') {

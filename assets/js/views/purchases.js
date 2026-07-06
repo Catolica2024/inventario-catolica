@@ -2337,7 +2337,7 @@ window.confirmDeleteOC = function(id, numero) {
     onConfirm: async () => {
       UI.loading('Eliminando orden...');
       try {
-        const resp = await fetch(`api/purchases.php?id=${id}`, { method: 'DELETE' });
+        const resp = await fetch(`api/purchases.php?id=${id}&usuario_id=${window.Auth.getUser()?.id || ''}`, { method: 'DELETE' });
         const res = await resp.json();
         UI.stopLoading();
         if (res.ok) {

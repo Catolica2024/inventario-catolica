@@ -38,7 +38,7 @@ if ($is_local) {
     define('SMTP_PORT', 465);                               // 465=SSL | 587=TLS
     define('SMTP_SECURE', 'ssl');                           // 'ssl' para puerto 465
     define('SMTP_USER', 'notiweb@catolicaschool.edu.pe');   // Correo que existe en el hosting
-    define('SMTP_PASS', '28GJ9nG)%Ezs(}Fy');     // ← Obtener del cPanel > Administrar
+    define('SMTP_PASS', ',J*H(WrA{}?-gaOC');     // ← Actualizado 06/07/2026
     define('SMTP_FROM_EMAIL', 'notiweb@catolicaschool.edu.pe');
     define('SMTP_FROM_NAME', 'Católica School');
 }
