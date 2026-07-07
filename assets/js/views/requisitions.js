@@ -36,6 +36,12 @@ window.Views.requisitions = function () {
           <span id="badge-por-aprobar-count" class="hidden ml-1 inline-flex items-center justify-center w-5 h-5 text-[10px] font-bold bg-red-500 text-white rounded-full">0</span>
         </span>
       </button>
+      <button id="tab-en-proceso" class="tab-req-btn px-5 py-2 text-xs font-bold rounded-lg transition-all text-slate-600 hover:bg-slate-100" onclick="switchRequisitionsTab('en-proceso')">
+        <span class="flex items-center gap-1.5">
+          <i data-lucide="arrow-right-left" class="w-3.5 h-3.5"></i>
+          En Proceso
+        </span>
+      </button>
       <button id="tab-historial" class="tab-req-btn px-5 py-2 text-xs font-bold rounded-lg transition-all text-slate-600 hover:bg-slate-100" onclick="switchRequisitionsTab('historial')">
         <span class="flex items-center gap-1.5">
           <i data-lucide="archive" class="w-3.5 h-3.5"></i>
@@ -68,7 +74,7 @@ window.Views.requisitions = function () {
   `;
 };
 
-window.switchRequisitionsTab = function (tab) {
+window.switchRequisitionsTab = async function (tab) {
   document.querySelectorAll('.tab-req-btn').forEach(btn => {
     btn.classList.remove('bg-primary', 'text-white');
     btn.classList.add('text-slate-600', 'hover:bg-slate-100');
@@ -82,6 +88,22 @@ window.switchRequisitionsTab = function (tab) {
   if (tab === 'historial') {
     loadRequisitionsHistory();
   } else {
+    const tbody = document.getElementById('requisitions-table-body');
+    if (tbody) {
+      tbody.innerHTML = `<tr><td colspan="7" class="text-center py-10 text-slate-400">
+        <div class="flex flex-col items-center gap-2">
+          <i data-lucide="loader-2" class="w-6 h-6 text-slate-300 animate-spin"></i>
+          <span class="text-sm">Cargando...</span>
+        </div>
+      </td></tr>`;
+      lucide.createIcons();
+    }
+    try {
+      const data = await fetch('api/purchases.php?requisitions_only=1').then(r => r.json());
+      _allRequisitions = data.purchases || [];
+    } catch(e) {
+      console.error(e);
+    }
     renderRequisitions(tab);
   }
 };
@@ -252,18 +274,25 @@ function renderRequisitions(tab) {
   const esDirectorPedagogia = user?.role === 'jefe_area' && user?.area_nombre === 'Pedagogía';
   let filtered = [];
 
-  if (isAdmin) {
-    // El administrador ve todas las requisiciones activas
-    filtered = _allRequisitions;
+  if (tab === 'en-proceso') {
+    // Pestaña "En Proceso": ver requisiciones que ya están siendo gestionadas (Req_Gestionando)
+    if (isComprador) {
+      filtered = _allRequisitions.filter(p => p.estado === 'Req_Gestionando');
+    } else {
+      filtered = _allRequisitions.filter(p => p.estado === 'Req_Gestionando' && String(p.creado_por) === String(user?.id));
+    }
+  } else if (isAdmin) {
+    // El administrador en la bandeja ve todas excepto las que están en proceso o finalizadas
+    filtered = _allRequisitions.filter(p => p.estado !== 'Req_Gestionando');
   } else if (tab === 'por-aprobar') {
     // Director de Pedagogía: requisiciones pendientes de aprobación de área
     filtered = _allRequisitions.filter(p => p.estado === 'Req_Pendiente_Area');
   } else if (isComprador) {
-    // Comprador: solo las que están en su bandeja
+    // Comprador: solo las que están en su bandeja pendientes por procesar (excluyendo las que ya procesó)
     filtered = _allRequisitions.filter(p => p.estado === 'Req_Pendiente_Compras');
   } else {
-    // Usuarios normales: solo las suyas propias
-    filtered = _allRequisitions.filter(p => String(p.creado_por) === String(user?.id));
+    // Usuarios normales en su pestaña principal: solo sus activas excluyendo las que ya están en proceso
+    filtered = _allRequisitions.filter(p => String(p.creado_por) === String(user?.id) && p.estado !== 'Req_Gestionando');
   }
 
   if (filtered.length === 0) {
@@ -280,6 +309,7 @@ function renderRequisitions(tab) {
   const badgeMap = {
     'Req_Pendiente_Area':    { label: 'Falta Firma Área',      cls: 'badge-yellow', icon: 'clock' },
     'Req_Pendiente_Compras': { label: 'En Bandeja de Compras', cls: 'badge-indigo', icon: 'truck' },
+    'Req_Gestionando':       { label: 'Gestionando',           cls: 'badge-orange', icon: 'loader-2' },
     'Req_Rechazada':         { label: 'Rechazada',             cls: 'badge-red',    icon: 'x-circle' },
   };
 
@@ -287,6 +317,7 @@ function renderRequisitions(tab) {
   const badgeMapUsuario = {
     'Req_Pendiente_Area':    { label: 'Falta Firma Área',  cls: 'badge-yellow', icon: 'clock' },
     'Req_Pendiente_Compras': { label: 'En Proceso',        cls: 'badge-cyan',   icon: 'loader-2' },
+    'Req_Gestionando':       { label: 'Gestionando',       cls: 'badge-orange', icon: 'arrow-right-left' },
     'Req_Rechazada':         { label: 'Rechazada',         cls: 'badge-red',    icon: 'x-circle' },
   };
 
@@ -327,7 +358,7 @@ function renderRequisitions(tab) {
                 <i data-lucide="x" class="w-4 h-4"></i>
               </button>
             ` : ''}
-            ${isComprador && p.estado === 'Req_Pendiente_Compras' ? `
+            ${isComprador && (p.estado === 'Req_Pendiente_Compras' || p.estado === 'Req_Gestionando') ? `
               <button class="btn btn-primary px-3 py-1.5 text-xs font-bold" onclick="Router.go('edit-purchase', { requisition_id: ${p.id} })">
                 <i data-lucide="arrow-right-left" class="w-3.5 h-3.5 mr-1"></i>Procesar
               </button>
@@ -908,6 +939,7 @@ window.viewRequisitionDetails = async function (id) {
     const statusMap = {
       'Req_Pendiente_Area':    '<span class="badge badge-yellow py-1 px-2.5 flex items-center gap-1.5 w-fit"><i data-lucide="clock" class="w-3.5 h-3.5"></i>Falta Firma del Área</span>',
       'Req_Pendiente_Compras': '<span class="badge badge-indigo py-1 px-2.5 flex items-center gap-1.5 w-fit"><i data-lucide="truck" class="w-3.5 h-3.5"></i>En Bandeja de Compras</span>',
+      'Req_Gestionando':       '<span class="badge badge-orange py-1 px-2.5 flex items-center gap-1.5 w-fit"><i data-lucide="loader-2" class="w-3.5 h-3.5"></i>Gestionando</span>',
       'Req_Rechazada':         '<span class="badge badge-red py-1 px-2.5 flex items-center gap-1.5 w-fit"><i data-lucide="x-circle" class="w-3.5 h-3.5"></i>Rechazada</span>',
       'Req_Finalizada':        '<span class="badge badge-green py-1 px-2.5 flex items-center gap-1.5 w-fit"><i data-lucide="check-circle-2" class="w-3.5 h-3.5"></i>Finalizada</span>',
     };

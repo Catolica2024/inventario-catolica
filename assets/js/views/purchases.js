@@ -2547,19 +2547,31 @@ window.Views['edit-purchase'] = function (params) {
   // Interceptar el botón de guardar/previsualizar para usar el flujo de edición
   html = html.replace('showOCPreview()', `showOCEditPreview(${requisitionId})`);
   
+  // Agregar input oculto para preservar el ID aunque Router.params sea limpiado
+  html = html + `<input type="hidden" id="edit-requisition-id" value="${requisitionId || ''}"/>`;
+  
   return html;
 };
 
 // afterMount de Edición: carga catálogos y llena el formulario con los datos cargados
 window.Views['edit-purchase'].afterMount = async function () {
   // Los params se leen directamente de Router.params (set por Router.go antes de navegar)
+  // Como fallback, intentar leerlo desde el input oculto en el DOM (ya escrito por la vista)
   const params = Router.params;
-  const requisitionId = params ? (params.requisition_id || params.id) : null;
+  let requisitionId = params ? (params.requisition_id || params.id) : null;
+  if (!requisitionId) {
+    // Fallback: leer del input oculto inyectado por Views['edit-purchase']
+    const domId = document.getElementById('edit-requisition-id')?.value;
+    requisitionId = domId ? parseInt(domId) : null;
+  }
   if (!requisitionId) {
     UI.toast('ID de requisición no proporcionado', 'error');
     Router.go('requisitions');
     return;
   }
+  // Asegurar que el input oculto tenga el ID correcto (por si se renderizó con null)
+  const hiddenInput = document.getElementById('edit-requisition-id');
+  if (hiddenInput) hiddenInput.value = requisitionId;
 
   // 1. Ejecutar afterMount regular para cargar los selectores y catálogos
   await window.Views['new-purchase'].afterMount();
@@ -2679,6 +2691,16 @@ window.Views['edit-purchase'].afterMount = async function () {
 
 // Interceptor de previsualización en edición
 window.showOCEditPreview = function (requisitionId) {
+  // Leer el ID desde el DOM como fuente de verdad (por si Router.params fue limpiado)
+  const domId = document.getElementById('edit-requisition-id')?.value;
+  const resolvedId = requisitionId || (domId ? parseInt(domId) : null);
+
+  // Validar que tenemos un ID válido antes de continuar
+  if (!resolvedId) {
+    UI.toast('Error: ID de requisición no encontrado. Recarga la página e intenta de nuevo.', 'error');
+    return;
+  }
+
   // 1. Mostrar la vista previa de compras regular
   window.showOCPreview();
   
@@ -2686,18 +2708,24 @@ window.showOCEditPreview = function (requisitionId) {
   const confirmBtn = document.getElementById('oc-preview-confirm-btn');
   if (confirmBtn) {
     const cloned = confirmBtn.cloneNode(true);
-    cloned.textContent = 'Guardar y Enviar a Firmas';
-    cloned.style.background = 'linear-gradient(135deg, #4f46e5, #4338ca)'; // color índigo premium
+    // Preservar el SVG del ícono y sólo cambiar el texto
+    cloned.innerHTML = `
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+      Guardar y Enviar a Firmas
+    `;
+    cloned.style.background = 'linear-gradient(135deg, #4f46e5, #4338ca)';
     confirmBtn.replaceWith(cloned);
     
     cloned.addEventListener('click', () => {
-      if (typeof closePreview === 'function') closePreview();
-      window.saveEditedOC(requisitionId);
+      // Cerrar el overlay directamente por ID (closePreview es local a showOCPreview)
+      const overlay = document.getElementById('oc-preview-overlay');
+      if (overlay) overlay.remove();
+      window.saveEditedOC(resolvedId);
     });
   }
 };
 
-// Guardar los cambios (PUT)
+// Procesar requisición: crea una OC/OS NUEVA (POST) y luego finaliza la requisición original
 window.saveEditedOC = async function (requisitionId) {
   const proveedor_id = document.getElementById('oc-proveedor').value;
   const area = document.getElementById('oc-area').value;
@@ -2714,7 +2742,7 @@ window.saveEditedOC = async function (requisitionId) {
   }
   if (items.length === 0) { UI.toast('Agregue al menos un ítem con categoría válida', 'error'); return; }
 
-  UI.loading('Actualizando y Generando OC/OS...');
+  UI.loading('Generando OC/OS desde requisición...');
 
   try {
     const tipo = document.getElementById('oc-tipo').value;
@@ -2723,17 +2751,25 @@ window.saveEditedOC = async function (requisitionId) {
     const cond = document.getElementById('oc-condicion').value;
     const cTipo = document.getElementById('oc-credito-tipo').value;
     const cVal = document.getElementById('oc-condicion-val').value;
-    
+
+    // Obtener activo_id si es OS
     let activoId = null;
     if (tipo === 'servicio') {
-      const assetCode = document.getElementById('os-target-code')?.value || '';
+      const assetCode = document.getElementById('os-target-code')?.value?.trim() || '';
       if (assetCode) {
         const found = _ocAssets.find(a => a.codigo_interno === assetCode || a.numero_serie === assetCode);
         if (found) activoId = found.id;
+        else UI.toast('Código de activo no encontrado, se procesará como servicio general', 'warning');
       }
     }
 
-    // Detalles del pago
+    // Calcular montos
+    const porcIgv = parseFloat(document.getElementById('oc-igv-porcentaje').value || 18) / 100;
+    const incluido = document.getElementById('oc-precios-con-igv').checked;
+    const base = items.reduce((a, it) => a + (parseFloat(it.total) || 0), 0);
+    let totalCalculado = incluido ? base : base * (1 + porcIgv);
+
+    // Condición de pago
     let condDetalle = null;
     let fechaVencimientoCredito = null;
     let diaPago = null;
@@ -2747,37 +2783,39 @@ window.saveEditedOC = async function (requisitionId) {
     let fechaPagoAdelanto = null;
     let fechaPagoSaldoProyectado = null;
 
-    // Calcular montos finales
-    const porcIgv = parseFloat(document.getElementById('oc-igv-porcentaje').value || 18) / 100;
-    const incluido = document.getElementById('oc-precios-con-igv').checked;
-    const base = items.reduce((a, it) => a + (parseFloat(it.total) || 0), 0);
-    let subtotal, igv, total;
-    if (incluido) { total = base; subtotal = total / (1 + porcIgv); igv = total - subtotal; }
-    else { subtotal = base; igv = subtotal * porcIgv; total = subtotal + igv; }
-
     if (cond === 'Credito') {
-      condDetalle = (cTipo === 'Dias') ? `${cVal} Días` : `${cVal} Cuotas`;
       if (cTipo === 'Dias') {
-        fechaVencimientoCredito = document.getElementById('oc-credito-fecha-limite').value;
+        const fechaLim = document.getElementById('oc-credito-fecha-limite')?.value || '';
+        if (!fechaLim) { UI.toast('Seleccione la fecha límite de pago del crédito', 'error'); UI.stopLoading(); return; }
+        fechaVencimientoCredito = fechaLim;
+        const hoy = new Date(); hoy.setHours(0,0,0,0);
+        const limite = new Date(fechaLim + 'T00:00:00');
+        const diff = Math.round((limite - hoy) / (1000 * 60 * 60 * 24));
+        condDetalle = `${diff} días`;
       } else {
-        diaPago = parseInt(document.getElementById('oc-cuotas-dia-mes').value) || null;
-        fecha1raCuota = document.getElementById('oc-cuotas-fecha-inicio').value || null;
+        condDetalle = `${cVal} cuotas`;
+        cuotasDiaMes = parseInt(document.getElementById('oc-cuotas-dia-mes')?.value || 0) || null;
+        cuotasFechaInicio = document.getElementById('oc-cuotas-fecha-inicio')?.value || null;
       }
     } else if (cond === 'Adelanto + Saldo') {
-      adelantoPorc = parseFloat(document.getElementById('oc-adelanto-porc').value);
-      adelantoMonto = total * (adelantoPorc / 100);
-      saldoMonto = total - adelantoMonto;
+      adelantoPorc = parseFloat(document.getElementById('oc-adelanto-porc').value) || 0;
+      if (adelantoPorc <= 0 || adelantoPorc >= 100) {
+        UI.toast('El porcentaje de adelanto debe estar entre 1 y 99', 'warning'); UI.stopLoading(); return;
+      }
+      adelantoMonto = totalCalculado * (adelantoPorc / 100);
+      saldoMonto = totalCalculado - adelantoMonto;
       fechaPagoAdelanto = document.getElementById('oc-adelanto-fecha-pago').value;
       fechaPagoSaldoProyectado = document.getElementById('oc-adelanto-fecha-saldo').value;
+      if (!fechaPagoAdelanto) { UI.toast('Seleccione la fecha de pago de adelanto', 'warning'); UI.stopLoading(); return; }
+      if (!fechaPagoSaldoProyectado) { UI.toast('Seleccione la fecha proyectada del saldo', 'warning'); UI.stopLoading(); return; }
     } else if (cond === 'Alquiler') {
-      diaPago = parseInt(document.getElementById('oc-alquiler-dia').value) || 30;
-      mesesAlquiler = parseInt(document.getElementById('oc-alquiler-meses').value) || 24;
-      fecha1raCuota = document.getElementById('oc-alquiler-fecha-inicio').value || null;
+      diaPago = parseInt(document.getElementById('oc-alquiler-dia')?.value || 30);
+      mesesAlquiler = parseInt(document.getElementById('oc-alquiler-meses')?.value || 24);
+      fecha1raCuota = document.getElementById('oc-alquiler-primera-fecha')?.value || null;
     }
 
+    // ── PAYLOAD: igual a generateOC — sin id ni action (es un POST nuevo) ──
     const payload = {
-      action: 'full_update',
-      id: requisitionId,
       tipo,
       usuario_id: user?.id,
       proveedor_id,
@@ -2806,74 +2844,92 @@ window.saveEditedOC = async function (requisitionId) {
       mobility: _ocMobilityData,
       observaciones: document.getElementById('oc-observaciones').value.trim(),
       dentro_presupuesto: document.getElementById('oc-dentro-presupuesto')?.checked ? 1 : 0,
-      estado: 'Pendiente', // <--- Se eleva a aprobación formal de firmas
+      estado: 'Pendiente', // OC/OS nueva, va directo a firma
       items
     };
 
+    // ── PASO 1: Crear la nueva OC/OS via POST ──
     const resp = await fetch('api/purchases.php', {
-      method: 'PUT',
+      method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     });
 
-    const res = await resp.json();
+    let res;
+    try {
+      res = await resp.json();
+    } catch (e) {
+      throw new Error('La respuesta del servidor no es válida');
+    }
+
     UI.stopLoading();
 
-    if (res.ok) {
-      const areaNombre = document.getElementById('oc-area').options[document.getElementById('oc-area').selectedIndex].text;
-      payload.fecha_vencimiento = res.fecha_vencimiento || payload.fecha_vencimiento_credito || null;
-
-      // ── PASO 1: Generar y descargar PDF ──
-      UI.loading('Descargando PDF de la OC/OS…');
-      let ocDoc = null;
-      try {
-        ocDoc = generateOCPDF(res.numero_oc, sup, areaNombre, payload, items);
-      } catch (pdfErr) {
-        console.error('Error in generateOCPDF:', pdfErr);
-        UI.toast('Error al generar el PDF de la OC', 'warning');
-      }
-
-      // ── PASO 2: Generar y descargar PDF de Movilidad si aplica ──
-      let mobDoc = null;
-      if (!payload.incluye_movilidad && payload.mobility) {
-        await new Promise(r => setTimeout(r, 800));
-        UI.loading('Descargando PDF de Movilidad…');
-        try {
-          mobDoc = generateMobilityPDF(res.numero_oc, payload.mobility, sup, payload.moneda, payload.mobility.proveedor_nombre);
-        } catch (mobErr) {
-          console.error('Error in generateMobilityPDF:', mobErr);
-        }
-      }
-
-      UI.stopLoading();
-      UI.toast(`Orden ${res.numero_oc} generada y enviada a firmas con éxito.`, 'success');
-      
-      // Redirigir a listado de compras
-      Router.go('purchases');
-
-      // ── PASO 3: Subir a Google Drive en segundo plano ──
-      (async () => {
-          try {
-            const driveLinks = {};
-            if (ocDoc) driveLinks.pdf_oc_url = await uploadToDrive(ocDoc, res.numero_oc);
-            if (mobDoc) driveLinks.pdf_mov_url = await uploadToDrive(mobDoc, res.numero_oc + '-MOV');
-
-            if (driveLinks.pdf_oc_url || driveLinks.pdf_mov_url) {
-              await fetch('api/purchases.php', {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ action: 'save_drive_links', id: res.id, ...driveLinks })
-              });
-              console.log('Copia de seguridad de requisición procesada subida a Drive.');
-            }
-          } catch (driveErr) {
-            console.error('Drive background upload error:', driveErr);
-          }
-      })();
-
-    } else {
-      UI.toast('Error: ' + (res.error || 'Ocurrió un problema en el servidor'), 'error');
+    if (!res.ok) {
+      UI.toast('Error: ' + (res.error || 'Ocurrió un problema al crear la OC'), 'error');
+      return;
     }
+
+    // ── PASO 2: Cambiar el estado de la requisición original a "Req_Gestionando" ──
+    try {
+      await fetch('api/purchases.php', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'update_status', id: requisitionId, estado: 'Req_Gestionando' })
+      });
+    } catch (statusErr) {
+      // No bloqueamos el flujo si falla el marcado — la OC ya fue creada
+      console.warn('No se pudo cambiar el estado de la requisición original a gestionando:', statusErr);
+    }
+
+    const areaNombre = document.getElementById('oc-area').options[document.getElementById('oc-area').selectedIndex].text;
+    payload.fecha_vencimiento = res.fecha_vencimiento || fechaVencimientoCredito || null;
+
+    // ── PASO 3: Generar y descargar PDF de la OC ──
+    UI.loading('Descargando PDF de la OC/OS…');
+    let ocDoc = null;
+    try {
+      ocDoc = generateOCPDF(res.numero_oc, sup, areaNombre, payload, items);
+    } catch (pdfErr) {
+      console.error('Error in generateOCPDF:', pdfErr);
+      UI.toast('Error al generar el PDF de la OC', 'warning');
+    }
+
+    // ── PASO 4: PDF de Movilidad si aplica ──
+    let mobDoc = null;
+    if (!payload.incluye_movilidad && payload.mobility) {
+      await new Promise(r => setTimeout(r, 800));
+      UI.loading('Descargando PDF de Movilidad…');
+      try {
+        mobDoc = generateMobilityPDF(res.numero_oc, payload.mobility, sup, payload.moneda, payload.mobility.proveedor_nombre);
+      } catch (mobErr) {
+        console.error('Error in generateMobilityPDF:', mobErr);
+      }
+    }
+
+    UI.stopLoading();
+    UI.toast(`✅ ${res.numero_oc} generada y enviada a firmas con éxito.`, 'success');
+
+    // ── PASO 5: Refrescar badge de requisiciones y navegar a compras ──
+    if (typeof window.refreshRequisitionsBadge === 'function') window.refreshRequisitionsBadge();
+    Router.go('purchases');
+
+    // ── PASO 6: Subir a Google Drive en segundo plano ──
+    (async () => {
+      try {
+        const driveLinks = {};
+        if (ocDoc) driveLinks.pdf_oc_url = await uploadToDrive(ocDoc, res.numero_oc);
+        if (mobDoc) driveLinks.pdf_mov_url = await uploadToDrive(mobDoc, res.numero_oc + '-MOV');
+        if (driveLinks.pdf_oc_url || driveLinks.pdf_mov_url) {
+          await fetch('api/purchases.php', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'save_drive_links', id: res.id, ...driveLinks })
+          });
+        }
+      } catch (driveErr) {
+        console.error('Drive background upload error:', driveErr);
+      }
+    })();
 
   } catch (err) {
     UI.stopLoading();
@@ -2882,4 +2938,6 @@ window.saveEditedOC = async function (requisitionId) {
   }
 };
 
+
 // Router hook para edición
+

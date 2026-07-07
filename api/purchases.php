@@ -71,7 +71,7 @@ try {
                 $where .= " AND oc.estado = 'Req_Finalizada'";
             } else if (isset($_GET['requisitions_only'])) {
                 // Requisiciones activas (excluye finalizadas)
-                $where .= " AND oc.estado IN ('Req_Pendiente_Area', 'Req_Pendiente_Compras', 'Req_Rechazada')";
+                $where .= " AND oc.estado IN ('Req_Pendiente_Area', 'Req_Pendiente_Compras', 'Req_Gestionando', 'Req_Rechazada')";
             } else if (!isset($_GET['include_reqs'])) {
                 $where .= " AND oc.estado NOT LIKE 'Req_%'";
             }
@@ -405,9 +405,9 @@ try {
                 $estadoActual = $stmtCheck->fetchColumn();
                 if (!$estadoActual) json_response(['error' => 'Requisición no encontrada'], 404);
 
-                // Solo se puede finalizar desde Req_Pendiente_Compras
-                if ($estadoActual !== 'Req_Pendiente_Compras') {
-                    json_response(['error' => 'Solo se pueden finalizar requisiciones en bandeja de compras'], 400);
+                // Solo se puede finalizar desde Req_Pendiente_Compras o Req_Gestionando
+                if ($estadoActual !== 'Req_Pendiente_Compras' && $estadoActual !== 'Req_Gestionando') {
+                    json_response(['error' => 'Solo se pueden finalizar requisiciones en bandeja de compras o en gestión'], 400);
                 }
 
                 $pdo->beginTransaction();

@@ -371,9 +371,15 @@ window.todayPE = function() {
     const mainView = document.getElementById('view');
     mainView.innerHTML = `<div class="animate-slide-up h-full">Cargando...</div>`;
     
+    // Capturar Router.params ANTES del setTimeout (el router los limpia en 500ms)
+    const capturedParams = Router.params || null;
+
     setTimeout(() => {
         const fn = window.Views && window.Views[section];
-        mainView.innerHTML = `<div class="animate-slide-up">` + (fn ? fn(user) : `<div class="card p-20 text-center text-muted-foreground font-medium italic">La sección "${section}" se encuentra bajo mantenimiento.</div>`) + `</div>`;
+        // CORRECCIÓN: pasar Router.params capturado a la vista (no `user`).
+        // Las vistas como edit-purchase necesitan params.requisition_id,
+        // no el objeto usuario. Si la vista no usa params, los ignora.
+        mainView.innerHTML = `<div class="animate-slide-up">` + (fn ? fn(capturedParams) : `<div class="card p-20 text-center text-muted-foreground font-medium italic">La sección "${section}" se encuentra bajo mantenimiento.</div>`) + `</div>`;
         lucide.createIcons();
         if (fn && fn.afterMount) fn.afterMount(user);
     }, 50);
