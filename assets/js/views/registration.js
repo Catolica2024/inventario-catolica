@@ -105,8 +105,8 @@ function renderEquiposForm() {
                 <div>
                     <label class="text-sm font-bold mb-1 block text-muted-foreground">Ubicación Destino <span class="text-destructive">*</span></label>
                     <select id="reg-loc" class="select w-full h-11">
-                        <option value="">Seleccione Depósito...</option>
-                        ${_regResources.locs.filter(l => l.tipo === 'Depósito' && l.estado === 'activo').map(l => `<option value="${l.id}">${l.nombre} (${l.sede_nombre})</option>`).join('')}
+                        <option value="">Seleccione Ubicación...</option>
+                        ${_regResources.locs.filter(l => l.estado === 'activo').map(l => `<option value="${l.id}">${l.nombre} (${l.sede_nombre})</option>`).join('')}
                     </select>
                 </div>
                 <div class="md:col-span-2">
@@ -149,8 +149,8 @@ function renderMobiliarioForm() {
                 <div>
                     <label class="text-sm font-bold mb-1 block text-muted-foreground">Ubicación / Sede <span class="text-destructive">*</span></label>
                     <select id="reg-loc" class="select w-full h-11">
-                        <option value="">Seleccione Depósito...</option>
-                        ${_regResources.locs.filter(l => l.tipo === 'Depósito' && l.estado === 'activo').map(l => `<option value="${l.id}">${l.nombre} (${l.sede_nombre})</option>`).join('')}
+                        <option value="">Seleccione Ubicación...</option>
+                        ${_regResources.locs.filter(l => l.estado === 'activo').map(l => `<option value="${l.id}">${l.nombre} (${l.sede_nombre})</option>`).join('')}
                     </select>
                 </div>
                 <div>
@@ -201,8 +201,8 @@ function renderInsumosForm() {
                 <div>
                     <label class="text-sm font-bold mb-1 block text-muted-foreground">Ubicación de Almacenaje <span class="text-destructive">*</span></label>
                     <select id="reg-loc" class="select w-full h-11">
-                        <option value="">Seleccione Depósito...</option>
-                        ${_regResources.locs.filter(l => l.tipo === 'Depósito' && l.estado === 'activo').map(l => `<option value="${l.id}">${l.nombre} (${l.sede_nombre})</option>`).join('')}
+                        <option value="">Seleccione Ubicación...</option>
+                        ${_regResources.locs.filter(l => l.estado === 'activo').map(l => `<option value="${l.id}">${l.nombre} (${l.sede_nombre})</option>`).join('')}
                     </select>
                 </div>
                 <div>

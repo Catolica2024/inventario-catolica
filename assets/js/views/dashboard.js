@@ -1,5 +1,6 @@
 window.Views = window.Views || {};
-window.Views.dashboard = function(user) {
+window.Views.dashboard = function() {
+  const user = Auth.getUser();
   return `
     ${UI.pageHeader(`Bienvenido de nuevo, ${user.name.split(' ')[0]} 👋`, 'Resumen estratégico del inventario institucional', `
         <div class="flex items-center gap-3">
