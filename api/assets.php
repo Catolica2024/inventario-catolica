@@ -48,7 +48,7 @@ try {
             $rows = $pdo->query("
                 SELECT a.*, i.nombre as item_nombre, i.codigo as item_codigo,
                        a.codigo_interno as codigo_patrimonial,
-                       ci.nombre as categoria_nombre, 
+                       ci.nombre as categoria_nombre, ci.tipo as categoria_tipo,
                        u.nombre as ubicacion_nombre, u.id as ubicacion_id,
                        s.nombre as sede_nombre, s.id as sede_id,
                        p.nombre as responsable_nombre

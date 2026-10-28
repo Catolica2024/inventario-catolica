@@ -19,7 +19,7 @@ async function loadInventory() {
         _inventoryData = [
             ...(assetsResp.assets || []).map(a => ({ ...a, _type: 'unit' })),
             ...(itemsResp.items || []).filter(i => {
-                if (i.categoria_tipo === 'equipo') {
+                if (i.categoria_tipo === 'equipo' || i.categoria_tipo === 'activo') {
                     const hasUnits = (assetsResp.assets || []).some(a => a.item_id == i.id);
                     return !hasUnits;
                 }
@@ -118,9 +118,12 @@ function renderInventoryRows(data) {
                 <td>${codeHtml}</td>
                 <td>
                     <div class="font-bold text-slate-800">${isUnit ? d.item_nombre : d.nombre}</div>
-                    <div class="text-[9px] font-black text-muted-foreground uppercase tracking-wider mt-0.5">${isUnit ? (d.numero_serie ? 'S/N: '+d.numero_serie : 'SIN SERIE') : (d.marca || 'GENÉRICO')}</div>
+                    <div class="text-[9px] font-black text-muted-foreground uppercase tracking-wider mt-0.5">${isUnit ? (d.numero_serie ? 'S/N: ' + d.numero_serie : 'SIN SERIE') : (d.marca || 'GENÉRICO')}</div>
                 </td>
-                <td><span class="badge ${getCategoryTypeBadge(isUnit ? 'equipo' : d.categoria_tipo)}">${isUnit ? 'EQUIPO' : (d.categoria_nombre || '—')}</span></td>
+                <td>
+                    <div class="badge ${getCategoryTypeBadge(isUnit ? (d.categoria_tipo === 'equipo' ? 'equipo' : 'activo') : d.categoria_tipo)} mb-1">${(isUnit ? (d.categoria_tipo === 'equipo' ? 'EQUIPO' : 'ACTIVO') : (d.categoria_tipo || '—')).toUpperCase()}</div>
+                    <div class="text-[9px] font-bold text-muted-foreground uppercase tracking-wider">${d.categoria_nombre || '—'}</div>
+                </td>
                 <td>
                     <div class="text-xs font-black text-slate-700 uppercase tracking-tighter">
                         ${isUnit ? (d.ubicacion_nombre || '—') : (d.num_ubicaciones > 1 ? 'Múltiples' : (d.ubicacion_nombre || '—'))}
@@ -128,9 +131,12 @@ function renderInventoryRows(data) {
                     <div class="text-[9px] font-bold text-muted-foreground uppercase">${d.sede_nombre || 'Sede Central'}</div>
                 </td>
                 <td class="text-center">
-                    ${isUnit ? 
-                        `<span class="badge ${getStatusBadge(d.estado)}">${d.estado}</span>` : 
-                        `<div class="flex flex-col items-center">
+                    ${isUnit
+                ? (d.ubicacion_nombre
+                    ? `<span class="badge ${getStatusBadge(d.estado)}">${d.estado}</span>`
+                    : `<span class="badge badge-green">DISPONIBLE</span><div class="text-[9px] font-bold text-muted-foreground mt-0.5">${d.estado}</div>`)
+                :
+                `<div class="flex flex-col items-center">
                             <div class="flex items-center gap-1">
                                 <span class="font-black text-base ${d.stock_actual <= 0 ? 'text-destructive' : d.stock_actual <= (d.categoria_stock_minimo || d.stock_minimo) ? 'text-amber-500' : 'text-emerald-600'}">${d.stock_actual}</span>
                                 <span class="text-[9px] font-black text-muted-foreground uppercase tracking-wider">${d.unidad_medida || 'unid.'}</span>
@@ -142,11 +148,11 @@ function renderInventoryRows(data) {
                             ` : ''}
                             <div class="text-[8px] font-bold text-slate-400 uppercase tracking-tighter mt-0.5">de ${d.stock_total || d.stock_actual} total</div>
                         </div>`
-                    }
+            }
                 </td>
                 <td>
                     <div class="flex items-center gap-2">
-                        <div class="w-6 h-6 rounded-lg bg-slate-100 flex items-center justify-center text-[10px] font-black text-slate-400">${(d.responsable_nombre||'—').charAt(0)}</div>
+                        <div class="w-6 h-6 rounded-lg bg-slate-100 flex items-center justify-center text-[10px] font-black text-slate-400">${(d.responsable_nombre || '—').charAt(0)}</div>
                         <div class="text-[11px] font-bold text-slate-600 italic">${d.responsable_nombre || 'Sin asignar'}</div>
                     </div>
                 </td>
@@ -154,21 +160,21 @@ function renderInventoryRows(data) {
                     <div class="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                         <button class="btn btn-ghost p-2 rounded-xl" onclick="UI.showQR('${isUnit ? (d.codigo_patrimonial || '—') : (d.codigo || '—')}', '${isUnit ? 'EQUIPO' : (d.categoria_nombre || '—')}')" title="Ver QR"><i data-lucide="qr-code" class="w-4 h-4"></i></button>
                         <button class="btn btn-ghost p-2 rounded-xl" onclick="${isUnit ? `viewAssetDetails(${d.id})` : `viewCatalogItem(${d.id})`}" title="Ver detalle"><i data-lucide="eye" class="w-4 h-4"></i></button>
-                        ${isAdmin && !isUnit ? 
-                            `<button class="btn btn-ghost p-2 rounded-xl text-indigo-600" onclick="editInventoryItem(${d.id})" title="Editar (Solo Admin)"><i data-lucide="pencil" class="w-4 h-4"></i></button>` : 
-                            ''
-                        }
-                        ${isUnit ? 
-                            `<button class="btn btn-ghost p-2 rounded-xl text-primary" onclick="loadTraceResources().then(() => openAssignmentModal(${d.id}))" title="Asignar"><i data-lucide="user-plus" class="w-4 h-4"></i></button>` : 
-                            (d.categoria_tipo === 'mobiliario' ? 
-                                `<button class="btn btn-ghost p-2 rounded-xl text-amber-600" onclick="loadTraceResources().then(() => openTransferModal(${d.id}))" title="Trasladar"><i data-lucide="move" class="w-4 h-4"></i></button>` :
-                                `<button class="btn btn-ghost p-2 rounded-xl text-emerald-600" onclick="loadTraceResources().then(() => openDispatchModal(${d.id}))" title="Despachar"><i data-lucide="send" class="w-4 h-4"></i></button>`
-                            )
-                        }
-                        ${window.canDelete(window.Auth.getUser()) ? 
-                            `<button class="btn btn-ghost p-2 rounded-xl text-destructive" onclick="deleteInventoryItem('${d._type}', ${d.id}, '${(isUnit ? d.item_nombre : d.nombre || '').replace(/'/g, '\\&apos;')}')" title="Eliminar"><i data-lucide="trash-2" class="w-4 h-4"></i></button>` : 
-                            ''
-                        }
+                        ${isAdmin && !isUnit ?
+                `<button class="btn btn-ghost p-2 rounded-xl text-indigo-600" onclick="editInventoryItem(${d.id})" title="Editar (Solo Admin)"><i data-lucide="pencil" class="w-4 h-4"></i></button>` :
+                ''
+            }
+                        ${isUnit ?
+                `<button class="btn btn-ghost p-2 rounded-xl text-primary" onclick="loadTraceResources().then(() => openAssignmentModal(${d.id}))" title="Asignar"><i data-lucide="user-plus" class="w-4 h-4"></i></button>` :
+                (d.categoria_tipo === 'mobiliario' ?
+                    `<button class="btn btn-ghost p-2 rounded-xl text-amber-600" onclick="loadTraceResources().then(() => openTransferModal(${d.id}))" title="Trasladar"><i data-lucide="move" class="w-4 h-4"></i></button>` :
+                    `<button class="btn btn-ghost p-2 rounded-xl text-emerald-600" onclick="loadTraceResources().then(() => openDispatchModal(${d.id}))" title="Despachar"><i data-lucide="send" class="w-4 h-4"></i></button>`
+                )
+            }
+                        ${window.canDelete(window.Auth.getUser()) ?
+                `<button class="btn btn-ghost p-2 rounded-xl text-destructive" onclick="deleteInventoryItem('${d._type}', ${d.id}, '${(isUnit ? d.item_nombre : d.nombre || '').replace(/'/g, '\\&apos;')}')" title="Eliminar"><i data-lucide="trash-2" class="w-4 h-4"></i></button>` :
+                ''
+            }
                     </div>
                 </td>
             </tr>
@@ -178,7 +184,7 @@ function renderInventoryRows(data) {
 }
 
 function getCategoryTypeBadge(type) {
-    if (type === 'equipo') return 'badge-blue';
+    if (type === 'equipo' || type === 'activo') return 'badge-blue';
     if (type === 'mobiliario') return 'badge-cyan';
     if (type === 'insumo') return 'badge-green';
     return 'badge-gray';
@@ -189,7 +195,7 @@ function getStatusBadge(status) {
     return map[status] || 'badge-gray';
 }
 
-window.applyAdvancedFilters = function() {
+window.applyAdvancedFilters = function () {
     const search = document.getElementById('f-search').value.toLowerCase();
     const sede = document.getElementById('f-sede').value;
     const cat = document.getElementById('f-cat').value;
@@ -197,14 +203,14 @@ window.applyAdvancedFilters = function() {
     const statusVal = document.getElementById('f-status').value;
 
     const filtered = _inventoryData.filter(d => {
-        const matchSearch = !search || 
-            (d.item_nombre || d.nombre || '').toLowerCase().includes(search) || 
-            (d.numero_serie || '').toLowerCase().includes(search) || 
+        const matchSearch = !search ||
+            (d.item_nombre || d.nombre || '').toLowerCase().includes(search) ||
+            (d.numero_serie || '').toLowerCase().includes(search) ||
             (d.codigo_patrimonial || d.codigo || '').toLowerCase().includes(search);
         const matchSede = !sede || d.sede_id == sede;
         const matchCat = !cat || (d.categoria_inventario_id == cat || d.categoria_id == cat);
         const matchLoc = !loc || d.ubicacion_id == loc;
-        
+
         let matchStatus = true;
         if (statusVal) {
             if (statusVal.startsWith('T:')) {
@@ -221,10 +227,11 @@ window.applyAdvancedFilters = function() {
     renderInventoryRows(filtered);
 };
 
-window.Views.inventory = function() {
+window.Views.inventory = function () {
     return `
-        ${UI.pageHeader('Inventario General','Control centralizado de activos e insumos institucionales', `
+        ${UI.pageHeader('Inventario General', 'Control centralizado de activos e insumos institucionales', `
             <button class="btn btn-outline shadow-sm btn-sm-auto" onclick="loadInventory()"><i data-lucide="refresh-cw" class="w-4 h-4 mr-2"></i>Sincronizar</button>
+            <button class="btn btn-outline shadow-sm btn-sm-auto text-blue-600" onclick="openExcelImportModal()"><i data-lucide="upload-cloud" class="w-4 h-4 mr-2"></i>Importar Excel</button>
             <button class="btn btn-outline shadow-sm btn-sm-auto text-emerald-600" onclick="exportInventory()"><i data-lucide="file-spreadsheet" class="w-4 h-4 mr-2"></i>Exportar Excel</button>
             <button class="btn btn-primary shadow-lg btn-sm-auto" onclick="Router.go('registration')"><i data-lucide="plus" class="w-4 h-4 mr-2"></i>Nuevo Bien</button>
         `)}
@@ -243,7 +250,7 @@ window.Views.inventory = function() {
                         <tr>
                             <th>Código</th>
                             <th>Descripción del Bien</th>
-                            <th>Categoría</th>
+                            <th>Tipo</th>
                             <th>Ubicación / Sede</th>
                             <th class="text-center">Estado / Stock</th>
                             <th>Responsable</th>
@@ -259,12 +266,12 @@ window.Views.inventory = function() {
     `;
 };
 
-window.Views.inventory.afterMount = function() {
+window.Views.inventory.afterMount = function () {
     loadInventory();
     lucide.createIcons();
 };
 
-window.deleteInventoryItem = function(type, id, nombre) {
+window.deleteInventoryItem = function (type, id, nombre) {
     if (!window.canDelete(window.Auth.getUser())) {
         UI.toast('Solo el Administrador puede eliminar registros', 'error');
         return;
@@ -311,7 +318,7 @@ window.deleteInventoryItem = function(type, id, nombre) {
     });
 };
 
-window.editInventoryItem = async function(itemId) {
+window.editInventoryItem = async function (itemId) {
     const user = window.Auth.getUser();
     if (!user || user.role !== 'admin') {
         UI.toast('Solo el Administrador puede editar registros del inventario', 'error');
@@ -430,7 +437,7 @@ window.editInventoryItem = async function(itemId) {
     setTimeout(() => lucide.createIcons(), 50);
 };
 
-window.editItemPreviewCode = async function(itemId) {
+window.editItemPreviewCode = async function (itemId) {
     const catId = document.getElementById('edit-item-cat')?.value;
     const manualCode = document.getElementById('edit-item-codigo')?.value.trim();
     const preview = document.getElementById('edit-item-code-preview');
@@ -443,7 +450,7 @@ window.editItemPreviewCode = async function(itemId) {
     }
 };
 
-window.openInventoryScanner = function() {
+window.openInventoryScanner = function () {
     UI.openScanner((decodedText) => {
         const searchInput = document.getElementById('f-search');
         if (searchInput) {
@@ -455,7 +462,7 @@ window.openInventoryScanner = function() {
     });
 };
 
-window.exportInventory = function() {
+window.exportInventory = function () {
     const dataToExport = _inventoryData.map(d => {
         const isUnit = d._type === 'unit';
         return {
@@ -471,4 +478,205 @@ window.exportInventory = function() {
         };
     });
     UI.exportToExcel(dataToExport, 'Inventario_General_' + new Date().toISOString().split('T')[0] + '.xlsx');
+};
+
+window.openExcelImportModal = function() {
+    UI.modal({
+        title: 'Importar Inventario desde Excel',
+        body: `
+            <div class="space-y-4">
+                <p class="text-sm text-slate-500">Seleccione un archivo de Excel (.xlsx, .xls) con las siguientes columnas: <strong>Nombre del artículo, Marca, Modelo, Nro de Serie, Tipo, Categoria, Ubicación, stock, Estado, descripción</strong>.</p>
+                <div>
+                    <input type="file" id="excel-file-input" accept=".xlsx, .xls" class="input w-full p-2 border border-slate-300 rounded-md">
+                </div>
+            </div>
+        `,
+        confirmText: 'Importar',
+        onConfirm: async () => {
+            const fileInput = document.getElementById('excel-file-input');
+            if (!fileInput.files.length) {
+                UI.toast('Por favor seleccione un archivo Excel.', 'error');
+                return false;
+            }
+
+            const file = fileInput.files[0];
+            const reader = new FileReader();
+
+            reader.onload = async function(e) {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, {type: 'array'});
+                    const firstSheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[firstSheetName];
+                    const json = XLSX.utils.sheet_to_json(worksheet);
+
+                    if (!json || json.length === 0) {
+                        UI.toast('El archivo Excel está vacío o no tiene el formato correcto.', 'error');
+                        return;
+                    }
+
+                    UI.loading('Importando datos, por favor espere...');
+
+                    const response = await fetch('api/import_excel.php', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(json)
+                    });
+
+                    const responseText = await response.text();
+                    let result;
+                    try {
+                        result = JSON.parse(responseText);
+                    } catch(parseErr) {
+                        console.error('Respuesta del servidor no es JSON:', responseText);
+                        UI.stopLoading();
+                        UI.toast('Error del servidor: ' + responseText.substring(0, 100), 'error');
+                        return;
+                    }
+
+                    UI.stopLoading();
+
+                    if (result.success) {
+                        const s = result.stats;
+                        let msg = `Ítems creados: ${s.items_creados}<br>Activos creados: ${s.activos_creados}<br>Stocks actualizados: ${s.stock_actualizado}`;
+                        if (s.errores && s.errores.length > 0) {
+                            msg += `<br><br><span class="text-red-500">Errores (${s.errores.length}):</span><br>` + s.errores.slice(0,5).join('<br>') + (s.errores.length > 5 ? '<br>...' : '');
+                        }
+                        UI.toast('Importación finalizada con éxito.', 'success');
+                        UI.modal({
+                            title: 'Resultado de la Importación',
+                            body: `<div class="text-sm text-slate-600">${msg}</div>`,
+                            confirmText: 'Aceptar',
+                            onConfirm: () => {
+                                loadInventory();
+                            }
+                        });
+                    } else {
+                        UI.toast('Error al importar: ' + (result.error || 'Error desconocido'), 'error');
+                    }
+                } catch (err) {
+                    UI.stopLoading();
+                    UI.toast('Error al procesar el archivo: ' + err.message, 'error');
+                    console.error(err);
+                }
+            };
+
+            reader.readAsArrayBuffer(file);
+        }
+    });
+};
+
+window.viewAssetDetails = function (id) {
+    const item = _inventoryData.find(d => d._type === 'unit' && d.id == id);
+    if (!item) return;
+
+    UI.modal({
+        title: '<div class="flex items-center gap-2"><i data-lucide="monitor" class="w-5 h-5 text-blue-600"></i> Detalle del Equipo</div>',
+        body: `
+            <div class="space-y-4 text-sm text-slate-700">
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <span class="block text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-1">Código Patrimonial</span>
+                        <div class="font-mono font-bold text-slate-900 bg-slate-100 px-2 py-1 rounded inline-block">${item.codigo_patrimonial || '—'}</div>
+                    </div>
+                    <div>
+                        <span class="block text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-1">Número de Serie</span>
+                        <div class="font-mono font-bold text-slate-900">${item.numero_serie || '—'}</div>
+                    </div>
+                </div>
+                
+                <div class="p-3 bg-slate-50 border border-slate-100 rounded-xl">
+                    <p class="font-bold text-base text-slate-800 mb-1">${item.item_nombre || '—'}</p>
+                    <p class="text-xs text-slate-500"><strong>Marca:</strong> ${item.marca || '—'} &nbsp;|&nbsp; <strong>Modelo:</strong> ${item.modelo || '—'}</p>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <span class="block text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-1">Tipo y Categoría</span>
+                        <div class="badge ${getCategoryTypeBadge(item.categoria_tipo)} mb-1">${(item.categoria_tipo || '—').toUpperCase()}</div>
+                        <div class="text-xs font-medium text-slate-600">${item.categoria_nombre || '—'}</div>
+                    </div>
+                    <div>
+                        <span class="block text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-1">Estado Operativo</span>
+                        <span class="badge ${getStatusBadge(item.estado)}">${item.estado}</span>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <span class="block text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-1">Ubicación Actual</span>
+                        <div class="font-bold text-slate-800">${item.ubicacion_nombre || '—'}</div>
+                        <div class="text-[10px] text-slate-500 uppercase">${item.sede_nombre || 'Sede Central'}</div>
+                    </div>
+                    <div>
+                        <span class="block text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-1">Responsable Asignado</span>
+                        <div class="font-bold text-slate-800">${item.responsable_nombre || 'Sin asignar'}</div>
+                    </div>
+                </div>
+
+                <div>
+                    <span class="block text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-1">Observaciones Técnicas</span>
+                    <div class="text-xs text-slate-600 p-2 bg-slate-50 rounded-lg italic">${item.observaciones_tecnicas || 'Ninguna'}</div>
+                </div>
+            </div>
+        `,
+        confirmText: 'Cerrar'
+    });
+    setTimeout(() => lucide.createIcons(), 50);
+};
+
+window.viewCatalogItem = function (id) {
+    const item = _inventoryData.find(d => d._type === 'stock' && d.id == id);
+    if (!item) return;
+
+    UI.modal({
+        title: '<div class="flex items-center gap-2"><i data-lucide="package" class="w-5 h-5 text-emerald-600"></i> Detalle del Ítem de Inventario</div>',
+        body: `
+            <div class="space-y-4 text-sm text-slate-700">
+                <div class="p-3 bg-slate-50 border border-slate-100 rounded-xl">
+                    <div class="flex justify-between items-start mb-1">
+                        <p class="font-bold text-base text-slate-800">${item.nombre || '—'}</p>
+                        <div class="font-mono font-bold text-slate-900 bg-slate-100 px-2 py-1 rounded inline-block text-xs">${item.codigo || '—'}</div>
+                    </div>
+                    <p class="text-xs text-slate-500"><strong>Marca:</strong> ${item.marca || '—'} &nbsp;|&nbsp; <strong>Modelo:</strong> ${item.modelo || '—'}</p>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <span class="block text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-1">Tipo y Categoría</span>
+                        <div class="badge ${getCategoryTypeBadge(item.categoria_tipo)} mb-1">${(item.categoria_tipo || '—').toUpperCase()}</div>
+                        <div class="text-xs font-medium text-slate-600">${item.categoria_nombre || '—'}</div>
+                    </div>
+                    <div>
+                        <span class="block text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-1">Stock Actual</span>
+                        <div class="text-2xl font-black ${item.stock_actual <= 0 ? 'text-destructive' : 'text-emerald-600'}">
+                            ${item.stock_actual} <span class="text-xs font-bold text-slate-500 uppercase tracking-widest">${item.unidad_medida || 'UNID'}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-3 gap-2 p-3 bg-slate-50 rounded-xl border border-slate-100 text-center">
+                    <div>
+                        <div class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Total Entradas</div>
+                        <div class="font-bold text-slate-700">${item.stock_total || 0}</div>
+                    </div>
+                    <div>
+                        <div class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Total Salidas</div>
+                        <div class="font-bold text-slate-700">${item.stock_salido || 0}</div>
+                    </div>
+                    <div>
+                        <div class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Stock Mínimo</div>
+                        <div class="font-bold ${item.stock_actual <= (item.categoria_stock_minimo || item.stock_minimo) ? 'text-amber-500' : 'text-slate-700'}">${item.stock_minimo || 0}</div>
+                    </div>
+                </div>
+
+                <div>
+                    <span class="block text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-1">Ubicación de Stock</span>
+                    <div class="font-bold text-slate-800">${item.num_ubicaciones > 1 ? 'Múltiples ubicaciones ('+item.num_ubicaciones+')' : (item.ubicacion_nombre || '—')}</div>
+                </div>
+            </div>
+        `,
+        confirmText: 'Cerrar'
+    });
+    setTimeout(() => lucide.createIcons(), 50);
 };

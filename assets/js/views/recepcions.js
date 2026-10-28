@@ -58,7 +58,7 @@ async function loadRecepcions() {
         const approvedList  = (approved.purchases || []);
         // Incluir Completadas del segundo fetch para el historial
         const completedList = (completed.purchases || []).filter(p =>
-            p.estado === 'Completada' && p.comprobante_url && p.conformidad_url
+            p.estado === 'Completada' || _docState(p) === 'complete'
         );
 
         // Merge: approved_only ya devuelve Aprobada y Recibida
@@ -89,6 +89,8 @@ function _updateRecepcionTabCounts() {
 
 // ── Render table ──────────────────────────────────────────────────────────────
 function renderRecepcionTable() {
+    const _canEditDocs = window.Auth && ['admin', 'comprador'].includes(window.Auth.getUser()?.role);
+    const _adminUserId = window.Auth?.getUser()?.id || null;
     const tbody = document.getElementById('recepcions-table-body');
     if (!tbody) return;
 
@@ -162,17 +164,22 @@ function renderRecepcionTable() {
                 </div>`;
         }
 
-        // ── Dos botones independientes: Conformidad | Factura⁠/⁠RxH ──
+        // ── Dos botones independientes: Conformidad | Factura / RxH ──
         const esOS = p.tipo === 'servicio';
 
         // ── Botón 1: Conformidad ──
         const conformidadBtn = p.conformidad_url
-            ? `<a href="${p.conformidad_url}" target="_blank"
-                  class="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-bold
-                         bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 transition-colors shrink-0"
-                  title="Ver Acta de Conformidad">
-                  <i data-lucide="check-circle" class="w-3.5 h-3.5"></i> Conformidad
-               </a>`
+            ? `<div class="inline-flex items-center gap-1 shrink-0">
+                 <a href="${p.conformidad_url}" target="_blank"
+                    class="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-bold
+                           bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 transition-colors"
+                    title="Ver Acta de Conformidad">
+                    <i data-lucide="check-circle" class="w-3.5 h-3.5"></i> Conformidad
+                 </a>
+                 ${_canEditDocs ? `<button class="inline-flex items-center p-1.5 rounded-lg text-amber-600 hover:bg-amber-50 border border-amber-200 transition-colors" title="Editar Conformidad" onclick="editarDocumento(${p.id}, '${p.numero_oc}', 'conformidad_url', '${p.tipo}')">
+                   <i data-lucide="pencil" class="w-3 h-3"></i>
+                 </button>` : ''}
+               </div>`
             : `<button class="btn btn-primary btn-sm btn-sm-auto"
                        onclick="subirConformidadSolo(${p.id}, '${p.numero_oc}', '${p.tipo}', ${esCuotas})"
                        title="Subir Acta de Conformidad">
@@ -187,10 +194,12 @@ function renderRecepcionTable() {
             const allFac = cuotasConFac >= totalCuotas && totalCuotas > 0;
             const cuotaLabel = p.condicion_pago === 'Alquiler' ? 'Subir Facturas' : 'Fact. Cuotas';
             facturaBtn = allFac
-                ? `<span class="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-bold
-                              bg-emerald-50 text-emerald-700 border border-emerald-200 shrink-0">
-                       <i data-lucide="check-circle" class="w-3.5 h-3.5"></i> ${esOS ? 'RxH' : 'Facturas'} OK
-                   </span>`
+                ? `<button class="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-bold
+                              bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 transition-colors shrink-0"
+                           onclick="gestionarFacturasCuotas(${p.id}, '${p.numero_oc}')"
+                           title="Ver y gestionar facturas de cuotas">
+                       <i data-lucide="check-circle" class="w-3.5 h-3.5"></i> ${esOS ? 'RxH' : 'Facturas'} OK
+                   </button>`
                 : `<button class="btn btn-amber-outline btn-sm btn-sm-auto"
                            onclick="gestionarFacturasCuotas(${p.id}, '${p.numero_oc}')"
                            title="Gestionar facturas por cuota">
@@ -202,12 +211,17 @@ function renderRecepcionTable() {
             const facLabel = esOS ? 'Subir RxH' : 'Subir Factura';
             const facTitle = esOS ? 'Ver RxH' : 'Ver Factura';
             facturaBtn = p.comprobante_url
-                ? `<a href="${p.comprobante_url}" target="_blank"
-                      class="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-bold
-                             bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 transition-colors shrink-0"
-                      title="${facTitle}">
-                      <i data-lucide="check-circle" class="w-3.5 h-3.5"></i> ${esOS ? 'RxH' : 'Factura'}
-                   </a>`
+                ? `<div class="inline-flex items-center gap-1 shrink-0">
+                     <a href="${p.comprobante_url}" target="_blank"
+                        class="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-bold
+                               bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 transition-colors"
+                        title="${facTitle}">
+                        <i data-lucide="check-circle" class="w-3.5 h-3.5"></i> ${esOS ? 'RxH' : 'Factura'}
+                     </a>
+                     ${_canEditDocs ? `<button class="inline-flex items-center p-1.5 rounded-lg text-amber-600 hover:bg-amber-50 border border-amber-200 transition-colors" title="Editar Factura" onclick="editarDocumento(${p.id}, '${p.numero_oc}', 'comprobante_url', '${p.tipo}')">
+                       <i data-lucide="pencil" class="w-3 h-3"></i>
+                     </button>` : ''}
+                   </div>`
                 : `<button class="btn btn-amber-outline btn-sm btn-sm-auto"
                            onclick="uploadFactura(${p.id}, '${p.numero_oc}', '${p.tipo}')"
                            title="${facLabel}">
@@ -278,7 +292,12 @@ window.gestionarFacturasCuotas = async function(id, numero_oc) {
             </div>
             <div class="flex items-center gap-2 shrink-0">
                 ${tieneFac
-                    ? `<span class="badge badge-green text-[10px]"><i data-lucide="check" class="w-2.5 h-2.5"></i> Factura OK</span>`
+                    ? `<div class="flex items-center gap-1">
+                         <span class="badge badge-green text-[10px]"><i data-lucide="check" class="w-2.5 h-2.5"></i> Factura OK</span>
+                         ${(window.Auth && ['admin', 'comprador'].includes(window.Auth.getUser()?.role)) ? `<button class="inline-flex items-center p-1.5 rounded-lg text-amber-600 hover:bg-amber-50 border border-amber-200 transition-colors" title="Editar Factura de Cuota" onclick="editarFacturaCuota(${id}, '${numero_oc}', ${c.id}, ${c.numero_cuota}, ${c.total_cuotas})">
+                           <i data-lucide="pencil" class="w-3 h-3"></i>
+                         </button>` : ''}
+                       </div>`
                     : `<button class="btn btn-outline btn-sm text-amber-700 border-amber-300 hover:bg-amber-50"
                           onclick="uploadFacturaCuota(${id}, '${numero_oc}', ${c.id}, ${c.numero_cuota}, ${c.total_cuotas})">
                            <i data-lucide="upload" class="w-3.5 h-3.5"></i> Subir Factura
@@ -788,6 +807,260 @@ window.subirConformidadSolo = async function(id, numero_oc, tipo = 'compra', tie
         }
     });
     setTimeout(() => lucide.createIcons(), 60);
+};
+
+// ── ADMIN / COMPRADOR: Editar documento ya subido (Conformidad o Factura) ──
+window.editarDocumento = async function(id, numero_oc, campo, tipo) {
+    const esConformidad = campo === 'conformidad_url';
+    const esOS          = tipo  === 'servicio';
+    const docLabel      = esConformidad ? 'Acta de Conformidad' : (esOS ? 'RxH / Factura' : 'Factura / Comprobante');
+    const uploadTag     = esConformidad ? `CONFORMIDAD_${numero_oc}` : (esOS ? `RXH_${numero_oc}` : `FACTURA_${numero_oc}`);
+    const user          = window.Auth?.getUser();
+
+    if (!user || !['admin', 'comprador'].includes(user.role)) {
+        UI.toast('Solo el administrador o comprador puede editar documentos.', 'error');
+        return;
+    }
+
+    UI.modal({
+        title: `✏️ Editar ${docLabel} — ${numero_oc}`,
+        body: `
+            <div class="space-y-4">
+                <div class="p-4 bg-amber-50 border border-amber-200 rounded-xl flex items-start gap-3">
+                    <i data-lucide="shield-alert" class="w-5 h-5 text-amber-600 mt-0.5 shrink-0"></i>
+                    <div>
+                        <p class="text-sm font-bold text-amber-800">Acción de Administrador / Comprador</p>
+                        <p class="text-xs text-amber-700 mt-0.5">Puedes reemplazar el archivo actual por uno nuevo, o eliminar el documento para subir uno distinto desde cero.</p>
+                    </div>
+                </div>
+
+                <!-- Opción A: Reemplazar con nuevo archivo -->
+                <div class="border border-border rounded-xl p-4 space-y-3">
+                    <p class="text-xs font-bold uppercase tracking-wider text-foreground flex items-center gap-2">
+                        <span class="w-5 h-5 rounded-full bg-primary text-white flex items-center justify-center text-[10px] font-black">A</span>
+                        Reemplazar con nuevo archivo
+                    </p>
+                    <div class="relative">
+                        <input type="file" id="edit-doc-file" class="hidden" accept="image/*,application/pdf"
+                               onchange="document.getElementById('edit-doc-filename').textContent = this.files[0]?.name || 'Seleccionar archivo...'"/>
+                        <label for="edit-doc-file" class="flex items-center justify-between p-3 border-2 border-dashed border-primary/30 rounded-xl cursor-pointer hover:border-primary hover:bg-primary/5 transition-all">
+                            <div class="flex items-center gap-3">
+                                <div class="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
+                                    <i data-lucide="upload"></i>
+                                </div>
+                                <span id="edit-doc-filename" class="text-sm font-medium text-muted-foreground">Seleccionar archivo...</span>
+                            </div>
+                            <span class="btn btn-ghost btn-sm">Explorar</span>
+                        </label>
+                    </div>
+                    <p class="text-[10px] text-muted-foreground italic">El nuevo archivo reemplazará al actual en el sistema.</p>
+                </div>
+
+                <!-- Opción B: Eliminar documento -->
+                <div class="border border-red-200 rounded-xl p-4 space-y-2 bg-red-50/50">
+                    <p class="text-xs font-bold uppercase tracking-wider text-red-700 flex items-center gap-2">
+                        <span class="w-5 h-5 rounded-full bg-red-500 text-white flex items-center justify-center text-[10px] font-black">B</span>
+                        Eliminar documento actual
+                    </p>
+                    <p class="text-xs text-red-600">El campo quedará vacío y la orden volverá a estado "Recibida" si estaba completada. El botón de subida original reaparecerá en la tabla.</p>
+                    <button type="button" id="edit-doc-delete-btn"
+                            class="btn btn-sm w-full border border-red-300 text-red-700 hover:bg-red-100 flex items-center justify-center gap-2 transition-colors">
+                        <i data-lucide="trash-2" class="w-4 h-4"></i> Eliminar este documento
+                    </button>
+                </div>
+            </div>`,
+        confirmText: '↑ Subir y Reemplazar',
+        onConfirm: async () => {
+            const file = document.getElementById('edit-doc-file')?.files[0];
+            if (!file) {
+                UI.toast('Selecciona un archivo para reemplazar, o usa el botón rojo para eliminar.', 'warning');
+                return false;
+            }
+            UI.loading(`Subiendo nuevo archivo "${file.name}" a Drive...`);
+            const nuevaUrl = await uploadReceptionFileToDrive(file, uploadTag + '_EDIT');
+            if (!nuevaUrl) {
+                UI.stopLoading();
+                UI.toast('No se pudo subir el archivo. Intenta de nuevo.', 'error');
+                return false;
+            }
+            UI.loading('Actualizando en el sistema...');
+            const res = await fetch('api/recepcions.php', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action:      'replace_document',
+                    purchase_id: id,
+                    campo,
+                    nueva_url:   nuevaUrl,
+                    usuario_id:  user.id
+                })
+            }).then(r => r.json());
+            UI.stopLoading();
+            if (res.ok) {
+                UI.toast(`✅ ${docLabel} reemplazada correctamente.`, 'success');
+                await loadRecepcions();
+            } else {
+                UI.toast('Error: ' + res.error, 'error');
+            }
+        }
+    });
+
+    // Handler del botón de eliminar (fuera del onConfirm)
+    setTimeout(() => {
+        lucide.createIcons();
+        const deleteBtn = document.getElementById('edit-doc-delete-btn');
+        if (deleteBtn) {
+            deleteBtn.addEventListener('click', async () => {
+                if (!confirm(`¿Seguro que deseas eliminar la ${docLabel} de esta orden?\n\nSi la orden estaba Completada, volverá a estado "Recibida".`)) return;
+                UI.stopLoading();
+                UI.loading('Eliminando documento...');
+                const res = await fetch('api/recepcions.php', {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action:      'delete_document',
+                        purchase_id: id,
+                        campo,
+                        usuario_id:  user.id
+                    })
+                }).then(r => r.json());
+                UI.stopLoading();
+                // Cerrar modal
+                const overlay = document.querySelector('.modal-overlay, [data-modal]');
+                if (overlay) overlay.remove();
+                const backdrop = document.querySelector('.modal-backdrop, .fixed.inset-0');
+                if (backdrop) backdrop.remove();
+                if (res.ok) {
+                    UI.toast(`🗑️ ${docLabel} eliminada. La orden volvió a estado "${res.nuevo_estado}".`, 'info');
+                    await loadRecepcions();
+                } else {
+                    UI.toast('Error: ' + res.error, 'error');
+                }
+            });
+        }
+    }, 80);
+};
+
+// ── ADMIN / COMPRADOR: Editar factura de una cuota individual ───────────────
+window.editarFacturaCuota = async function(orden_id, numero_oc, cuota_id, numero_cuota, total_cuotas) {
+    const user = window.Auth?.getUser();
+    if (!user || !['admin', 'comprador'].includes(user.role)) {
+        UI.toast('Solo el administrador o comprador puede editar facturas de cuotas.', 'error');
+        return;
+    }
+
+    UI.modal({
+        title: `✏️ Editar Factura — Cuota ${numero_cuota}/${total_cuotas} · ${numero_oc}`,
+        body: `
+            <div class="space-y-4">
+                <div class="p-4 bg-amber-50 border border-amber-200 rounded-xl flex items-start gap-3">
+                    <i data-lucide="shield-alert" class="w-5 h-5 text-amber-600 mt-0.5 shrink-0"></i>
+                    <div>
+                        <p class="text-sm font-bold text-amber-800">Editar Factura de Cuota ${numero_cuota}/${total_cuotas}</p>
+                        <p class="text-xs text-amber-700 mt-0.5">Reemplaza la factura actual con un nuevo archivo o elimínala para subirla desde cero.</p>
+                    </div>
+                </div>
+
+                <!-- Reemplazar -->
+                <div class="border border-border rounded-xl p-4 space-y-3">
+                    <p class="text-xs font-bold uppercase tracking-wider text-foreground flex items-center gap-2">
+                        <span class="w-5 h-5 rounded-full bg-primary text-white flex items-center justify-center text-[10px] font-black">A</span>
+                        Reemplazar con nuevo archivo
+                    </p>
+                    <div>
+                        <input type="file" id="edit-cuota-file" class="hidden" accept="image/*,application/pdf"
+                               onchange="document.getElementById('edit-cuota-filename').textContent = this.files[0]?.name || 'Seleccionar archivo...'"/>
+                        <label for="edit-cuota-file" class="flex items-center justify-between p-3 border-2 border-dashed border-primary/30 rounded-xl cursor-pointer hover:border-primary hover:bg-primary/5 transition-all">
+                            <div class="flex items-center gap-3">
+                                <div class="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
+                                    <i data-lucide="file-text"></i>
+                                </div>
+                                <span id="edit-cuota-filename" class="text-sm font-medium text-muted-foreground">Seleccionar archivo...</span>
+                            </div>
+                            <span class="btn btn-ghost btn-sm">Explorar</span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Eliminar -->
+                <div class="border border-red-200 rounded-xl p-4 space-y-2 bg-red-50/50">
+                    <p class="text-xs font-bold uppercase tracking-wider text-red-700 flex items-center gap-2">
+                        <span class="w-5 h-5 rounded-full bg-red-500 text-white flex items-center justify-center text-[10px] font-black">B</span>
+                        Eliminar factura actual
+                    </p>
+                    <p class="text-xs text-red-600">El campo de la cuota quedará vacío y podrás volver a subirla.</p>
+                    <button type="button" id="edit-cuota-delete-btn"
+                            class="btn btn-sm w-full border border-red-300 text-red-700 hover:bg-red-100 flex items-center justify-center gap-2 transition-colors">
+                        <i data-lucide="trash-2" class="w-4 h-4"></i> Eliminar factura de esta cuota
+                    </button>
+                </div>
+            </div>`,
+        confirmText: '↑ Subir y Reemplazar',
+        onConfirm: async () => {
+            const file = document.getElementById('edit-cuota-file')?.files[0];
+            if (!file) {
+                UI.toast('Selecciona un archivo o usa el botón rojo para eliminar.', 'warning');
+                return false;
+            }
+            UI.loading(`Subiendo nueva factura "${file.name}" a Drive...`);
+            const nuevaUrl = await uploadReceptionFileToDrive(file, `FACTURA_CUOTA${numero_cuota}_${numero_oc}_EDIT`);
+            if (!nuevaUrl) {
+                UI.stopLoading();
+                UI.toast('No se pudo subir el archivo.', 'error');
+                return false;
+            }
+            UI.loading('Registrando en el sistema...');
+            const res = await fetch('api/recepcions.php', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action:       'upload_cuota_factura',
+                    purchase_id:  orden_id,
+                    cuota_id,
+                    comprobante_url: nuevaUrl
+                })
+            }).then(r => r.json());
+            UI.stopLoading();
+            if (res.ok) {
+                UI.toast(`✅ Factura de Cuota ${numero_cuota} reemplazada.`, 'success');
+                await loadRecepcions();
+            } else {
+                UI.toast('Error: ' + res.error, 'error');
+            }
+        }
+    });
+
+    setTimeout(() => {
+        lucide.createIcons();
+        const deleteBtn = document.getElementById('edit-cuota-delete-btn');
+        if (deleteBtn) {
+            deleteBtn.addEventListener('click', async () => {
+                if (!confirm(`¿Seguro que deseas eliminar la factura de la cuota ${numero_cuota}/${total_cuotas}?`)) return;
+                UI.loading('Eliminando factura de cuota...');
+                const res = await fetch('api/recepcions.php', {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action:      'delete_cuota_factura',
+                        purchase_id: orden_id,
+                        cuota_id,
+                        usuario_id:  user.id
+                    })
+                }).then(r => r.json());
+                UI.stopLoading();
+                const overlay = document.querySelector('.modal-overlay, [data-modal]');
+                if (overlay) overlay.remove();
+                const backdrop = document.querySelector('.modal-backdrop, .fixed.inset-0');
+                if (backdrop) backdrop.remove();
+                if (res.ok) {
+                    UI.toast(`🗑️ Factura de Cuota ${numero_cuota} eliminada.`, 'info');
+                    await loadRecepcions();
+                } else {
+                    UI.toast('Error: ' + res.error, 'error');
+                }
+            });
+        }
+    }, 80);
 };
 
 // ── Helper para convertir DataURL (base64) a Blob ─────────────────────────────

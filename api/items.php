@@ -17,19 +17,28 @@ try {
                 $stmtCat = $pdo->prepare("SELECT prefijo FROM categorias_inventario WHERE id = ?");
                 $stmtCat->execute([$cat_id]);
                 $cat = $stmtCat->fetch();
-                $prefix = ($cat && $cat['prefijo']) ? $cat['prefijo'] : 'ITM';
+                $prefix = ($cat && $cat['prefijo']) ? strtoupper(trim($cat['prefijo'])) : 'ITM';
 
-                // Obtener TODOS los códigos existentes con este prefijo
+                $used = [];
+
+                // Obtener TODOS los códigos existentes con este prefijo en items
                 $rows = $pdo->prepare("SELECT codigo FROM items WHERE codigo LIKE ?");
                 $rows->execute([$prefix . '-%']);
-                $data = $rows->fetchAll();
+                foreach ($rows->fetchAll() as $row) {
+                    if (preg_match('/-([0-9]+)$/', $row['codigo'], $m)) {
+                        $n = intval($m[1]);
+                        if ($n > 0) $used[] = $n;
+                    }
+                }
 
-                // Construir un set de números ya usados
-                $used = [];
-                foreach ($data as $row) {
-                    $parts = explode('-', $row['codigo']);
-                    $n = intval(end($parts));
-                    if ($n > 0) $used[] = $n;
+                // También verificar en la tabla activos para evitar colisiones
+                $rows2 = $pdo->prepare("SELECT codigo_interno FROM activos WHERE codigo_interno LIKE ?");
+                $rows2->execute([$prefix . '-%']);
+                foreach ($rows2->fetchAll() as $row) {
+                    if (preg_match('/-([0-9]+)$/', $row['codigo_interno'], $m)) {
+                        $n = intval($m[1]);
+                        if ($n > 0) $used[] = $n;
+                    }
                 }
 
                 // Buscar el PRIMER hueco disponible desde 1
@@ -124,6 +133,8 @@ try {
 
             // Modo force: eliminación en cascada (solo admin desde UI)
             if ($force) {
+                $pdo->prepare("DELETE FROM traslados WHERE item_id = ?")->execute([$id]);
+                $pdo->prepare("DELETE FROM stock_ubicaciones WHERE item_id = ?")->execute([$id]);
                 $pdo->prepare("DELETE FROM movimientos WHERE item_id = ?")->execute([$id]);
                 $pdo->prepare("DELETE FROM activos WHERE item_id = ?")->execute([$id]);
                 $pdo->prepare("DELETE FROM items WHERE id = ?")->execute([$id]);
@@ -153,6 +164,11 @@ try {
             $stmtOc->execute([$id]);
             $c = $stmtOc->fetchColumn();
             if ($c > 0) $deps[] = "$c registro(s) en Órdenes de Compra";
+
+            $stmtTras = $pdo->prepare("SELECT COUNT(*) FROM traslados WHERE item_id = ?");
+            $stmtTras->execute([$id]);
+            $c = $stmtTras->fetchColumn();
+            if ($c > 0) $deps[] = "$c traslado(s) registrado(s)";
 
             if (!empty($deps)) {
                 $msg = "No se puede eliminar el artículo porque tiene: " . implode(", ", $deps) . ". Debe eliminar estos registros primero.";

@@ -30,6 +30,22 @@ if ($method === 'PATCH') {
             $pdo->prepare("UPDATE ordenes_cuotas SET comprobante_url = ? WHERE id = ? AND orden_id = ?")
                 ->execute([$comprobante_url, $cuota_id, $purchase_id]);
 
+            // Si la orden ya tiene conformidad y todas las cuotas tienen factura, marcar como Completada
+            $stmtOc = $pdo->prepare("SELECT conformidad_url FROM ordenes_compra WHERE id = ?");
+            $stmtOc->execute([$purchase_id]);
+            $ocConf = $stmtOc->fetchColumn();
+
+            $stmtCount = $pdo->prepare("SELECT COUNT(*) as total, SUM(CASE WHEN comprobante_url IS NOT NULL AND comprobante_url != '' THEN 1 ELSE 0 END) as con_fac FROM ordenes_cuotas WHERE orden_id = ?");
+            $stmtCount->execute([$purchase_id]);
+            $cCounts = $stmtCount->fetch();
+            $totalCuotas = (int)($cCounts['total'] ?? 0);
+            $conFac = (int)($cCounts['con_fac'] ?? 0);
+
+            if (!empty($ocConf) && $totalCuotas > 0 && $conFac >= $totalCuotas) {
+                $pdo->prepare("UPDATE ordenes_compra SET estado = 'Completada' WHERE id = ?")
+                    ->execute([$purchase_id]);
+            }
+
             ob_clean();
             json_response([
                 'ok' => true,
@@ -38,7 +54,125 @@ if ($method === 'PATCH') {
             exit;
         }
 
+        // ── SUB-ACCIÓN: eliminar documento (solo Admin) ──────────────────────
+        if ($action === 'delete_document') {
+            $campo      = $b['campo']      ?? null; // 'conformidad_url' | 'comprobante_url'
+            $usuario_id = $b['usuario_id'] ?? null;
+
+            if (!$purchase_id || !$campo || !$usuario_id) {
+                json_response(['error' => 'purchase_id, campo y usuario_id son requeridos'], 400);
+            }
+            if (!in_array($campo, ['conformidad_url', 'comprobante_url'])) {
+                json_response(['error' => 'Campo no valido. Use conformidad_url o comprobante_url'], 400);
+            }
+            $stmtRol = $pdo->prepare("SELECT r.nombre FROM usuarios u JOIN roles r ON u.rol_id = r.id WHERE u.id = ?");
+            $stmtRol->execute([$usuario_id]);
+            $userRole = $stmtRol->fetchColumn();
+            if (!in_array($userRole, ['admin', 'comprador'])) {
+                json_response(['error' => 'Solo el administrador o comprador puede eliminar documentos.'], 403);
+            }
+            $stmtDoc = $pdo->prepare("SELECT conformidad_url, comprobante_url, estado FROM ordenes_compra WHERE id = ?");
+            $stmtDoc->execute([$purchase_id]);
+            $docRow = $stmtDoc->fetch();
+            if (!$docRow) json_response(['error' => 'Orden no encontrada'], 404);
+
+            $pdo->prepare("UPDATE ordenes_compra SET {$campo} = NULL WHERE id = ?")
+                ->execute([$purchase_id]);
+
+            // Si estaba Completada y se elimina un doc → volver a Recibida
+            $nuevoEstado = $docRow['estado'];
+            if ($docRow['estado'] === 'Completada') {
+                $nuevoEstado = 'Recibida';
+                $pdo->prepare("UPDATE ordenes_compra SET estado = 'Recibida' WHERE id = ?")
+                    ->execute([$purchase_id]);
+            }
+            ob_clean();
+            json_response(['ok' => true, 'nuevo_estado' => $nuevoEstado]);
+            exit;
+        }
+
+        // ── SUB-ACCIÓN: reemplazar documento (solo Admin) ────────────────────
+        if ($action === 'replace_document') {
+            $campo      = $b['campo']      ?? null; // 'conformidad_url' | 'comprobante_url'
+            $nueva_url  = $b['nueva_url']  ?? null;
+            $usuario_id = $b['usuario_id'] ?? null;
+
+            if (!$purchase_id || !$campo || !$nueva_url || !$usuario_id) {
+                json_response(['error' => 'purchase_id, campo, nueva_url y usuario_id son requeridos'], 400);
+            }
+            if (!in_array($campo, ['conformidad_url', 'comprobante_url'])) {
+                json_response(['error' => 'Campo no valido. Use conformidad_url o comprobante_url'], 400);
+            }
+            $stmtRol = $pdo->prepare("SELECT r.nombre FROM usuarios u JOIN roles r ON u.rol_id = r.id WHERE u.id = ?");
+            $stmtRol->execute([$usuario_id]);
+            $userRole = $stmtRol->fetchColumn();
+            if (!in_array($userRole, ['admin', 'comprador'])) {
+                json_response(['error' => 'Solo el administrador o comprador puede reemplazar documentos.'], 403);
+            }
+            $stmtDoc = $pdo->prepare("SELECT conformidad_url, comprobante_url FROM ordenes_compra WHERE id = ?");
+            $stmtDoc->execute([$purchase_id]);
+            $docRow = $stmtDoc->fetch();
+            if (!$docRow) json_response(['error' => 'Orden no encontrada'], 404);
+
+            $pdo->prepare("UPDATE ordenes_compra SET {$campo} = ? WHERE id = ?")
+                ->execute([$nueva_url, $purchase_id]);
+
+            $conf = ($campo === 'conformidad_url') ? $nueva_url : $docRow['conformidad_url'];
+            $comp = ($campo === 'comprobante_url') ? $nueva_url : $docRow['comprobante_url'];
+
+            // Verificar si la orden es en cuotas
+            $stmtCuotas = $pdo->prepare("SELECT COUNT(*) as total, SUM(CASE WHEN comprobante_url IS NOT NULL AND comprobante_url != '' THEN 1 ELSE 0 END) as con_fac FROM ordenes_cuotas WHERE orden_id = ?");
+            $stmtCuotas->execute([$purchase_id]);
+            $cInfo = $stmtCuotas->fetch();
+            $tCuotas = (int)($cInfo['total'] ?? 0);
+            $cFac = (int)($cInfo['con_fac'] ?? 0);
+
+            if ($tCuotas > 0) {
+                $nuevoEstado = ($conf && $cFac >= $tCuotas) ? 'Completada' : 'Recibida';
+            } else {
+                $nuevoEstado = ($conf && $comp) ? 'Completada' : 'Recibida';
+            }
+
+            $pdo->prepare("UPDATE ordenes_compra SET estado = ? WHERE id = ?")
+                ->execute([$nuevoEstado, $purchase_id]);
+
+            ob_clean();
+            json_response(['ok' => true, 'nuevo_estado' => $nuevoEstado]);
+            exit;
+        }
+
+        // ── SUB-ACCIÓN: eliminar factura de cuota individual (solo Admin) ─────
+        if ($action === 'delete_cuota_factura') {
+            $cuota_id   = $b['cuota_id']   ?? null;
+            $usuario_id = $b['usuario_id'] ?? null;
+
+            if (!$purchase_id || !$cuota_id || !$usuario_id) {
+                json_response(['error' => 'purchase_id, cuota_id y usuario_id son requeridos'], 400);
+            }
+            $stmtRol = $pdo->prepare("SELECT r.nombre FROM usuarios u JOIN roles r ON u.rol_id = r.id WHERE u.id = ?");
+            $stmtRol->execute([$usuario_id]);
+            $userRole = $stmtRol->fetchColumn();
+            if (!in_array($userRole, ['admin', 'comprador'])) {
+                json_response(['error' => 'Solo el administrador o comprador puede eliminar facturas de cuotas.'], 403);
+            }
+            $stmtC = $pdo->prepare("SELECT id FROM ordenes_cuotas WHERE id = ? AND orden_id = ?");
+            $stmtC->execute([$cuota_id, $purchase_id]);
+            if (!$stmtC->fetch()) json_response(['error' => 'Cuota no encontrada'], 404);
+
+            $pdo->prepare("UPDATE ordenes_cuotas SET comprobante_url = NULL WHERE id = ? AND orden_id = ?")
+                ->execute([$cuota_id, $purchase_id]);
+
+            // Si la orden estaba en 'Completada', revertir a 'Recibida'
+            $pdo->prepare("UPDATE ordenes_compra SET estado = 'Recibida' WHERE id = ? AND estado = 'Completada'")
+                ->execute([$purchase_id]);
+
+            ob_clean();
+            json_response(['ok' => true]);
+            exit;
+        }
+
         // ── SUB-ACCIÓN DEFAULT: subir factura general a orden ya recibida ─────
+
         if (!$purchase_id || !$comprobante_url) {
             json_response(['error' => 'purchase_id y comprobante_url son requeridos'], 400);
         }
